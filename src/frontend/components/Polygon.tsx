@@ -74,6 +74,7 @@ function PolygonControlPoint({
         }
         setIsBeingDragged(false);
       }}
+      className="control-point"
     />
   );
 }

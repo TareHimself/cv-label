@@ -54,7 +54,10 @@ const createWindow = async () => {
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
+    autoHideMenuBar: true,
   });
+
+  mainWindow.setMenu(null);
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
@@ -87,14 +90,14 @@ app.on("activate", async () => {
 
 let detector: GenericComputerVisionModel | undefined = undefined;
 
-ipcMain.handle("doInference", async (_modelType,imagePath) => {
+ipcMain.handle("doInference", async (_modelType, imagePath) => {
   if (!detector) {
     console.error("Inference was attempted with no model");
     return undefined;
   }
 
   try {
-    return await detector.predict(imagePath) as any
+    return (await detector.predict(imagePath)) as any;
   } catch (error) {
     console.error(error);
     return undefined;
@@ -111,7 +114,6 @@ const POSSIBLE_DETECTORS: Record<
 
 ipcMain.handle("loadModel", async (modelType, modelPath) => {
   try {
-    
     detector = await POSSIBLE_DETECTORS[modelType](modelPath);
     return true;
   } catch (error) {

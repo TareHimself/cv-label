@@ -14,8 +14,8 @@ type DrawProps<T> = {
 
 function DrawBox({ label, image, onUpdated }: DrawProps<CvBoxLabel>) {
   const [scaleX, scaleY] = [
-    image.drawWidth / image.naturalWidth,
-    image.drawHeight / image.naturalHeight,
+    image.width / image.naturalWidth,
+    image.height / image.naturalHeight,
   ];
 
   const { x1, y1, x2, y2 } = label;
@@ -38,10 +38,10 @@ function DrawBox({ label, image, onUpdated }: DrawProps<CvBoxLabel>) {
       onDragCompleted={(newPoints) => {
         onUpdated({
           ...label,
-          x1: Math.min(...newPoints.map(a => a[0])),
-          y1: Math.min(...newPoints.map(a => a[1])),
-          x2: Math.max(...newPoints.map(a => a[0])),
-          y2: Math.max(...newPoints.map(a => a[1])),
+          x1: Math.min(...newPoints.map((a) => a[0])),
+          y1: Math.min(...newPoints.map((a) => a[1])),
+          x2: Math.max(...newPoints.map((a) => a[0])),
+          y2: Math.max(...newPoints.map((a) => a[1])),
         });
         return newPoints;
       }}
@@ -52,8 +52,8 @@ function DrawBox({ label, image, onUpdated }: DrawProps<CvBoxLabel>) {
 
 function DrawSegment({ label, image, onUpdated }: DrawProps<CvSegmentLabel>) {
   const [scaleX, scaleY] = [
-    image.drawWidth / image.naturalWidth,
-    image.drawHeight / image.naturalHeight,
+    image.width / image.naturalWidth,
+    image.height / image.naturalHeight,
   ];
 
   const pointsScaled: [number, number][] = label.points.map((b) => [
@@ -82,7 +82,16 @@ export default function LabelOverlay({
   onLabelUpdated,
 }: LabelOverlayProps) {
   return (
-    <svg width={"100%"} height={"100%"} id="label-overlay">
+    <svg
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: image.width,
+        height: image.height,
+      }}
+      id="label-overlay"
+    >
       {labels.map((a, idx) => {
         if (a.type === ELabelType.BOX) {
           return (

@@ -7,13 +7,100 @@ body {
   display: flex;
 }
 
-img {
-  height: 100%;
+
+
+#label-box {
   width: auto;
+  max-height: 100%;
+  position: relative;
+}
+
+#label-box img {
+  max-width: 100%;
+  max-height: 100%;
 }
 
 #root {
   width: 100%;
   height: 100%;
   display: flex;
+}
+
+
+#editor {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.editor-action-panel {
+  display: flex;
+  position: absolute;
+  background-color: rgb(41, 60, 54);
+  --main-axis-dim: 200px;
+  --alt-axis-dim: 50px;
+  border-radius: 15px;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.editor-action-panel[data-pos="top"] {
+  height: var(--alt-axis-dim);
+  min-width: var(--main-axis-dim);
+  left: 50%;
+  top: 20px;
+  transform: translate(-50%, 0%);
+}
+
+.editor-action-panel[data-pos="left"] {
+  min-height: var(--main-axis-dim);
+  width: var(--alt-axis-dim);
+  left: 20px;
+  top: 50%;
+  transform: translate(0%, -50%);
+  flex-direction: column;
+}
+
+.editor-action-panel[data-pos="right"] {
+  min-height: var(--main-axis-dim);
+  width: var(--alt-axis-dim);
+  right: 20px;
+  top: 50%;
+  transform: translate(0%, -50%);
+  flex-direction: column;
+}
+
+.editor-action-panel[data-pos="bottom"] {
+  height: var(--alt-axis-dim);
+  min-width: var(--main-axis-dim);
+  left: 50%;
+  bottom: 20px;
+  transform: translate(-50%, 0%);
+}
+
+polygon {
+  cursor: pointer;
+}
+
+.editor-layer {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: absolute;
+  pointer-events: none;
+  overflow: overlay;
+}
+
+.editor-layer::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-layer>div {
+  pointer-events: all;
+}
+
+.control-point:hover {
+  cursor: pointer;
 }

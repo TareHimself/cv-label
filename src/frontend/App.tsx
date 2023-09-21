@@ -4,9 +4,8 @@ import {
   YoloV8DetectLabeler,
   YoloV8SegmentLabeler,
 } from "@frontend/cv/labelers/yolo";
+import Editor from "@components/editor/Editor";
 
 export default function App() {
-  const labeler = useRef(new YoloV8DetectLabeler()).current;
-
-  return <BoxContainer imagePath="./test.jpg" labeler={labeler} />;
+  return <Editor />;
 }
