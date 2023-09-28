@@ -66,7 +66,7 @@ export function clamp(a: number, min: number, max: number) {
   return Math.max(Math.min(max, a), min);
 }
 
-export function wrap(a: number, min: number, max: number) {
+export function wrap(a: number, min: number, max: number): number {
   if (a < min) {
     return wrap(max - (min - a), min, max);
   }

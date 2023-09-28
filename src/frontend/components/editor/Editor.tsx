@@ -70,13 +70,13 @@ export default function Editor() {
     )
   );
 
-  useEffect(() => {
-    dispatch(
-      importSamples({
-        id: "yolo",
-      })
-    );
-  }, [dispatch]);
+  // useEffect(() => {
+  //   dispatch(
+  //     importSamples({
+  //       id: "yolo",
+  //     })
+  //   );
+  // }, [dispatch]);
 
   // useEffect(() => {
   //   if (currentSample && currentSample.labels.length === 0) {
