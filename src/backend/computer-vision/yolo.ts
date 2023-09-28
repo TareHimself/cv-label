@@ -38,7 +38,7 @@ abstract class Yolov8<
 
     const pixels = await img
       .removeAlpha()
-      .resize({ width: 640, height: 640, fit: "fill" })
+      .resize({ width: 640, height: 640, fit: "contain" }) // Yolo pads to maintain aspect ratio
       .raw()
       .toBuffer();
 
@@ -94,7 +94,8 @@ export class Yolov8Detection extends Yolov8<
 
   static async create(modelPath: string) {
     return new Yolov8Detection(
-      await InferenceSession.create(modelPath, Yolov8.getSessionOptions()));
+      await InferenceSession.create(modelPath, Yolov8.getSessionOptions())
+    );
   }
 
   override async predictRaw(
@@ -112,51 +113,28 @@ export class Yolov8Detection extends Yolov8<
     input: Yolov8InputType,
     output: Yolov8DetectionResultRaw
   ): Promise<Yolov8DetectionResult> {
+    const rawResult = (
+      await pythonUtils
+        .get("format_detect_result")
+        .callAsync(
+          [Array.from(output.data as Float32Array), output.dims],
+          [input.width, input.height],
+          [Yolov8Detection.inferenceDims.x, Yolov8Detection.inferenceDims.y]
+        )
+    ).toJS();
 
-    const rawResult = pythonUtils
-    .format_detect_result(
-      [Array.from(output.data as Float32Array), output.dims],
-      [input.width, input.height],
-      [Yolov8Detection.inferenceDims.x, Yolov8Detection.inferenceDims.y]
-    )
-    .toJS()
+    const rawBoxes: number[][] = rawResult.boxes;
 
-    const rawBoxes: number[][] = rawResult.boxes
-    
     const allBoxes: Yolov8DetectionResult = rawBoxes.map((a) => {
-        return {
-            x1: a[0],
-            y1: a[1],
-            x2: a[2],
-            y2: a[3],
-            class: a[4],
-            confidence: a[5]
-        }
-    })
-
-    // for (let i = 0; i < output.dims[1]; i++) {
-    //   const section = data.slice(i * output.dims[2], (i + 1) * output.dims[2]); // get rows
-
-    //   const possibleProps = section.slice(4);
-    //   const maxProb = Math.max(...possibleProps);
-    //   const classIndex = possibleProps.indexOf(maxProb);
-
-    //   const [x, y, w, h] = section.slice(0, 4);
-
-    //   const x1 = ((x - w / 2) / Yolov8Detection.inferenceDims.x) * input.width;
-    //   const y1 = ((y - h / 2) / Yolov8Detection.inferenceDims.y) * input.height;
-    //   const x2 = ((x + w / 2) / Yolov8Detection.inferenceDims.x) * input.width;
-    //   const y2 = ((y + h / 2) / Yolov8Detection.inferenceDims.y) * input.height;
-
-    //   allBoxes.push({
-    //     x1,
-    //     y1,
-    //     x2,
-    //     y2,
-    //     class: classIndex,
-    //     confidence: maxProb,
-    //   });
-    // }
+      return {
+        x1: a[0],
+        y1: a[1],
+        x2: a[2],
+        y2: a[3],
+        class: a[4],
+        confidence: a[5],
+      };
+    });
 
     allBoxes.sort((box1, box2) => box2.confidence - box1.confidence);
 
@@ -183,7 +161,8 @@ export class Yolov8Segmentation extends Yolov8<
 
   static async create(modelPath: string) {
     return new Yolov8Segmentation(
-      await InferenceSession.create(modelPath, Yolov8.getSessionOptions()));
+      await InferenceSession.create(modelPath, Yolov8.getSessionOptions())
+    );
   }
 
   override async predictRaw(
@@ -191,32 +170,6 @@ export class Yolov8Segmentation extends Yolov8<
   ): Promise<Yolov8SegmentationResultRaw> {
     const input = new Tensor(data.data, [1, 3, 640, 640]);
     const outputs = await this.model.run({ images: input });
-    // const output0 = outputs["output0"];
-
-    // const sectionSize = output0.dims[1];
-    // const maxPredicted = output0.dims[2];
-    // const firstBatch: number[] = [];
-
-    // for (let j = 0; j < sectionSize; j++) {
-    //   firstBatch.push((output0.data as Float32Array)[maxPredicted * j]);
-    // }
-
-    // const numClasses = firstBatch.length - 4;
-
-    // const config = new Tensor(
-    //   "float32",
-    //   new Float32Array([
-    //     numClasses, // num class
-    //     100, // topk per class
-    //     0.45, // iou threshold
-    //     0.25, // score threshold
-    //   ])
-    // ); // nms config tensor
-
-    // const { selected: boxes } = await this.nms.run({
-    //   detection: output0,
-    //   config,
-    // });
 
     return [outputs["output0"], outputs["output1"]];
   }
@@ -231,28 +184,31 @@ export class Yolov8Segmentation extends Yolov8<
     // console.log(output.dims)
     // const data = output.data as Float32Array
 
-    const processed = pythonUtils
-    .format_seg_results(
-      [Array.from(out1.data as Float32Array), out1.dims],
-      [Array.from(out2.data as Float32Array), out2.dims],
-      [input.width, input.height],
-      [Yolov8Detection.inferenceDims.x, Yolov8Detection.inferenceDims.y]
-    )
-    .toJS()
+    const processed = (
+      await pythonUtils.get("format_seg_results").callAsync(
+        [Array.from(out1.data as Float32Array), out1.dims],
+        [Array.from(out2.data as Float32Array), out2.dims],
+        //[input.width, input.height],
+        [input.width, input.height],
+        [Yolov8Detection.inferenceDims.x, Yolov8Detection.inferenceDims.y]
+      )
+    ).toJS();
 
-    const rawBoxes: number[][] = processed.boxes
-    const masks: [number,number][][] = processed.masks
+    const rawBoxes: number[][] = processed.boxes;
+    const masks: [number, number][][] = processed.masks;
 
-    return rawBoxes.map((a,idx) => {
+    return rawBoxes
+      .map((a, idx) => {
         return {
-            x1: a[0],
-            y1: a[1],
-            x2: a[2],
-            y2: a[3],
-            class: a[4],
-            confidence: a[5],
-            mask: masks[idx]
-        }
-    }).sort((box1, box2) => box2.confidence - box1.confidence);
+          x1: a[0],
+          y1: a[1],
+          x2: a[2],
+          y2: a[3],
+          class: a[4],
+          confidence: a[5],
+          mask: masks[idx],
+        };
+      })
+      .sort((box1, box2) => box2.confidence - box1.confidence);
   }
 }

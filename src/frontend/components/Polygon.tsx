@@ -1,4 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import useMouseUp from "@hooks/useMouseUp";
+import { useAppSelector } from "@redux/hooks";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 export type PolygonProps = {
   points: [number, number][];
@@ -9,6 +11,8 @@ export type PolygonProps = {
   onDragCompleted: (
     points: PolygonProps["points"]
   ) => PolygonProps["points"] | undefined;
+  isEditable: boolean;
+  onClicked?: () => void;
 };
 
 type PolygonControlPointProps = {
@@ -27,10 +31,15 @@ function PolygonControlPoint({
 }: PolygonControlPointProps) {
   const [isBeingDragged, setIsBeingDragged] = useState(false);
 
+  const labelerRect = useAppSelector((s) => s.editor.labelerRect);
+
   useEffect(() => {
     if (isBeingDragged) {
       const callback = (ev: MouseEvent) => {
-        const newPos: [number, number] = [x + ev.movementX, y + ev.movementY];
+        const newPos: [number, number] = [
+          ev.clientX - labelerRect.x,
+          ev.clientY - labelerRect.y,
+        ];
 
         onMoved(newPos);
 
@@ -47,7 +56,16 @@ function PolygonControlPoint({
         window.removeEventListener("mousemove", callback);
       };
     }
-  }, [isBeingDragged, onMoved, x, y]);
+  }, [isBeingDragged, labelerRect.x, labelerRect.y, onMoved, x, y]);
+
+  useMouseUp(
+    useCallback(() => {
+      if (isBeingDragged) {
+        onMoveEnded([x, y]);
+        setIsBeingDragged(false);
+      }
+    }, [isBeingDragged, onMoveEnded, x, y])
+  );
 
   return (
     <circle
@@ -59,21 +77,17 @@ function PolygonControlPoint({
         stroke: "black",
         strokeWidth: 0.5,
       }}
-      onMouseDown={() => {
+      onMouseDown={(e) => {
         setIsBeingDragged(true);
+        e.stopPropagation();
+        e.preventDefault();
       }}
-      onMouseUp={() => {
-        if (isBeingDragged) {
-          onMoveEnded([x, y]);
-        }
-        setIsBeingDragged(false);
-      }}
-      onMouseOut={() => {
-        if (isBeingDragged) {
-          onMoveCancelled([x, y]);
-        }
-        setIsBeingDragged(false);
-      }}
+      // onMouseOut={() => {
+      //   if (isBeingDragged) {
+      //     onMoveCancelled([x, y]);
+      //   }
+      //   setIsBeingDragged(false);
+      // }}
       className="control-point"
     />
   );
@@ -120,8 +134,9 @@ function matchRectDims(
   return newRect;
 }
 export default function Polygon(props: PolygonProps) {
-  const originalPoints = useRef(props.points).current;
-  const [points, setPoints] = useState([...originalPoints]);
+  const originalPoints = props.points;
+  console.log("RENDERING POINTS");
+  const [points, setPoints] = useState(originalPoints);
 
   const [isBeingDragged, setIsBeingDragged] = useState(false);
 
@@ -141,6 +156,15 @@ export default function Polygon(props: PolygonProps) {
     }
   }, [isBeingDragged]);
 
+  useMouseUp(
+    useCallback(() => {
+      if (isBeingDragged) {
+        setPoints(props.onDragCompleted(points) ?? originalPoints);
+        setIsBeingDragged(false);
+      }
+    }, [isBeingDragged, originalPoints, points, props])
+  );
+
   return (
     <>
       <polygon
@@ -150,21 +174,25 @@ export default function Polygon(props: PolygonProps) {
           stroke: props.stroke ?? "green",
           strokeWidth: props.strokeWidth ?? 1,
         }}
-        onMouseDown={() => {
-          setIsBeingDragged(true);
-        }}
-        onMouseUp={() => {
-          if (isBeingDragged) {
-            setPoints(props.onDragCompleted(points) ?? originalPoints);
+        // onClick={}
+        onMouseDown={(e) => {
+          if (props.isEditable) {
+            setIsBeingDragged(true);
+            e.stopPropagation();
+          } else {
+            if (props.onClicked) {
+              props.onClicked();
+            }
           }
-          setIsBeingDragged(false);
         }}
-        onMouseOut={() => {
-          if (isBeingDragged) setPoints(originalPoints);
-          setIsBeingDragged(false);
-        }}
+        // onMouseOut={() => {
+        //   if (props.isEditable) {
+        //     if (isBeingDragged) setPoints(originalPoints);
+        //   }
+        //   setIsBeingDragged(false);
+        // }}
       />
-      {points.map(([x1, y1], pointIdx) => (
+      {(props.isEditable ? points : []).map(([x1, y1], pointIdx) => (
         <PolygonControlPoint
           x={x1}
           y={y1}

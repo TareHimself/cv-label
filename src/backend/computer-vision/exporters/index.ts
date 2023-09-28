@@ -1,17 +1,16 @@
-import { ECVModelType, ILabel, ISample, ValueOf } from "@types"
+import { ISample } from "@types";
 
 export class ComputerVisionExporter {
-    name: string;
+  name: string;
 
-    
-    static ALL_EXPORTERS: ComputerVisionExporter[] = []
+  static ALL_EXPORTERS: ComputerVisionExporter[] = [];
 
-    constructor(name: string){
-        this.name = name
-    }
+  constructor(name: string) {
+    this.name = name;
+  }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async export(samples: ISample[]): Promise<boolean>{
-        throw new Error("Exporter not implemented")
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async export(samples: ISample[]): Promise<boolean> {
+    throw new Error("Exporter not implemented");
+  }
 }

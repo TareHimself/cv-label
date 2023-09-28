@@ -1,19 +1,26 @@
-import React, { PropsWithChildren, useEffect, useId, useRef } from "react";
+import React, { PropsWithChildren, useEffect, useId, useMemo, useRef } from "react";
+
+
+
+export type DialogController = {
+  id: string;
+}
+export function useDialog(): DialogController{
+  const dialogId = useId()
+
+
+  return useMemo(()=>{
+    return ( { id: dialogId })
+  },[dialogId])
+}
 
 export type DialogPropsType = PropsWithChildren<{
-  ref: (r: HTMLDialogElement) => void;
+  controller: DialogController
 }>;
 
-export default function Dialog({ children, ref }: DialogPropsType) {
-  const dialogId = useRef(useId()).current;
 
-  useEffect(() => {
-    const dialog = document.getElementById(
-      dialogId
-    ) as HTMLDialogElement | null;
-    if (dialog) {
-      ref(dialog);
-    }
-  }, [dialogId, ref]);
+export default function Dialog({ children, controller }: DialogPropsType) {
+  const dialogId = controller.id;
+
   return <dialog id={dialogId}>{children}</dialog>;
 }

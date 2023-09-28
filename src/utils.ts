@@ -63,4 +63,17 @@ export function modAbs(val: number,target: number){
         return val % target
     }
 }
+
+export function clamp(a: number, min: number, max: number) {
+  return Math.max(Math.min(max, a), min);
+}
+
+export function waitMouseRelease(callback: (e: MouseEvent) => void) {
+  const midway = (e: MouseEvent) => {
+    callback(e);
+    window.removeEventListener("mouseup", callback);
+  };
+
+  window.addEventListener("mouseup", midway);
+}
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

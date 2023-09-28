@@ -1,30 +1,32 @@
+import React from "react";
 import { IconType } from "react-icons";
 
 export type ActionPanelIconProps = {
   icon: IconType;
+  iconSize?: number;
+  disabled?: boolean;
+  style?: React.CSSProperties;
+  isActive?: boolean;
   onClicked?: () => void;
 };
 export default function ActionPanelIcon({
   icon,
   onClicked,
+  iconSize,
+  disabled,
+  style,
+  isActive,
 }: ActionPanelIconProps) {
   const Icon = icon;
-  const size = 30;
+  const size = iconSize ?? 20;
   return (
-    <div
-      style={{
-        maxWidth: size,
-        maxHeight: size,
-        minWidth: size,
-        minHeight: size,
-        margin: (50 - size) / 2,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        cursor: "pointer",
-      }}
+    <button
+      onClick={onClicked}
+      className={isActive ? "active-icon" : ""}
+      style={style}
+      disabled={disabled}
     >
-      <Icon onClick={onClicked} color="white" size={20} />
-    </div>
+      <Icon size={size} />
+    </button>
   );
 }

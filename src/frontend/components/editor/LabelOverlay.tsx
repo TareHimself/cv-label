@@ -1,21 +1,33 @@
 import Polygon from "@components/Polygon";
+import { setLabelIndex } from "@redux/exports";
+import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import {
   CvBoxLabel,
   CvSegmentLabel,
+  EEditorMode,
   ELabelType,
   LabelOverlayProps,
 } from "@types";
 
 type DrawProps<T> = {
   label: T;
-  image: LabelOverlayProps["image"];
+  isEditable: boolean;
   onUpdated: (update: T) => void;
+  onClicked?: () => void;
 };
 
-function DrawBox({ label, image, onUpdated }: DrawProps<CvBoxLabel>) {
+function DrawBox({
+  label,
+  onUpdated,
+  isEditable,
+  onClicked,
+}: DrawProps<CvBoxLabel>) {
+  const labelerRect = useAppSelector((s) => s.editor.labelerRect);
+  const imageInfo = useAppSelector((s) => s.editor.sampleImageInfo);
+
   const [scaleX, scaleY] = [
-    image.width / image.naturalWidth,
-    image.height / image.naturalHeight,
+    labelerRect.width / imageInfo.width,
+    labelerRect.height / imageInfo.height,
   ];
 
   const { x1, y1, x2, y2 } = label;
@@ -38,22 +50,33 @@ function DrawBox({ label, image, onUpdated }: DrawProps<CvBoxLabel>) {
       onDragCompleted={(newPoints) => {
         onUpdated({
           ...label,
-          x1: Math.min(...newPoints.map((a) => a[0])),
-          y1: Math.min(...newPoints.map((a) => a[1])),
-          x2: Math.max(...newPoints.map((a) => a[0])),
-          y2: Math.max(...newPoints.map((a) => a[1])),
+          x1: Math.min(...newPoints.map((a) => a[0])) / scaleX,
+          y1: Math.min(...newPoints.map((a) => a[1])) / scaleY,
+          x2: Math.max(...newPoints.map((a) => a[0])) / scaleX,
+          y2: Math.max(...newPoints.map((a) => a[1])) / scaleY,
         });
         return newPoints;
       }}
       isRect={true}
+      isEditable={isEditable}
+      onClicked={onClicked}
+      key={pointsScaled.toString()}
     />
   );
 }
 
-function DrawSegment({ label, image, onUpdated }: DrawProps<CvSegmentLabel>) {
+function DrawSegment({
+  label,
+  onUpdated,
+  isEditable,
+  onClicked,
+}: DrawProps<CvSegmentLabel>) {
+  const labelerRect = useAppSelector((s) => s.editor.labelerRect);
+  const imageInfo = useAppSelector((s) => s.editor.sampleImageInfo);
+
   const [scaleX, scaleY] = [
-    image.width / image.naturalWidth,
-    image.height / image.naturalHeight,
+    labelerRect.width / imageInfo.width,
+    labelerRect.height / imageInfo.height,
   ];
 
   const pointsScaled: [number, number][] = label.points.map((b) => [
@@ -72,35 +95,49 @@ function DrawSegment({ label, image, onUpdated }: DrawProps<CvSegmentLabel>) {
         return newPoints;
       }}
       isRect={false}
+      isEditable={isEditable}
+      onClicked={onClicked}
     />
   );
 }
 
 export default function LabelOverlay({
   labels,
-  image,
   onLabelUpdated,
 }: LabelOverlayProps) {
+  const labelIndex = useAppSelector((s) => s.editor.currentLabelIndex);
+  const editorMode = useAppSelector((s) => s.editor.mode);
+  const dispatch = useAppDispatch();
+
+  const labelerRect = useAppSelector((s) => s.editor.labelerRect);
   return (
     <svg
       style={{
         position: "absolute",
-        top: 0,
-        left: 0,
-        width: image.width,
-        height: image.height,
+        top: "50%",
+        left: "50%",
+        width: labelerRect.width,
+        height: labelerRect.height,
+        transform: "translate(-50%,-50%)",
       }}
       id="label-overlay"
     >
       {labels.map((a, idx) => {
+        const canBeEdited =
+          editorMode === EEditorMode.SELECT && labelIndex === idx;
         if (a.type === ELabelType.BOX) {
           return (
             <DrawBox
               label={a}
-              image={image}
               key={`label-${idx}`}
               onUpdated={(u) => {
                 onLabelUpdated(idx, u);
+              }}
+              isEditable={canBeEdited}
+              onClicked={() => {
+                if (!canBeEdited) {
+                  dispatch(setLabelIndex(idx));
+                }
               }}
             />
           );
@@ -108,10 +145,15 @@ export default function LabelOverlay({
           return (
             <DrawSegment
               label={a}
-              image={image}
               key={`label-${idx}`}
               onUpdated={(u) => {
                 onLabelUpdated(idx, u);
+              }}
+              isEditable={canBeEdited}
+              onClicked={() => {
+                if (!canBeEdited) {
+                  dispatch(setLabelIndex(idx));
+                }
               }}
             />
           );

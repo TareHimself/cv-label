@@ -15,8 +15,8 @@ export const enum ELabelType {
 
 export const enum EEditorMode {
   SELECT,
-  EDIT_BOX,
-  EDIT_SEGMENT,
+  CREATE_BOX,
+  CREATE_SEGMENT,
 }
 
 export interface ICVModelInferenceResults {
@@ -38,6 +38,13 @@ export interface ICVModelInferenceResults {
     mask: [number, number][];
   }[];
 }
+
+export type BasicRect = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
 
 export type InferenceResult<
   T extends ValueOf<typeof ECVModelType> = ValueOf<typeof ECVModelType>
@@ -62,6 +69,7 @@ export type IRendererToMainEvents = {
     modelType: T,
     imagePath: string
   ) => Promise<InferenceResult<T> | undefined>;
+  importSamples: (id: string) => Promise<ISample[]>;
 };
 
 export type IMainToRendererEvents = {
@@ -70,7 +78,6 @@ export type IMainToRendererEvents = {
 
 export type LabelOverlayProps = PropsWithChildren<{
   labels: CvLabel[];
-  image: HTMLImageElement;
   onLabelUpdated: (idx: number, label: CvLabel) => void;
 }>;
 
@@ -103,9 +110,22 @@ export interface ISample {
 
 export type EditorSliceState = {
   samples: ISample[];
-  currentSampleIndex: number;
+  sampleIndex: number;
+  currentLabelIndex: number;
   activeLabeler: ComputerVisionLabeler<ECVModelType> | null;
   mode: EEditorMode;
+  sampleScale: number;
+  xScroll: number;
+  yScroll: number;
+  labelerContainerRect: BasicRect;
+  labelerRect: BasicRect;
+  editorRect: BasicRect;
+  loadedImage: HTMLImageElement | null;
+  isLoadingCurrentSample: boolean;
+  sampleImageInfo: {
+    width: number;
+    height: number;
+  };
 };
 
 export type AppSliceState = {

@@ -12,6 +12,7 @@ def masks2segments_scaled(masks,original_size: tuple[int,int], strategy='largest
 
     Args:
         masks (torch.Tensor): the output of the model, which is a tensor of shape (batch_size, 160, 160)
+        original_size (tuple[int,int]): the original size of the image of shape (w,h)
         strategy (str): 'concat' or 'largest'. Defaults to largest
 
     Returns:
@@ -19,8 +20,13 @@ def masks2segments_scaled(masks,original_size: tuple[int,int], strategy='largest
     """
     segments = []
     saved = 0
+
+    max_dim = max(original_size)
+    diff_x = int((max_dim - original_size[0]) / 2)
+    diff_y = int((max_dim - original_size[1]) / 2)
+
     for x in masks.int().cpu().numpy().astype('uint8'):
-        x = cv2.resize(x,original_size,interpolation=cv2.INTER_CUBIC)
+        x = cv2.resize(x,(max_dim,max_dim),interpolation=cv2.INTER_CUBIC)[diff_y:diff_y + original_size[1], diff_x:diff_x + original_size[0]]
         saved += 1
         c = cv2.findContours(x * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
         if c:
@@ -46,22 +52,24 @@ def scale_boxes(img1_shape, boxes, img0_shape):
         img1_shape (tuple): The shape of the image that the bounding boxes are for, in the format of (height, width).
         boxes (torch.Tensor): the bounding boxes of the objects in the image, in the format of (x1, y1, x2, y2)
         img0_shape (tuple): the shape of the target image, in the format of (height, width).
-        ratio_pad (tuple): a tuple of (ratio, pad) for scaling the boxes. If not provided, the ratio and pad will be
-            calculated based on the size difference between the two images.
-        padding (bool): If True, assuming the boxes is based on image augmented by yolo style. If False then do regular
-            rescaling.
-
     Returns:
         boxes (torch.Tensor): The scaled bounding boxes, in the format of (x1, y1, x2, y2)
     # """
     b = boxes.numpy().tolist()
     new_b = []
+    max_dim = max(img0_shape)
+    diff_x = int((max_dim - img0_shape[1]) / 2)
+    diff_y = int((max_dim - img0_shape[0]) / 2)
     for box in b:
-        x1 = (box[0]/ img1_shape[1]) * img0_shape[1]
-        y1 = (box[1] / img1_shape[0]) * img0_shape[0]
-        x2 = (box[2] / img1_shape[1]) * img0_shape[1]
-        y2 = (box[3] / img1_shape[0]) * img0_shape[0]
+        x1 = ((box[0]/ img1_shape[1]) * max_dim) - diff_x
+        y1 = ((box[1] / img1_shape[0]) * max_dim) - diff_y
+        x2 = ((box[2] / img1_shape[1]) * max_dim) - diff_x
+        y2 = ((box[3] / img1_shape[0]) * max_dim) - diff_y
+
+        # increase = min_dim / max_dim
         new_b.append([x1,y1,x2,y2])
+
+    print("DIFF ",diff_y,diff_x,max_dim,file=open("test.log",'w'))
 
     boxes = torch.from_numpy(np.array(new_b))
     clip_boxes(boxes, img0_shape)
@@ -275,47 +283,5 @@ def process_mask_upsample(protos, masks_in, bboxes, shape):
     c, mh, mw = protos.shape  # CHW
     masks = (masks_in @ protos.float().view(c, -1)).sigmoid().view(-1, mh, mw)
     masks = F.interpolate(masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
-    masks = crop_mask(masks, bboxes)  # CHW
-    return masks.gt_(0.5)
-
-def scale_masks(masks, shape, padding=True):
-    """
-    Rescale segment masks to shape.
-
-    Args:
-        masks (torch.Tensor): (N, C, H, W).
-        shape (tuple): Height and width.
-        padding (bool): If True, assuming the boxes is based on image augmented by yolo style. If False then do regular
-            rescaling.
-    """
-    mh, mw = masks.shape[2:]
-    gain = min(mh / shape[0], mw / shape[1])  # gain  = old / new
-    pad = [mw - shape[1] * gain, mh - shape[0] * gain]  # wh padding
-    if padding:
-        pad[0] /= 2
-        pad[1] /= 2
-    top, left = (int(pad[1]), int(pad[0])) if padding else (0, 0)  # y, x
-    bottom, right = (int(mh - pad[1]), int(mw - pad[0]))
-    masks = masks[..., top:bottom, left:right]
-
-    masks = F.interpolate(masks, shape, mode='bilinear', align_corners=False)  # NCHW
-    return masks
-
-def process_mask_native(protos, masks_in, bboxes, shape):
-    """
-    It takes the output of the mask head, and crops it after upsampling to the bounding boxes.
-
-    Args:
-        protos (torch.Tensor): [mask_dim, mask_h, mask_w]
-        masks_in (torch.Tensor): [n, mask_dim], n is number of masks after nms
-        bboxes (torch.Tensor): [n, 4], n is number of masks after nms
-        shape (tuple): the size of the input image (h,w)
-
-    Returns:
-        masks (torch.Tensor): The returned masks with dimensions [h, w, n]
-    """
-    c, mh, mw = protos.shape  # CHW
-    masks = (masks_in @ protos.float().view(c, -1)).sigmoid().view(-1, mh, mw)
-    masks = scale_masks(masks[None], shape)[0]  # CHW
     masks = crop_mask(masks, bboxes)  # CHW
     return masks.gt_(0.5)

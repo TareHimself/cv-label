@@ -62,6 +62,7 @@ def format_seg_results(out0: list[list[float],list[int]],out1: list[list[float],
     #         new_segment.append([x1,y1])
 
     #     new_segments.append(new_segment)
+    
 
     return {
             "boxes": pred[:, :6].numpy().tolist(),

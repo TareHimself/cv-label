@@ -1,9 +1,10 @@
-import { app, BrowserWindow, protocol, systemPreferences } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import { Yolov8Detection, Yolov8Segmentation } from "./computer-vision/yolo";
 import * as fs from "fs";
 import { ipcMain } from "../ipc-impl";
 import { GenericComputerVisionModel } from "./computer-vision";
-import { ECVModelType, InferenceResult, ValueOf } from "../types";
+import { ECVModelType, ValueOf } from "../types";
+import { YoloV8Importer } from "./computer-vision/importers/yolov8";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -24,7 +25,7 @@ declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
-ipcMain.handle("getPreloadPath", () => MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY);
+// ipcMain.handle("getPreloadPath", () => MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY);
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -69,7 +70,8 @@ const createWindow = async () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on("ready", createWindow);
+app.whenReady().then(createWindow);
+// app.on("ready", createWindow);
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -97,6 +99,7 @@ ipcMain.handle("doInference", async (_modelType, imagePath) => {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (await detector.predict(imagePath)) as any;
   } catch (error) {
     console.error(error);
@@ -120,6 +123,11 @@ ipcMain.handle("loadModel", async (modelType, modelPath) => {
     console.error(error);
     return false;
   }
+});
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ipcMain.handle("importSamples", async (id) => {
+  return await new YoloV8Importer("test").import();
 });
 
 // In this file you can include the rest of your app's specific main process
