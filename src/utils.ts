@@ -67,23 +67,19 @@ export function clamp(a: number, min: number, max: number) {
 }
 
 export function wrap(a: number, min: number, max: number): number {
+  if (max - min <= 1) {
+    return a;
+  }
+
   if (a < min) {
-    return wrap(max - (min - a), min, max);
+    return wrap(max - Math.abs(a), min, max);
   }
 
   if (a > max) {
-    return wrap(a - max, min, max);
+    return wrap(a - max - 1, min, max);
   }
 
   return a;
 }
 
-export function waitMouseRelease(callback: (e: MouseEvent) => void) {
-  const midway = (e: MouseEvent) => {
-    callback(e);
-    window.removeEventListener("mouseup", callback);
-  };
-
-  window.addEventListener("mouseup", midway);
-}
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

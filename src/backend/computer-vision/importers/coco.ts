@@ -1,8 +1,7 @@
 import { dialog } from "electron";
 import { ComputerVisionImporter } from ".";
-import * as fs from "fs";
-import path from "path";
 import { CvLabel, CvSegmentLabel, ELabelType, ISample } from "@types";
+import { withNodeWorker } from "@root/backend/utils";
 interface ICocoDataset {
   info: {
     year: string;
@@ -51,66 +50,75 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
 
     const datasetPath = dialogResult.filePaths[0];
 
-    const immediateFolders = await fs.promises.readdir(datasetPath);
+    return await withNodeWorker(
+      async (datasetPath, segmentLabelType) => {
+        const [fs, path] = eval(`[require('fs'),require('path')]`) as [
+          typeof import("fs"),
+          typeof import("path")
+        ];
 
-    const allSamples: ISample[] = [];
+        const immediateFolders = await fs.promises.readdir(datasetPath);
+        const allSamples: ISample[] = [];
 
-    for (const folder of immediateFolders) {
-      const annotationsPath = path.join(
-        datasetPath,
-        folder,
-        "_annotations.coco.json"
-      );
+        for (const folder of immediateFolders) {
+          const annotationsPath = path.join(
+            datasetPath,
+            folder,
+            "_annotations.coco.json"
+          );
 
-      try {
-        const dataset: ICocoDataset = await fs.promises
-          .readFile(annotationsPath, {
-            encoding: "utf-8",
-          })
-          .then((a) => JSON.parse(a));
+          try {
+            const dataset: ICocoDataset = await fs.promises
+              .readFile(annotationsPath, {
+                encoding: "utf-8",
+              })
+              .then((a) => JSON.parse(a));
 
-        // const categoriesLookup = dataset.categories.reduce((t, c) => {
-        //   t[c.id] = c;
+            // const categoriesLookup = dataset.categories.reduce((t, c) => {
+            //   t[c.id] = c;
 
-        //   return t;
-        // }, {} as Record<string, ICocoDataset["categories"][0]>);
+            //   return t;
+            // }, {} as Record<string, ICocoDataset["categories"][0]>);
 
-        const samples: ISample[] = dataset.images.map((img) => {
-          return {
-            path: path.join(datasetPath, folder, img.file_name),
-            labels: dataset.annotations
-              .filter((a) => a.image_id === img.id)
-              .reduce((t, c) => {
-                t.push(
-                  ...c.segmentation.map((d) => {
-                    const points: [number, number][] = [];
+            const samples: ISample[] = dataset.images.map((img) => {
+              return {
+                path: path.join(datasetPath, folder, img.file_name),
+                labels: dataset.annotations
+                  .filter((a) => a.image_id === img.id)
+                  .reduce((t, c) => {
+                    t.push(
+                      ...c.segmentation.map((d) => {
+                        const points: [number, number][] = [];
 
-                    for (let i = 0; i < d.length; i += 2) {
-                      console.log(d.length, i, i + 2, d.slice(i, i + 2));
-                      points.push(d.slice(i, i + 2) as [number, number]);
-                    }
+                        for (let i = 0; i < d.length; i += 2) {
+                          points.push(d.slice(i, i + 2) as [number, number]);
+                        }
 
-                    const label: CvSegmentLabel = {
-                      points: points,
-                      classIndex: c.category_id,
-                      type: ELabelType.SEGMENT,
-                    };
+                        const label: CvSegmentLabel = {
+                          points: points,
+                          classIndex: c.category_id,
+                          type: segmentLabelType as ELabelType.SEGMENT,
+                        };
 
-                    return label;
-                  })
-                );
+                        return label;
+                      })
+                    );
 
-                return t;
-              }, [] as CvLabel[]),
-          };
-        });
+                    return t;
+                  }, [] as CvLabel[]),
+              };
+            });
 
-        allSamples.push(...samples);
-      } catch (error) {
-        console.error(error);
-      }
-    }
+            allSamples.push(...samples);
+          } catch (error) {
+            console.error(error);
+          }
+        }
 
-    return allSamples;
+        return allSamples;
+      },
+      datasetPath,
+      ELabelType.SEGMENT
+    );
   }
 }

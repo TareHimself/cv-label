@@ -1,4 +1,4 @@
-import { InferenceSession, Tensor } from "onnxruntime-node";
+import { InferenceSession } from "onnxruntime-node";
 import sharp from "sharp";
 import ComputerVisionModel from ".";
 import { pymport, proxify } from "pymport";
@@ -6,9 +6,10 @@ const pythonSys = proxify(pymport("sys"));
 pythonSys.get("path").insert(0, process.cwd());
 const pythonUtils = proxify(pymport("python"));
 import { ECVModelType, ICVModelInferenceResults } from "@types";
+import { WorkerProcess, createWorkerProcess } from "../utils";
 
 export type Yolov8InputType = {
-  data: Float32Array;
+  data: number[];
   width: number;
   height: number;
 };
@@ -17,10 +18,10 @@ abstract class Yolov8<
   RawPredictionResult,
   Model extends ECVModelType.Yolov8Detect | ECVModelType.Yolov8Seg
 > extends ComputerVisionModel<Yolov8InputType, RawPredictionResult, Model> {
-  model: InferenceSession;
-  constructor(model: InferenceSession) {
+  worker: WorkerProcess;
+  constructor(model: WorkerProcess) {
     super();
-    this.model = model;
+    this.worker = model;
   }
 
   static getSessionOptions() {
@@ -55,7 +56,7 @@ abstract class Yolov8<
     return {
       width: img_width ?? -1,
       height: img_height ?? -1,
-      data: Float32Array.from([...red, ...green, ...blue]),
+      data: [...red, ...green, ...blue],
     };
   }
 
@@ -75,7 +76,10 @@ abstract class Yolov8<
   }
 }
 
-type Yolov8DetectionResultRaw = Tensor;
+type Yolov8DetectionResultRaw = {
+  data: number[];
+  dims: number[];
+};
 type Yolov8DetectionResult =
   ICVModelInferenceResults[ECVModelType.Yolov8Detect];
 
@@ -83,7 +87,7 @@ export class Yolov8Detection extends Yolov8<
   Yolov8DetectionResultRaw,
   ECVModelType.Yolov8Detect
 > {
-  constructor(model: InferenceSession) {
+  constructor(model: WorkerProcess) {
     super(model);
   }
 
@@ -94,30 +98,48 @@ export class Yolov8Detection extends Yolov8<
 
   static async create(modelPath: string) {
     return new Yolov8Detection(
-      await InferenceSession.create(modelPath, Yolov8.getSessionOptions())
+      await createWorkerProcess(
+        async (bridge, options, modelPath) => {
+          const { InferenceSession, Tensor } = eval(
+            `require("onnxruntime-node")`
+          ) as typeof import("onnxruntime-node");
+          const session = await InferenceSession.create(modelPath, options);
+
+          bridge.handleEvent("infer", async (data: number[]) => {
+            const input = new Tensor(Float32Array.from(data), [1, 3, 640, 640]);
+
+            const outputs = await session.run({ images: input });
+
+            const output = outputs["output0"];
+
+            return {
+              data: Array.from(output.data as Float32Array),
+              dims: output.dims,
+            };
+          });
+        },
+        Yolov8.getSessionOptions(),
+        modelPath
+      )
     );
   }
 
   override async predictRaw(
     data: Yolov8InputType
   ): Promise<Yolov8DetectionResultRaw> {
-    const input = new Tensor(data.data, [1, 3, 640, 640]);
-    const outputs = await this.model.run({ images: input });
-
-    const output = outputs["output0"];
-
-    return output;
+    return await this.worker.call("infer", data.data);
   }
 
   override async rawToResult(
     input: Yolov8InputType,
     output: Yolov8DetectionResultRaw
   ): Promise<Yolov8DetectionResult> {
+    console.log(output);
     const rawResult = (
       await pythonUtils
         .get("format_detect_result")
         .callAsync(
-          [Array.from(output.data as Float32Array), output.dims],
+          [output.data, output.dims],
           [input.width, input.height],
           [Yolov8Detection.inferenceDims.x, Yolov8Detection.inferenceDims.y]
         )
@@ -142,7 +164,12 @@ export class Yolov8Detection extends Yolov8<
   }
 }
 
-type Yolov8SegmentationResultRaw = [Tensor, Tensor];
+type Yolov8SegmentationResultRaw = {
+  out1: number[];
+  dims1: number[];
+  out2: number[];
+  dims2: number[];
+};
 type Yolov8SegmentationResult =
   ICVModelInferenceResults[ECVModelType.Yolov8Seg];
 
@@ -150,7 +177,7 @@ export class Yolov8Segmentation extends Yolov8<
   Yolov8SegmentationResultRaw,
   ECVModelType.Yolov8Seg
 > {
-  constructor(model: InferenceSession) {
+  constructor(model: WorkerProcess) {
     super(model);
   }
 
@@ -161,24 +188,42 @@ export class Yolov8Segmentation extends Yolov8<
 
   static async create(modelPath: string) {
     return new Yolov8Segmentation(
-      await InferenceSession.create(modelPath, Yolov8.getSessionOptions())
+      await createWorkerProcess(
+        async (bridge, options, modelPath) => {
+          const { InferenceSession, Tensor } = eval(
+            `require("onnxruntime-node")`
+          ) as typeof import("onnxruntime-node");
+          const session = await InferenceSession.create(modelPath, options);
+
+          bridge.handleEvent("infer", async (data: number[]) => {
+            const input = new Tensor(Float32Array.from(data), [1, 3, 640, 640]);
+
+            const outputs = await session.run({ images: input });
+
+            return {
+              out1: Array.from(outputs["output0"].data as Float32Array),
+              dims1: outputs["output0"].dims,
+              out2: Array.from(outputs["output1"].data as Float32Array),
+              dims2: outputs["output1"].dims,
+            };
+          });
+        },
+        Yolov8.getSessionOptions(),
+        modelPath
+      )
     );
   }
 
   override async predictRaw(
     data: Yolov8InputType
   ): Promise<Yolov8SegmentationResultRaw> {
-    const input = new Tensor(data.data, [1, 3, 640, 640]);
-    const outputs = await this.model.run({ images: input });
-
-    return [outputs["output0"], outputs["output1"]];
+    return await this.worker.call("infer", data.data);
   }
 
   override async rawToResult(
     input: Yolov8InputType,
     output: Yolov8SegmentationResultRaw
   ): Promise<Yolov8SegmentationResult> {
-    const [out1, out2] = output;
     // const sectionSize = output.dims[1]
     // const maxPredicted = output.dims[2]
     // console.log(output.dims)
@@ -186,8 +231,8 @@ export class Yolov8Segmentation extends Yolov8<
 
     const processed = (
       await pythonUtils.get("format_seg_results").callAsync(
-        [Array.from(out1.data as Float32Array), out1.dims],
-        [Array.from(out2.data as Float32Array), out2.dims],
+        [output.out1, output.dims1],
+        [output.out2, output.dims2],
         //[input.width, input.height],
         [input.width, input.height],
         [Yolov8Detection.inferenceDims.x, Yolov8Detection.inferenceDims.y]

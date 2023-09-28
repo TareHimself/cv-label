@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
 import { domRectToBasicRect } from "@hooks/useElementRect";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { clamp, wrap } from "@root/utils";
+import { wrap } from "@root/utils";
 // import { toast } from "react-toastify"
 import {
   BasicRect,
@@ -12,7 +12,12 @@ import {
 } from "@types";
 
 const initialState: EditorSliceState = {
-  samples: [],
+  samples: [
+    {
+      path: "./test.jpg",
+      labels: [],
+    },
+  ],
   sampleIndex: 0,
   activeLabeler: null,
   mode: EEditorMode.SELECT,

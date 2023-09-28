@@ -71,12 +71,21 @@ export default function Editor() {
   );
 
   // useEffect(() => {
-  //   dispatch(
-  //     importSamples({
-  //       id: "yolo",
-  //     })
-  //   );
-  // }, [dispatch]);
+  //   withWebWorker(async () => {
+  //     // eslint-disable-next-line @typescript-eslint/no-var-requires
+  //     const path = require("path");
+
+  //     return "Hello world" + path.join("one", "two");
+  //   }).then((a) => console.log("From Worker", a));
+  // }, []);
+
+  useEffect(() => {
+    dispatch(
+      importSamples({
+        id: "yolo",
+      })
+    );
+  }, [dispatch]);
 
   // useEffect(() => {
   //   if (currentSample && currentSample.labels.length === 0) {

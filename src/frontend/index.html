@@ -1,13 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <!-- <meta http-equiv="Content-Security-Policy"
-    content="default-src app:; script-src app:; media-src app:;" /> -->
-    <title>Hello World!</title>
 
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <!-- <meta http-equiv="Content-Security-Policy"
+    content="default-src app:; script-src app:; media-src app:;" /> -->
+  <title>Hello World!</title>
+
+</head>
+
+<body>
+  <script id="worker-script">
+    self.onmessage = (d) => {
+      if (d.data.op === "start") {
+        const toCall = eval(d.data.data.func)
+
+        const args = d.data.data.args
+
+        toCall(...args)
+          .then((r) => {
+            self.postMessage({
+              op: "result",
+              data: r,
+            });
+          })
+          .catch((e) => {
+            self.postMessage({
+              op: "error",
+              data: e,
+            });
+          });
+      }
+    };
+  </script>
+  <div id="root"></div>
+</body>
+
+
 </html>

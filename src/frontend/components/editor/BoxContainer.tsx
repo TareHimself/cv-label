@@ -23,6 +23,10 @@ export default function BoxContainer() {
     (s) => s.editor.isLoadingCurrentSample
   );
 
+  console.log(
+    "Sample Index",
+    useAppSelector((s) => s.editor.sampleIndex)
+  );
   const imageId = useId();
 
   useEffect(() => {

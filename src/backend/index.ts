@@ -6,13 +6,8 @@ import { GenericComputerVisionModel } from "./computer-vision";
 import { ECVModelType, ValueOf } from "../types";
 import { YoloV8Importer } from "./computer-vision/importers/yolov8";
 import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
-import { runInWorker } from "./thread";
 
 // const IMPORTERS = [new YoloV8Importer("Yolov8")]
-
-runInWorker(async () => {
-  return "This is from a worker";
-}).then((d) => console.log("Worker Result",d))
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -62,6 +57,7 @@ const createWindow = async () => {
     width: 800,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      nodeIntegrationInWorker: true,
     },
     autoHideMenuBar: true,
   });
