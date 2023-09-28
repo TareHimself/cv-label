@@ -52,6 +52,7 @@
     "@reduxjs/toolkit": "^1.9.5",
     "@techstark/opencv-js": "^4.8.0-release.4",
     "@timfish/forge-externals-plugin": "^0.2.1",
+    "@types/uuid": "^9.0.4",
     "electron-squirrel-startup": "^1.0.0",
     "node-calls-python": "^1.7.7",
     "onnxruntime-node": "^1.15.1",
@@ -62,6 +63,7 @@
     "react-icons": "^4.11.0",
     "react-redux": "^8.1.2",
     "sharp": "^0.32.5",
+    "uuid": "^9.0.1",
     "webpack-node-externals": "^3.0.0"
   }
 }
