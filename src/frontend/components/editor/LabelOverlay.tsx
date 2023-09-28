@@ -108,8 +108,8 @@ export default function LabelOverlay({
   const labelIndex = useAppSelector((s) => s.editor.currentLabelIndex);
   const editorMode = useAppSelector((s) => s.editor.mode);
   const dispatch = useAppDispatch();
-
   const labelerRect = useAppSelector((s) => s.editor.labelerRect);
+  const labelerRectDims = `${labelerRect.height}x${labelerRect.width}`;
   return (
     <svg
       style={{
@@ -129,7 +129,7 @@ export default function LabelOverlay({
           return (
             <DrawBox
               label={a}
-              key={`label-${idx}`}
+              key={`label-${idx}-${labelerRectDims}`}
               onUpdated={(u) => {
                 onLabelUpdated(idx, u);
               }}
@@ -145,7 +145,7 @@ export default function LabelOverlay({
           return (
             <DrawSegment
               label={a}
-              key={`label-${idx}`}
+              key={`label-${idx}-${labelerRectDims}`}
               onUpdated={(u) => {
                 onLabelUpdated(idx, u);
               }}

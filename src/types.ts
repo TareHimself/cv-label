@@ -83,23 +83,23 @@ export type LabelOverlayProps = PropsWithChildren<{
 
 export type CvLabelSegmentPoint = [number, number];
 
-type CvLabelBase = {
+interface CvLabelBase {
   classIndex: number;
   type: ELabelType;
-};
+}
 
-export type CvBoxLabel = CvLabelBase & {
+export interface CvBoxLabel extends CvLabelBase {
   x1: number;
   y1: number;
   x2: number;
   y2: number;
   type: ELabelType.BOX;
-};
+}
 
-export type CvSegmentLabel = CvLabelBase & {
+export interface CvSegmentLabel extends CvLabelBase {
   points: CvLabelSegmentPoint[];
   type: ELabelType.SEGMENT;
-};
+}
 
 export type CvLabel = CvBoxLabel | CvSegmentLabel;
 

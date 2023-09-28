@@ -135,7 +135,6 @@ function matchRectDims(
 }
 export default function Polygon(props: PolygonProps) {
   const originalPoints = props.points;
-  console.log("RENDERING POINTS");
   const [points, setPoints] = useState(originalPoints);
 
   const [isBeingDragged, setIsBeingDragged] = useState(false);

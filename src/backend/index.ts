@@ -5,6 +5,7 @@ import { ipcMain } from "../ipc-impl";
 import { GenericComputerVisionModel } from "./computer-vision";
 import { ECVModelType, ValueOf } from "../types";
 import { YoloV8Importer } from "./computer-vision/importers/yolov8";
+import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
 
 // const IMPORTERS = [new YoloV8Importer("Yolov8")]
 
@@ -129,7 +130,7 @@ ipcMain.handle("loadModel", async (modelType, modelPath) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 ipcMain.handle("importSamples", async (id) => {
-  return await new YoloV8Importer("Yolov8").import();
+  return await new CocoSegmentationImporter("Yolov8").import();
 });
 
 // In this file you can include the rest of your app's specific main process

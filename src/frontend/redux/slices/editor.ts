@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
 import { domRectToBasicRect } from "@hooks/useElementRect";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { clamp } from "@root/utils";
+import { clamp, wrap } from "@root/utils";
 // import { toast } from "react-toastify"
 import {
   BasicRect,
@@ -78,8 +78,9 @@ export const EditorSlice = createSlice({
       state.samples.push(...action.payload);
     },
     setCurrentSample: (state, action: PayloadAction<number>) => {
-      if (state.samples[action.payload] !== undefined) {
-        state.sampleIndex = clamp(action.payload, 0, state.samples.length - 1);
+      const targetIdx = wrap(action.payload, 0, state.samples.length - 1);
+      if (state.samples[targetIdx] !== undefined) {
+        state.sampleIndex = targetIdx;
         state.currentLabelIndex = -1;
         state.isLoadingCurrentSample = true;
         state.loadedImage = null;
@@ -149,7 +150,6 @@ export const EditorSlice = createSlice({
       state.yScroll += deltaY;
     },
     onImageLoaded: (state, action: PayloadAction<HTMLImageElement>) => {
-      state.isLoadingCurrentSample = false;
       state.sampleImageInfo = {
         width: action.payload.naturalWidth,
         height: action.payload.naturalHeight,
@@ -173,6 +173,8 @@ export const EditorSlice = createSlice({
       state.sampleScale = 1;
       state.xScroll = 0;
       state.yScroll = 0;
+
+      state.isLoadingCurrentSample = false;
     },
   },
   // eslint-disable-next-line @typescript-eslint/no-empty-function
