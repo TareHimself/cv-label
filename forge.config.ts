@@ -40,7 +40,9 @@ const config: ForgeConfig = {
             },
           },
         ],
+        // nodeIntegration: true,
       },
+      packageSourceMaps: true,
       devContentSecurityPolicy: `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: * blob: app:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app: blob:; media-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app:;`,
     }),
     new ForgeExternalsPlugin({

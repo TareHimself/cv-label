@@ -6,7 +6,7 @@ const pythonSys = proxify(pymport("sys"));
 pythonSys.get("path").insert(0, process.cwd());
 const pythonUtils = proxify(pymport("python"));
 import { ECVModelType, ICVModelInferenceResults } from "@types";
-import { WorkerProcess, createWorkerProcess } from "../../utils";
+import { WorkerProcess, createWorkerProcess } from "@root/backend/worker";
 
 export type Yolov8InputType = {
   data: number[];
@@ -14,12 +14,39 @@ export type Yolov8InputType = {
   height: number;
 };
 
+type Yolov8DetectionResultRaw = {
+  data: number[];
+  dims: number[];
+};
+
+type Yolov8SegmentationResultRaw = {
+  out1: number[];
+  dims1: number[];
+  out2: number[];
+  dims2: number[];
+};
+
+type IDetectionWorkerEvents = {
+  infer: (data: number[]) => Promise<Yolov8DetectionResultRaw>;
+};
+
+type ISegmentationWorkerEvents = {
+  infer: (data: number[]) => Promise<Yolov8SegmentationResultRaw>;
+};
+
+type YoloV8WorkerProcess<
+  Model extends ECVModelType.Yolov8Detect | ECVModelType.Yolov8Seg
+> = WorkerProcess<
+  Model extends ECVModelType.Yolov8Detect
+    ? IDetectionWorkerEvents
+    : ISegmentationWorkerEvents
+>;
 abstract class Yolov8<
   RawPredictionResult,
   Model extends ECVModelType.Yolov8Detect | ECVModelType.Yolov8Seg
 > extends ComputerVisionModel<Yolov8InputType, RawPredictionResult, Model> {
-  worker: WorkerProcess;
-  constructor(model: WorkerProcess) {
+  worker: YoloV8WorkerProcess<Model>;
+  constructor(model: YoloV8WorkerProcess<Model>) {
     super();
     this.worker = model;
   }
@@ -80,10 +107,6 @@ abstract class Yolov8<
   }
 }
 
-type Yolov8DetectionResultRaw = {
-  data: number[];
-  dims: number[];
-};
 type Yolov8DetectionResult =
   ICVModelInferenceResults[ECVModelType.Yolov8Detect];
 
@@ -91,7 +114,7 @@ export class Yolov8Detection extends Yolov8<
   Yolov8DetectionResultRaw,
   ECVModelType.Yolov8Detect
 > {
-  constructor(model: WorkerProcess) {
+  constructor(model: YoloV8WorkerProcess<ECVModelType.Yolov8Detect>) {
     super(model);
   }
 
@@ -109,7 +132,7 @@ export class Yolov8Detection extends Yolov8<
           ) as typeof import("onnxruntime-node");
           const session = await InferenceSession.create(modelPath, options);
 
-          bridge.handleEvent("infer", async (data: number[]) => {
+          bridge.handleEvent("infer", async (data) => {
             const input = new Tensor(Float32Array.from(data), [1, 3, 640, 640]);
 
             const outputs = await session.run({ images: input });
@@ -118,7 +141,7 @@ export class Yolov8Detection extends Yolov8<
 
             return {
               data: Array.from(output.data as Float32Array),
-              dims: output.dims,
+              dims: [...output.dims],
             };
           });
         },
@@ -167,12 +190,6 @@ export class Yolov8Detection extends Yolov8<
   }
 }
 
-type Yolov8SegmentationResultRaw = {
-  out1: number[];
-  dims1: number[];
-  out2: number[];
-  dims2: number[];
-};
 type Yolov8SegmentationResult =
   ICVModelInferenceResults[ECVModelType.Yolov8Seg];
 
@@ -180,7 +197,7 @@ export class Yolov8Segmentation extends Yolov8<
   Yolov8SegmentationResultRaw,
   ECVModelType.Yolov8Seg
 > {
-  constructor(model: WorkerProcess) {
+  constructor(model: YoloV8WorkerProcess<ECVModelType.Yolov8Seg>) {
     super(model);
   }
 
@@ -198,16 +215,16 @@ export class Yolov8Segmentation extends Yolov8<
           ) as typeof import("onnxruntime-node");
           const session = await InferenceSession.create(modelPath, options);
 
-          bridge.handleEvent("infer", async (data: number[]) => {
+          bridge.handleEvent("infer", async (data) => {
             const input = new Tensor(Float32Array.from(data), [1, 3, 640, 640]);
 
             const outputs = await session.run({ images: input });
 
             return {
               out1: Array.from(outputs["output0"].data as Float32Array),
-              dims1: outputs["output0"].dims,
+              dims1: [...outputs["output0"].dims],
               out2: Array.from(outputs["output1"].data as Float32Array),
-              dims2: outputs["output1"].dims,
+              dims2: [...outputs["output1"].dims],
             };
           });
         },

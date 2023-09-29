@@ -1,7 +1,7 @@
 import { ELabelType, ISample } from "@types";
 import { ComputerVisionImporter } from ".";
 import { dialog } from "electron";
-import { withNodeWorker } from "@root/backend/utils";
+import { withNodeWorker } from "@root/backend/worker";
 
 export class YoloV8Importer extends ComputerVisionImporter {
   constructor() {

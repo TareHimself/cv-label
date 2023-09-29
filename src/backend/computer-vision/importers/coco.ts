@@ -1,7 +1,7 @@
 import { dialog } from "electron";
 import { ComputerVisionImporter } from ".";
 import { CvLabel, CvSegmentLabel, ELabelType, ISample } from "@types";
-import { withNodeWorker } from "@root/backend/utils";
+import { withNodeWorker } from "@root/backend/worker";
 interface ICocoDataset {
   info: {
     year: string;

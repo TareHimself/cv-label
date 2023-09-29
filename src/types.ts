@@ -133,3 +133,8 @@ export type AppSliceState = {
     editor: EditorSliceState;
   };
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AsyncReturnType<T extends (...args: any) => Promise<any>> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  T extends (...args: any) => Promise<infer R> ? R : any;

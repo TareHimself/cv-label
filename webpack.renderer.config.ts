@@ -1,12 +1,12 @@
-import type { Configuration } from 'webpack';
+import type { Configuration } from "webpack";
 
-import path from 'path'
-import { rules } from './webpack.rules';
-import { plugins } from './webpack.plugins';
+import path from "path";
+import { rules } from "./webpack.rules";
+import { plugins } from "./webpack.plugins";
 
 rules.push({
   test: /\.css$/,
-  use: [{ loader: 'style-loader' }, { loader: 'css-loader' }],
+  use: [{ loader: "style-loader" }, { loader: "css-loader" }],
 });
 
 export const rendererConfig: Configuration = {
@@ -15,7 +15,7 @@ export const rendererConfig: Configuration = {
   },
   plugins,
   resolve: {
-    extensions: ['.js', '.ts', '.jsx', '.tsx', '.css'],
+    extensions: [".js", ".ts", ".jsx", ".tsx", ".css"],
     alias: {
       "@redux": path.resolve(__dirname, path.join("src", "frontend", "redux")),
       "@hooks": path.resolve(__dirname, path.join("src", "frontend", "hooks")),
@@ -28,4 +28,7 @@ export const rendererConfig: Configuration = {
       "@types": path.resolve(__dirname, path.join("src", "types.ts")),
     },
   },
+  // optimization: {
+  //   minimize: false
+  // }
 };
