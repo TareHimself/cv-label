@@ -4,6 +4,10 @@ import { dialog } from "electron";
 import { withNodeWorker } from "@root/backend/utils";
 
 export class YoloV8Importer extends ComputerVisionImporter {
+  constructor() {
+    super("Yolov8");
+  }
+
   override async import(): Promise<ISample[]> {
     const dialogResult = await dialog.showOpenDialog({
       properties: ["openDirectory"],

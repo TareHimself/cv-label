@@ -6,7 +6,7 @@ const pythonSys = proxify(pymport("sys"));
 pythonSys.get("path").insert(0, process.cwd());
 const pythonUtils = proxify(pymport("python"));
 import { ECVModelType, ICVModelInferenceResults } from "@types";
-import { WorkerProcess, createWorkerProcess } from "../utils";
+import { WorkerProcess, createWorkerProcess } from "../../utils";
 
 export type Yolov8InputType = {
   data: number[];
@@ -74,6 +74,10 @@ abstract class Yolov8<
   ): Promise<ICVModelInferenceResults[Model]> {
     throw new Error("Not Implemented");
   }
+
+  override async cleanup(): Promise<void> {
+    await this.worker.stop();
+  }
 }
 
 type Yolov8DetectionResultRaw = {
@@ -134,7 +138,6 @@ export class Yolov8Detection extends Yolov8<
     input: Yolov8InputType,
     output: Yolov8DetectionResultRaw
   ): Promise<Yolov8DetectionResult> {
-    console.log(output);
     const rawResult = (
       await pythonUtils
         .get("format_detect_result")
@@ -224,11 +227,6 @@ export class Yolov8Segmentation extends Yolov8<
     input: Yolov8InputType,
     output: Yolov8SegmentationResultRaw
   ): Promise<Yolov8SegmentationResult> {
-    // const sectionSize = output.dims[1]
-    // const maxPredicted = output.dims[2]
-    // console.log(output.dims)
-    // const data = output.data as Float32Array
-
     const processed = (
       await pythonUtils.get("format_seg_results").callAsync(
         [output.out1, output.dims1],

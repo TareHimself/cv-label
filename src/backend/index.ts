@@ -1,13 +1,26 @@
 import { app, BrowserWindow, protocol } from "electron";
-import { Yolov8Detection, Yolov8Segmentation } from "./computer-vision/yolo";
+import {
+  Yolov8Detection,
+  Yolov8Segmentation,
+} from "./computer-vision/models/yolo";
 import * as fs from "fs";
 import { ipcMain } from "../ipc-impl";
-import { GenericComputerVisionModel } from "./computer-vision";
+import { GenericComputerVisionModel } from "./computer-vision/models";
 import { ECVModelType, ValueOf } from "../types";
 import { YoloV8Importer } from "./computer-vision/importers/yolov8";
 import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
 
-// const IMPORTERS = [new YoloV8Importer("Yolov8")]
+const IMPORTERS = [new YoloV8Importer(), new CocoSegmentationImporter()];
+
+let detector: GenericComputerVisionModel | undefined = undefined;
+
+const POSSIBLE_DETECTORS: Record<
+  ValueOf<typeof ECVModelType>,
+  (modelPath: string) => Promise<GenericComputerVisionModel>
+> = {
+  [ECVModelType.Yolov8Detect]: (...args) => Yolov8Detection.create(...args),
+  [ECVModelType.Yolov8Seg]: (...args) => Yolov8Segmentation.create(...args),
+};
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -37,8 +50,6 @@ if (require("electron-squirrel-startup")) {
 const createWindow = async () => {
   protocol.handle("app", async (req) => {
     const { host, pathname } = new URL(req.url);
-
-    console.log("Handling protocol", host, pathname);
     if (host === "file") {
       return new Response(
         await fs.promises.readFile(decodeURI(pathname.slice(1))),
@@ -94,8 +105,6 @@ app.on("activate", async () => {
   }
 }); //https://github.com/TareHimself/manga-translator/raw/master/assets/examples/solo_leveling.png
 
-let detector: GenericComputerVisionModel | undefined = undefined;
-
 ipcMain.handle("doInference", async (_modelType, imagePath) => {
   if (!detector) {
     console.error("Inference was attempted with no model");
@@ -111,16 +120,9 @@ ipcMain.handle("doInference", async (_modelType, imagePath) => {
   }
 });
 
-const POSSIBLE_DETECTORS: Record<
-  ValueOf<typeof ECVModelType>,
-  (modelPath: string) => Promise<GenericComputerVisionModel>
-> = {
-  [ECVModelType.Yolov8Detect]: (...args) => Yolov8Detection.create(...args),
-  [ECVModelType.Yolov8Seg]: (...args) => Yolov8Segmentation.create(...args),
-};
-
 ipcMain.handle("loadModel", async (modelType, modelPath) => {
   try {
+    detector?.cleanup();
     detector = await POSSIBLE_DETECTORS[modelType](modelPath);
     return true;
   } catch (error) {
@@ -131,7 +133,7 @@ ipcMain.handle("loadModel", async (modelType, modelPath) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 ipcMain.handle("importSamples", async (id) => {
-  return await new CocoSegmentationImporter("Yolov8").import();
+  return (await IMPORTERS.find((a) => a.id === id)?.import()) ?? [];
 });
 
 // In this file you can include the rest of your app's specific main process

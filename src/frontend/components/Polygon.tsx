@@ -1,6 +1,6 @@
 import useMouseUp from "@hooks/useMouseUp";
 import { useAppSelector } from "@redux/hooks";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type PolygonProps = {
   points: [number, number][];
@@ -27,7 +27,6 @@ function PolygonControlPoint({
   y,
   onMoved,
   onMoveEnded,
-  onMoveCancelled,
 }: PolygonControlPointProps) {
   const [isBeingDragged, setIsBeingDragged] = useState(false);
 

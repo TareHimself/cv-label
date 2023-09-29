@@ -39,6 +39,9 @@ interface ICocoDataset {
   }[];
 }
 export class CocoSegmentationImporter extends ComputerVisionImporter {
+  constructor() {
+    super("Coco");
+  }
   override async import(): Promise<ISample[]> {
     const dialogResult = await dialog.showOpenDialog({
       properties: ["openDirectory"],
