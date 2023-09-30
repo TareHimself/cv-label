@@ -1,4 +1,3 @@
-
 import { IpcRendererTyped, IpcMainTyped } from "./ipc";
 import { IMainToRendererEvents, IRendererToMainEvents } from "./types";
 
@@ -8,6 +7,6 @@ export const ipcRenderer = new IpcRendererTyped<
 >();
 
 export const ipcMain = new IpcMainTyped<
-IRendererToMainEvents,
+  IRendererToMainEvents,
   IMainToRendererEvents
 >();

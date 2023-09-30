@@ -5,13 +5,13 @@ import { ipcRenderer } from "../ipc-impl";
 const exposedApi = ipcRenderer.exposeApi("bridge", {
   getPreloadPath: () => ipcRenderer.sendSync("getPreloadPath"),
   windowMinimize: () => {
-    ipcRenderer.sendAsync("windowMinimize");
+    ipcRenderer.sendSync("windowMinimize");
   },
   windowMaximize: () => {
-    ipcRenderer.sendAsync("windowMaximize");
+    ipcRenderer.sendSync("windowMaximize");
   },
   windowClose: () => {
-    ipcRenderer.sendAsync("windowClose");
+    ipcRenderer.sendSync("windowClose");
   },
   getPlatform: (...args) => ipcRenderer.sendSync("getPlatform", ...args),
   isDev: (...args) => ipcRenderer.sendSync("isDev", ...args),

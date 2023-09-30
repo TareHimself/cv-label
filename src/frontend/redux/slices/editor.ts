@@ -17,6 +17,10 @@ const initialState: EditorSliceState = {
       path: "./test.jpg",
       labels: [],
     },
+    {
+      path: "./ja_one_punch_man_chapter_16_05.png",
+      labels: [],
+    },
   ],
   sampleIndex: 0,
   activeLabeler: null,

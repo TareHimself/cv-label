@@ -22,12 +22,12 @@ export const mainConfig: Configuration = {
       "@types": path.resolve(__dirname, path.join("src", "types.ts")),
     },
   },
-  externals: {
-    electron: "commonjs2 electron",
-  },
-  //   externals: [
-  //     nodeExternals(),
-  // ],
+  // externals: {
+  //   electron: "commonjs2 electron",
+  // },
+    externals: [
+      nodeExternals(),
+  ],
   // optimization: {
   //   minimize: false,
   // },

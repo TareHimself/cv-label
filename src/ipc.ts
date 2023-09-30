@@ -11,20 +11,29 @@ import {
   BrowserWindow,
 } from "electron";
 
+let generatedIds = 0;
 
-let generatedIds = 0
-
-function makeId(){
+function makeId() {
   generatedIds++;
   const myId = generatedIds;
   generatedIds++;
 
-  return `${Date.now()}|${myId}`
+  return `${Date.now()}|${myId}`;
 }
 export type IEventBase = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [K in string]: (...args: any[]) => unknown;
 };
+
+export type KeysWithPromises<T extends IEventBase> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [K in keyof T]: ReturnType<T[K]> extends Promise<unknown> ? K : never;
+}[keyof T];
+
+export type KeysWithoutPromises<T extends IEventBase> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [K in keyof T]: ReturnType<T[K]> extends Promise<unknown> ? never : K;
+}[keyof T];
 
 export type EventReturnType<E extends IEventBase, T extends keyof E> = Awaited<
   ReturnType<E[T]>
@@ -116,7 +125,7 @@ export class IpcRendererTyped<
     electronIpcRenderer.send(this.toMainEventChannel(event), makeId(), ...args);
   }
 
-  sendSync<T extends keyof EventsToMain>(
+  sendSync<T extends KeysWithoutPromises<EventsToMain>>(
     event: T,
     ...args: EventParams<EventsToMain, T>
   ): EventReturnType<EventsToMain, T> {
@@ -127,7 +136,7 @@ export class IpcRendererTyped<
     );
   }
 
-  sendAsync<T extends keyof EventsToMain>(
+  sendAsync<T extends KeysWithPromises<EventsToMain>>(
     event: T,
     ...args: EventParams<EventsToMain, T>
   ): Promise<EventReturnType<EventsToMain, T>> {
@@ -261,7 +270,7 @@ export class IpcMainTyped<
     browserWindow.webContents.send(this.toRendererEventChannel(event), ...args);
   }
 
-  sendAsync<T extends keyof EventsToRenderer>(
+  sendAsync<T extends KeysWithPromises<EventsToRenderer>>(
     browserWindow: BrowserWindow,
     event: T,
     ...args: EventParams<EventsToRenderer, T>
@@ -355,13 +364,13 @@ export class IpcMainTyped<
     handler: EventsFromRenderer[T]
   ) {
     const channel = this.fromRendererEventChannel(event);
-    
+
     electronIpcMain.on(
       channel,
       async (mainEvent, instanceId: string, ...args) => {
         const execArgs = args as EventParams<EventsFromRenderer, T>;
 
-        const result = handler(...execArgs)
+        const result = handler(...execArgs);
 
         if (result instanceof Promise) {
           mainEvent.reply(channel, {
