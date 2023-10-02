@@ -9,10 +9,16 @@ import { GenericComputerVisionModel } from "./computer-vision/models";
 import { ECVModelType, ValueOf } from "../types";
 import { YoloV8Importer } from "./computer-vision/importers/yolov8";
 import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
+import { FilesImporter } from "./computer-vision/importers/files";
 
-const IMPORTERS = [new YoloV8Importer(), new CocoSegmentationImporter()];
+const IMPORTERS = [
+  new YoloV8Importer(),
+  new CocoSegmentationImporter(),
+  new FilesImporter(),
+];
 
 let detector: GenericComputerVisionModel | undefined = undefined;
+let detectorModelPath = "";
 
 const POSSIBLE_DETECTORS: Record<
   ValueOf<typeof ECVModelType>,
@@ -112,8 +118,7 @@ ipcMain.handle("doInference", async (_modelType, imagePath) => {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (await detector.predict(imagePath)) as any;
+    return await detector.predict(imagePath);
   } catch (error) {
     console.error(error);
     return undefined;
@@ -122,8 +127,11 @@ ipcMain.handle("doInference", async (_modelType, imagePath) => {
 
 ipcMain.handle("loadModel", async (modelType, modelPath) => {
   try {
-    detector?.cleanup();
-    detector = await POSSIBLE_DETECTORS[modelType](modelPath);
+    if (detector?.modelType !== modelType || detectorModelPath !== modelPath) {
+      detector?.cleanup();
+      detectorModelPath = modelPath;
+      detector = await POSSIBLE_DETECTORS[modelType](modelPath);
+    }
     return true;
   } catch (error) {
     console.error(error);
@@ -133,7 +141,9 @@ ipcMain.handle("loadModel", async (modelType, modelPath) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 ipcMain.handle("importSamples", async (id) => {
-  return (await IMPORTERS.find((a) => a.id === id)?.import()) ?? [];
+  return (
+    (await IMPORTERS.find((a) => a.id === id)?.importIntoProject("test")) ?? []
+  );
 });
 
 // In this file you can include the rest of your app's specific main process

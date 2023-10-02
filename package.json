@@ -49,6 +49,7 @@
     "typescript": "~4.5.4"
   },
   "dependencies": {
+    "@node-rs/xxhash": "^1.4.2",
     "@reduxjs/toolkit": "^1.9.5",
     "@techstark/opencv-js": "^4.8.0-release.4",
     "@timfish/forge-externals-plugin": "^0.2.1",

@@ -67,12 +67,12 @@ export function clamp(a: number, min: number, max: number) {
 }
 
 export function wrap(a: number, min: number, max: number): number {
-  if (max - min <= 1) {
+  if (max - min < 1) {
     return a;
   }
 
   if (a < min) {
-    return wrap(max - Math.abs(a), min, max);
+    return wrap(max + 1 - Math.abs(a), min, max);
   }
 
   if (a > max) {

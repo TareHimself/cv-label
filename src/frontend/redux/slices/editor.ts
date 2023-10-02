@@ -1,29 +1,24 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
+import { toast } from "@frontend/react-basic-toast";
 import { domRectToBasicRect } from "@hooks/useElementRect";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { wrap } from "@root/utils";
 // import { toast } from "react-toastify"
 import {
+  AppSliceState,
   BasicRect,
   CvLabel,
+  ECVModelType,
   EditorSliceState,
   EEditorMode,
   ISample,
+  ValueOf,
 } from "@types";
 
 const initialState: EditorSliceState = {
-  samples: [
-    {
-      path: "./test.jpg",
-      labels: [],
-    },
-    {
-      path: "./ja_one_punch_man_chapter_16_05.png",
-      labels: [],
-    },
-  ],
+  samples: [],
   sampleIndex: 0,
-  activeLabeler: null,
+  activeLabeler: undefined,
   mode: EEditorMode.SELECT,
   sampleScale: 1,
   xScroll: 0,
@@ -62,9 +57,55 @@ const importSamples = createAsyncThunk(
   }
 );
 
-const createLabeler = createAsyncThunk("editor/labeler/create", async () => {});
+const loadModel = createAsyncThunk(
+  "editor/labeler/load",
+  async ({
+    modelType,
+    modelPath,
+  }: {
+    modelType: ValueOf<typeof ECVModelType>;
+    modelPath: string;
+  }) => {
+    if (await window.bridge.loadModel(modelType, modelPath)) {
+      return modelType;
+    }
 
-const autoLabel = createAsyncThunk("editor/labeler/auto", async () => {});
+    return undefined;
+  }
+);
+
+const autoLabel = createAsyncThunk<
+  {
+    index: number;
+    result: CvLabel[] | undefined;
+  },
+  { index: number },
+  AppSliceState
+>("editor/labeler/auto", async ({ index }, thunk) => {
+  return await toast.promise(
+    async () => {
+      const state = thunk.getState().editor;
+      const modelType = state.activeLabeler;
+      const sample = state.samples[index];
+      if (!modelType) {
+        return {
+          index,
+          result: undefined,
+        };
+      }
+
+      return {
+        index,
+        result: await window.bridge.doInference(modelType, sample.path),
+      };
+    },
+    {
+      success: (d) => `Added ${d.data.result?.length ?? 0} annotations`,
+      error: `Failed to annotoate`,
+      pending: `Predicting`,
+    }
+  );
+});
 
 export const EditorSlice = createSlice({
   name: "editor",
@@ -191,6 +232,14 @@ export const EditorSlice = createSlice({
     builder.addCase(importSamples.fulfilled, (state, action) => {
       state.samples.push(...action.payload);
     });
+    builder.addCase(loadModel.fulfilled, (state, action) => {
+      state.activeLabeler = action.payload;
+    });
+    builder.addCase(autoLabel.fulfilled, (state, action) => {
+      if (action.payload.result) {
+        state.samples[action.payload.index].labels = action.payload.result;
+      }
+    });
   },
 });
 
@@ -208,6 +257,6 @@ export const {
   setLabelerContainerRect,
   onImageLoaded,
 } = EditorSlice.actions;
-export { importSamples, createLabeler, autoLabel };
+export { importSamples, loadModel, autoLabel };
 
 export default EditorSlice.reducer;

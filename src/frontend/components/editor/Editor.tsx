@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import EditorActionPanel from "./EditorActionPanel";
 import { AiOutlineZoomIn, AiOutlineZoomOut } from "react-icons/ai";
 import { BsBoundingBoxCircles } from "react-icons/bs";
@@ -9,24 +9,24 @@ import {
   MdOutlineNavigateBefore,
 } from "react-icons/md";
 import BoxContainer from "./BoxContainer";
-import { YoloV8DetectLabeler } from "@frontend/cv/labelers/yolo";
 import ActionPanelIcon from "./ActionPanelIcon";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import {
-  addLabels,
+  autoLabel,
   importSamples,
+  loadModel,
   setCurrentSample,
   setEditorMode,
   setEditorRect,
   setLabelerContainerRect,
   setSampleScale,
 } from "@redux/exports";
-import { EEditorMode } from "@types";
+import { ECVModelType, EEditorMode } from "@types";
 import useElementRect from "@hooks/useElementRect";
 import Crosshair from "./Crosshair";
 
 export default function Editor() {
-  const labeler = useRef(new YoloV8DetectLabeler()).current;
+  const labeler = useAppSelector((s) => s.editor.activeLabeler);
 
   const dispatch = useAppDispatch();
 
@@ -50,6 +50,8 @@ export default function Editor() {
 
   const currentSampleIndex = useAppSelector((s) => s.editor.sampleIndex);
 
+  const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
+
   useElementRect(
     useCallback(() => editorRef.current, []),
     useCallback(
@@ -70,22 +72,29 @@ export default function Editor() {
     )
   );
 
-  // useEffect(() => {
-  //   withWebWorker(async () => {
-  //     // eslint-disable-next-line @typescript-eslint/no-var-requires
-  //     const path = require("path");
-
-  //     return "Hello world" + path.join("one", "two");
-  //   }).then((a) => console.log("From Worker", a));
-  // }, []);
-
   useEffect(() => {
     dispatch(
       importSamples({
-        id: "yolo",
+        id: "files",
       })
     );
   }, [dispatch]);
+
+  useEffect(() => {
+    if (
+      labeler &&
+      currentSample &&
+      lastIndexLabeled !== currentSampleIndex &&
+      currentSample.labels.length === 0
+    ) {
+      dispatch(
+        autoLabel({
+          index: currentSampleIndex,
+        })
+      );
+      setLastIndexLabeled(currentSampleIndex);
+    }
+  }, [currentSample, currentSampleIndex, dispatch, lastIndexLabeled, labeler]);
 
   // useEffect(() => {
   //   if (currentSample && currentSample.labels.length === 0) {
@@ -181,17 +190,17 @@ export default function Editor() {
           />
           <ActionPanelIcon
             icon={MdAutoAwesome}
+            isActive={labeler !== undefined}
             onClicked={useCallback(() => {
-              if (currentSample && currentSample.labels.length === 0) {
-                labeler.loadModel("./yolo-d.onnx").then(() => {
-                  labeler.predict(currentSample.path).then((a) => {
-                    if (a !== undefined) {
-                      dispatch(addLabels(a));
-                    }
-                  });
-                });
+              if (!labeler) {
+                dispatch(
+                  loadModel({
+                    modelType: ECVModelType.Yolov8Seg,
+                    modelPath: "./yolo-seg.onnx",
+                  })
+                );
               }
-            }, [currentSample, dispatch, labeler])}
+            }, [dispatch, labeler])}
           />
         </EditorActionPanel>
       </div>

@@ -75,6 +75,7 @@ function PolygonControlPoint({
         fill: "white",
         stroke: "black",
         strokeWidth: 0.5,
+        zIndex: 1,
       }}
       onMouseDown={(e) => {
         setIsBeingDragged(true);

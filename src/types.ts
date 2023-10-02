@@ -1,4 +1,3 @@
-import { ComputerVisionLabeler } from "@frontend/cv/labelers";
 import { PropsWithChildren } from "react";
 
 export type ValueOf<E> = E[keyof E];
@@ -63,12 +62,10 @@ export type IRendererToMainEvents = {
     modelPath: string
   ) => Promise<boolean>;
   getModel: () => ECVModelType;
-  doInference: <
-    T extends ValueOf<typeof ECVModelType> = ValueOf<typeof ECVModelType>
-  >(
-    modelType: T,
+  doInference: (
+    modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
-  ) => Promise<InferenceResult<T> | undefined>;
+  ) => Promise<CvLabel[] | undefined>;
   importSamples: (id: string) => Promise<ISample[]>;
 };
 
@@ -112,7 +109,7 @@ export type EditorSliceState = {
   samples: ISample[];
   sampleIndex: number;
   currentLabelIndex: number;
-  activeLabeler: ComputerVisionLabeler<ECVModelType> | null;
+  activeLabeler?: ValueOf<typeof ECVModelType>;
   mode: EEditorMode;
   sampleScale: number;
   xScroll: number;
@@ -133,6 +130,11 @@ export type AppSliceState = {
     editor: EditorSliceState;
   };
 };
+
+export interface IImporterInfo {
+  name: string;
+  id: string;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AsyncReturnType<T extends (...args: any) => Promise<any>> =

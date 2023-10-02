@@ -8,6 +8,7 @@ import {
   ELabelType,
   LabelOverlayProps,
 } from "@types";
+import { useEffect } from "react";
 
 type DrawProps<T> = {
   label: T;
@@ -110,6 +111,21 @@ export default function LabelOverlay({
   const dispatch = useAppDispatch();
   const labelerRect = useAppSelector((s) => s.editor.labelerRect);
   const labelerRectDims = `${labelerRect.height}x${labelerRect.width}`;
+
+  useEffect(() => {
+    const labelOverlay = document.getElementById("label-overlay");
+    if (labelOverlay) {
+      const circleElements = Array.from(
+        labelOverlay.querySelectorAll("circle")
+      );
+
+      for (const element of circleElements) {
+        labelOverlay.removeChild(element);
+        labelOverlay.appendChild(element);
+      }
+    }
+  });
+
   return (
     <svg
       style={{
