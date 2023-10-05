@@ -2,8 +2,9 @@
     "targets": [
     {
       "target_name": "addon",
-      "sources": [ "binding.cpp" ],
-      'include_dirs': ["<!@(node -p \"require('node-addon-api').include\")"],
+      # "sources": [ "binding.cpp" ],
+      "sources": [ "lib/xarray.cc" ],
+      'include_dirs': ["<!@(node -p \"require('node-addon-api').include\")","lib","lib/xtensor","lib/xtl"],
       'dependencies': ["<!(node -p \"require('node-addon-api').gyp\")"],
       'cflags!': [ '-fno-exceptions' ],
       'cflags_cc!': [ '-fno-exceptions' ],
