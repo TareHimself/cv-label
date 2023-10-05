@@ -2,6 +2,7 @@ import { ELabelType, ISample } from "@types";
 import { ComputerVisionImporter } from ".";
 import { dialog } from "electron";
 import { withNodeWorker } from "@root/backend/worker";
+import { sqliteNow as sqliteNowMain } from "@root/utils";
 
 export class YoloV8Importer extends ComputerVisionImporter {
   constructor() {
@@ -20,7 +21,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
     const datasetPath = dialogResult.filePaths[0];
 
     return await withNodeWorker(
-      async (datasetPath, boxLabelType) => {
+      async (datasetPath, boxLabelType, nowFunctAsString) => {
         const [fs, path, sharp] = eval(
           `[require('fs'),require('path'),require('sharp')]`
         ) as [
@@ -28,6 +29,8 @@ export class YoloV8Importer extends ComputerVisionImporter {
           typeof import("path"),
           typeof import("sharp")
         ];
+
+        const sqliteNowProxy: typeof sqliteNowMain = eval(nowFunctAsString);
 
         const immediateFolders = await fs.promises.readdir(datasetPath);
 
@@ -116,6 +119,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
               return {
                 path: imageFile,
                 labels: [],
+                added: sqliteNowProxy(),
               } as ISample;
             })
           );
@@ -123,10 +127,13 @@ export class YoloV8Importer extends ComputerVisionImporter {
           allSamples.push(...samples);
         }
 
+        console.log("DONE");
+
         return allSamples;
       },
       datasetPath,
-      ELabelType.BOX
+      ELabelType.BOX,
+      sqliteNowMain.toString()
     );
   }
 }

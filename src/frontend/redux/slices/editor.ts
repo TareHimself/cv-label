@@ -16,7 +16,8 @@ import {
 } from "@types";
 
 const initialState: EditorSliceState = {
-  samples: [],
+  samples: {},
+  sampleList: [],
   sampleIndex: 0,
   activeLabeler: undefined,
   mode: EEditorMode.SELECT,
@@ -48,7 +49,25 @@ const initialState: EditorSliceState = {
     width: 0,
     height: 0,
   },
+  availableExporters: [],
+  availableImporters: [],
+  availableModels: [],
 };
+
+const fetchPlugins = createAsyncThunk("editor/plugins/load", async () => {
+  const [importers, exporters, models] = await Promise.all([
+    window.bridge.getImporters(),
+    window.bridge.getExporters(),
+    window.bridge.getSupportedModels(),
+  ]);
+
+  console.log("Fetched", importers, exporters, models);
+  return {
+    importers,
+    exporters,
+    models,
+  };
+});
 
 const importSamples = createAsyncThunk(
   "editor/samples/load",
@@ -73,6 +92,10 @@ const loadModel = createAsyncThunk(
     return undefined;
   }
 );
+
+const unloadModel = createAsyncThunk("editor/labeler/unload", async () => {
+  return await window.bridge.unloadModel();
+});
 
 const autoLabel = createAsyncThunk<
   {
@@ -125,11 +148,26 @@ export const EditorSlice = createSlice({
       }
     },
     addSamples: (state, action: PayloadAction<ISample[]>) => {
-      state.samples.push(...action.payload);
+      for (const sample of action.payload) {
+        if (!state.samples[sample.path]) {
+          state.samples[sample.path] = sample;
+          state.sampleList.push(sample.path);
+        }
+      }
+      // const selectedItem =
+      //   state.sampleIndex !== -1
+      //     ? state.sampleList[state.sampleIndex]
+      //     : undefined;
+
+      //  = Object.keys(state.samples).sort((a,b) =?);
+
+      // if (selectedItem !== undefined) {
+      //   state.sampleIndex = state.sampleList.indexOf(selectedItem);
+      // }
     },
     setCurrentSample: (state, action: PayloadAction<number>) => {
-      const targetIdx = wrap(action.payload, 0, state.samples.length - 1);
-      if (state.samples[targetIdx] !== undefined) {
+      const targetIdx = wrap(action.payload, 0, state.sampleList.length - 1);
+      if (state.sampleList[targetIdx] !== undefined) {
         state.sampleIndex = targetIdx;
         state.currentLabelIndex = -1;
         state.isLoadingCurrentSample = true;
@@ -230,15 +268,30 @@ export const EditorSlice = createSlice({
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   extraReducers: (builder) => {
     builder.addCase(importSamples.fulfilled, (state, action) => {
-      state.samples.push(...action.payload);
+      for (const sample of action.payload) {
+        if (state.samples[sample.path] === undefined) {
+          state.samples[sample.path] = sample;
+          state.sampleList.push(sample.path);
+        }
+      }
     });
     builder.addCase(loadModel.fulfilled, (state, action) => {
       state.activeLabeler = action.payload;
+    });
+    builder.addCase(unloadModel.fulfilled, (state, action) => {
+      if (action.payload) {
+        state.activeLabeler = undefined;
+      }
     });
     builder.addCase(autoLabel.fulfilled, (state, action) => {
       if (action.payload.result) {
         state.samples[action.payload.index].labels = action.payload.result;
       }
+    });
+    builder.addCase(fetchPlugins.fulfilled, (state, action) => {
+      state.availableExporters = action.payload.exporters;
+      state.availableImporters = action.payload.importers;
+      state.availableModels = action.payload.models;
     });
   },
 });
@@ -257,6 +310,6 @@ export const {
   setLabelerContainerRect,
   onImageLoaded,
 } = EditorSlice.actions;
-export { importSamples, loadModel, autoLabel };
+export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins };
 
 export default EditorSlice.reducer;

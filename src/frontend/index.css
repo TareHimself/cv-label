@@ -49,6 +49,9 @@ body {
   border-radius: 5px;
   align-items: center;
   justify-content: space-around;
+  gap: 20px;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 .editor-action-panel button {
@@ -143,4 +146,20 @@ polygon {
 
 .control-point:hover {
   cursor: pointer;
+}
+
+
+.side-panel {
+  height: 100%;
+  position: absolute;
+  width: fit-content;
+  left: 0;
+  top: 0%;
+}
+
+.side-panel-header {}
+
+.side-panel-content {
+  display: flex;
+  flex-direction: column;
 }

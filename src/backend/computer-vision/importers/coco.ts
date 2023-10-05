@@ -2,6 +2,7 @@ import { dialog } from "electron";
 import { ComputerVisionImporter } from ".";
 import { CvLabel, CvSegmentLabel, ELabelType, ISample } from "@types";
 import { withNodeWorker } from "@root/backend/worker";
+import { sqliteNow as sqliteNowMain } from "@root/utils";
 interface ICocoDataset {
   info: {
     year: string;
@@ -54,11 +55,13 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
     const datasetPath = dialogResult.filePaths[0];
 
     return await withNodeWorker(
-      async (datasetPath, segmentLabelType) => {
+      async (datasetPath, segmentLabelType, nowFunctAsString) => {
         const [fs, path] = eval(`[require('fs'),require('path')]`) as [
           typeof import("fs"),
           typeof import("path")
         ];
+
+        const sqliteNowProxy: typeof sqliteNowMain = eval(nowFunctAsString);
 
         const immediateFolders = await fs.promises.readdir(datasetPath);
         const allSamples: ISample[] = [];
@@ -109,6 +112,7 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
 
                     return t;
                   }, [] as CvLabel[]),
+                added: sqliteNowProxy(),
               };
             });
 
@@ -121,7 +125,8 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
         return allSamples;
       },
       datasetPath,
-      ELabelType.SEGMENT
+      ELabelType.SEGMENT,
+      sqliteNowMain.toString()
     );
   }
 }

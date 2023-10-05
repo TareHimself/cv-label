@@ -1,11 +1,12 @@
 import { ISample } from "@types";
 import { ComputerVisionImporter } from ".";
 import { dialog } from "electron";
+import { sqliteNow } from "@root/utils";
 
 export class FilesImporter extends ComputerVisionImporter {
   constructor() {
     super("Files");
-    this.id = "files";
+    // this.id = "files";
   }
 
   override async import(): Promise<ISample[]> {
@@ -21,6 +22,7 @@ export class FilesImporter extends ComputerVisionImporter {
       return {
         path: a,
         labels: [],
+        added: sqliteNow(),
       };
     });
   }

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import EditorActionPanel from "./EditorActionPanel";
 import { AiOutlineZoomIn, AiOutlineZoomOut } from "react-icons/ai";
-import { BsBoundingBoxCircles } from "react-icons/bs";
+import { BsBoundingBoxCircles, BsFiles } from "react-icons/bs";
 import { PiPolygonLight, PiHandPalmBold } from "react-icons/pi";
 import {
   MdAutoAwesome,
   MdOutlineNavigateNext,
   MdOutlineNavigateBefore,
+  MdLabel,
 } from "react-icons/md";
+import { FaUndoAlt, FaRedoAlt, FaFileImport } from "react-icons/fa";
 import BoxContainer from "./BoxContainer";
 import ActionPanelIcon from "./ActionPanelIcon";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
@@ -20,6 +22,7 @@ import {
   setEditorRect,
   setLabelerContainerRect,
   setSampleScale,
+  unloadModel,
 } from "@redux/exports";
 import { ECVModelType, EEditorMode } from "@types";
 import useElementRect from "@hooks/useElementRect";
@@ -43,7 +46,7 @@ export default function Editor() {
   const editorRef = useRef<HTMLDivElement | null>(null);
 
   const currentSample = useAppSelector(
-    (s) => s.editor.samples[s.editor.sampleIndex]
+    (s) => s.editor.samples[s.editor.sampleList[s.editor.sampleIndex]]
   );
 
   const editorMode = useAppSelector((s) => s.editor.mode);
@@ -51,6 +54,8 @@ export default function Editor() {
   const currentSampleIndex = useAppSelector((s) => s.editor.sampleIndex);
 
   const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
+
+  const importers = useAppSelector((s) => s.editor.availableImporters);
 
   useElementRect(
     useCallback(() => editorRef.current, []),
@@ -72,13 +77,13 @@ export default function Editor() {
     )
   );
 
-  useEffect(() => {
-    dispatch(
-      importSamples({
-        id: "files",
-      })
-    );
-  }, [dispatch]);
+  // useEffect(() => {
+  //   dispatch(
+  //     importSamples({
+  //       id: "files",
+  //     })
+  //   );
+  // }, [dispatch]);
 
   useEffect(() => {
     if (
@@ -199,9 +204,28 @@ export default function Editor() {
                     modelPath: "./yolo-seg.onnx",
                   })
                 );
+              } else {
+                dispatch(unloadModel());
               }
             }, [dispatch, labeler])}
           />
+        </EditorActionPanel>
+        <EditorActionPanel position="left">
+          <ActionPanelIcon icon={BsFiles} />
+          <ActionPanelIcon icon={MdLabel} />
+          <ActionPanelIcon
+            icon={FaFileImport}
+            onClicked={() => {
+              console.log("Using importer", importers[0]);
+              dispatch(
+                importSamples({
+                  id: importers[0].id,
+                })
+              );
+            }}
+          />
+          <ActionPanelIcon icon={FaUndoAlt} />
+          <ActionPanelIcon icon={FaRedoAlt} />
         </EditorActionPanel>
       </div>
     </div>

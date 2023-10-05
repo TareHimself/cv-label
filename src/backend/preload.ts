@@ -22,6 +22,11 @@ const exposedApi = ipcRenderer.exposeApi("bridge", {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ipcRenderer.sendAsync("doInference", ...args) as any, // YES I KNOW THIS IS A SIN, FOGIVE ME
   importSamples: (...args) => ipcRenderer.sendAsync("importSamples", ...args),
+  unloadModel: (...args) => ipcRenderer.sendAsync("unloadModel", ...args),
+  getExporters: (...args) => ipcRenderer.sendAsync("getExporters", ...args),
+  getSupportedModels: (...args) =>
+    ipcRenderer.sendAsync("getSupportedModels", ...args),
+  getImporters: (...args) => ipcRenderer.sendAsync("getImporters", ...args),
 });
 
 declare global {

@@ -93,7 +93,8 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
 
           const pythonSys = proxify(pymport("sys"));
           pythonSys.get("path").insert(0, mainCwd);
-          const pythonUtils = proxify(pymport("python"));
+          console.log("CWD", mainCwd);
+          const pythonUtils = proxify(pymport("py_utils"));
 
           const session = await InferenceSession.create(modelPath, options);
 
@@ -220,7 +221,7 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
 
           const pythonSys = proxify(pymport("sys"));
           pythonSys.get("path").insert(0, mainCwd);
-          const pythonUtils = proxify(pymport("python"));
+          const pythonUtils = proxify(pymport("py_utils"));
 
           bridge.handleEvent("predict", async (imagePath, inferenceDims) => {
             try {

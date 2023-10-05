@@ -9,14 +9,20 @@ import {
 } from "@redux/exports";
 import useMouseUp from "@hooks/useMouseUp";
 import useElementRect from "@hooks/useElementRect";
+import { CvLabel } from "@types";
 
-export default function BoxContainer() {
+export type BoxContainerProps = {
+  tempLabels?: CvLabel[];
+  onTempLabelUpdated?: (update: CvLabel, idx: number) => void;
+};
+
+export default function BoxContainer(props: BoxContainerProps) {
   const dispatch = useAppDispatch();
 
   const [isDraggingImage, setIsDraggingImage] = useState(false);
 
   const currentSample = useAppSelector(
-    (s) => s.editor.samples[s.editor.sampleIndex]
+    (s) => s.editor.samples[s.editor.sampleList[s.editor.sampleIndex]]
   );
 
   const isLoadingSample = useAppSelector(
@@ -95,6 +101,17 @@ export default function BoxContainer() {
           labels={currentSample.labels}
           onLabelUpdated={(idx, u) => {
             dispatch(editLabel([idx, u]));
+          }}
+        />
+      )}
+
+      {!isLoadingSample && props.tempLabels?.length && (
+        <LabelOverlay
+          labels={props.tempLabels}
+          onLabelUpdated={(idx, u) => {
+            if (props.onTempLabelUpdated) {
+              props.onTempLabelUpdated(u, idx);
+            }
           }}
         />
       )}

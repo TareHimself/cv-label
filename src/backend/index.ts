@@ -10,22 +10,38 @@ import { ECVModelType, ValueOf } from "../types";
 import { YoloV8Importer } from "./computer-vision/importers/yolov8";
 import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
 import { FilesImporter } from "./computer-vision/importers/files";
+import { ComputerVisionExporter } from "./computer-vision/exporters";
+import { ComputerVisionImporter } from "./computer-vision/importers";
 
-const IMPORTERS = [
+const IMPORTERS: ComputerVisionImporter[] = [
   new YoloV8Importer(),
   new CocoSegmentationImporter(),
   new FilesImporter(),
 ];
+
+const EXPORTERS: ComputerVisionExporter[] = [];
 
 let detector: GenericComputerVisionModel | undefined = undefined;
 let detectorModelPath = "";
 
 const POSSIBLE_DETECTORS: Record<
   ValueOf<typeof ECVModelType>,
-  (modelPath: string) => Promise<GenericComputerVisionModel>
+  {
+    id: ValueOf<typeof ECVModelType>;
+    name: string;
+    create: (modelPath: string) => Promise<GenericComputerVisionModel>;
+  }
 > = {
-  [ECVModelType.Yolov8Detect]: (...args) => Yolov8Detection.create(...args),
-  [ECVModelType.Yolov8Seg]: (...args) => Yolov8Segmentation.create(...args),
+  [ECVModelType.Yolov8Detect]: {
+    id: ECVModelType.Yolov8Detect,
+    name: "Yolov8 Detection",
+    create: (...args) => Yolov8Detection.create(...args),
+  },
+  [ECVModelType.Yolov8Seg]: {
+    id: ECVModelType.Yolov8Seg,
+    name: "Yolo8 Segmentation",
+    create: (...args) => Yolov8Segmentation.create(...args),
+  },
 };
 
 protocol.registerSchemesAsPrivileged([
@@ -130,7 +146,7 @@ ipcMain.handle("loadModel", async (modelType, modelPath) => {
     if (detector?.modelType !== modelType || detectorModelPath !== modelPath) {
       detector?.cleanup();
       detectorModelPath = modelPath;
-      detector = await POSSIBLE_DETECTORS[modelType](modelPath);
+      detector = await POSSIBLE_DETECTORS[modelType].create(modelPath);
     }
     return true;
   } catch (error) {
@@ -144,6 +160,42 @@ ipcMain.handle("importSamples", async (id) => {
   return (
     (await IMPORTERS.find((a) => a.id === id)?.importIntoProject("test")) ?? []
   );
+});
+
+ipcMain.handle("unloadModel", async () => {
+  try {
+    if (detector) {
+      const oldDetector = detector;
+      detector = undefined;
+      await oldDetector.cleanup();
+      return true;
+    }
+  } catch (error) {
+    console.error(error);
+  }
+
+  return false;
+});
+
+ipcMain.handle("getImporters", async () => {
+  return IMPORTERS.map((a) => ({
+    id: a.id,
+    displayName: a.name,
+  }));
+});
+
+ipcMain.handle("getExporters", async () => {
+  return EXPORTERS.map((a) => ({
+    id: a.id,
+    displayName: a.name,
+  }));
+});
+
+ipcMain.handle("getSupportedModels", async () => {
+  return Object.values(POSSIBLE_DETECTORS).map((a) => ({
+    id: a.id as unknown as string,
+    displayName: a.name,
+  }));
 });
 
 // In this file you can include the rest of your app's specific main process

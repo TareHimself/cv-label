@@ -61,12 +61,16 @@ export type IRendererToMainEvents = {
     modelType: ValueOf<typeof ECVModelType>,
     modelPath: string
   ) => Promise<boolean>;
+  unloadModel: () => Promise<boolean>;
   getModel: () => ECVModelType;
   doInference: (
     modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
   ) => Promise<CvLabel[] | undefined>;
   importSamples: (id: string) => Promise<ISample[]>;
+  getImporters: () => Promise<IPluginInfo[]>;
+  getSupportedModels: () => Promise<IPluginInfo[]>;
+  getExporters: () => Promise<IPluginInfo[]>;
 };
 
 export type IMainToRendererEvents = {
@@ -80,6 +84,10 @@ export type LabelOverlayProps = PropsWithChildren<{
 
 export type CvLabelSegmentPoint = [number, number];
 
+interface IPluginInfo {
+  id: string;
+  displayName: string;
+}
 interface CvLabelBase {
   classIndex: number;
   type: ELabelType;
@@ -103,10 +111,12 @@ export type CvLabel = CvBoxLabel | CvSegmentLabel;
 export interface ISample {
   path: string;
   labels: CvLabel[];
+  added: number;
 }
 
 export type EditorSliceState = {
-  samples: ISample[];
+  samples: { [key: string]: ISample };
+  sampleList: string[];
   sampleIndex: number;
   currentLabelIndex: number;
   activeLabeler?: ValueOf<typeof ECVModelType>;
@@ -123,6 +133,9 @@ export type EditorSliceState = {
     width: number;
     height: number;
   };
+  availableModels: IPluginInfo[];
+  availableExporters: IPluginInfo[];
+  availableImporters: IPluginInfo[];
 };
 
 export type AppSliceState = {

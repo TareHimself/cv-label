@@ -44,6 +44,7 @@ export class ComputerVisionImporter {
               return {
                 path: newName,
                 labels: sample.labels,
+                added: sample.added,
               };
             } catch (error) {
               console.error(error);

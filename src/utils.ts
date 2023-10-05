@@ -82,4 +82,21 @@ export function wrap(a: number, min: number, max: number): number {
   return a;
 }
 
+export function sqliteNow() {
+  const now = new Date();
+
+  return parseInt(
+    `${now.getUTCFullYear()}${now
+      .getUTCMonth()
+      .toString()
+      .padStart(2, "0")}${now.getUTCDate().toString().padStart(2, "0")}${now
+      .getUTCHours()
+      .toString()
+      .padStart(2, "0")}${now.getUTCMinutes().toString().padStart(2, "0")}${now
+      .getUTCSeconds()
+      .toString()
+      .padStart(2, "0")}`
+  );
+}
+
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))
