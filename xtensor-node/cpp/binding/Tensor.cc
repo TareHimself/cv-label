@@ -1,13 +1,11 @@
-#include "xarray.h"
+#include "Tensor.h"
 #include "xtensor/xadapt.hpp"
 
 using namespace Napi;
 
-template <typename T>
-XArray<T>::XArray(const Napi::CallbackInfo &info) : ObjectWrap(info)
+Tensor::Tensor(const Napi::CallbackInfo &info) : ObjectWrap(info)
 {
     auto env = info.Env();
-    std::vector<T> data;
     std::vector<std::size_t> shape;
 
     if (info.Length() > 0 && info[0].IsArray())
@@ -52,8 +50,7 @@ XArray<T>::XArray(const Napi::CallbackInfo &info) : ObjectWrap(info)
     m_array = xt::adapt(data, shape);
 }
 
-template <typename T>
-Napi::Value XArray<T>::Shape(const Napi::CallbackInfo &info)
+Napi::Value Tensor::Shape(const Napi::CallbackInfo &info)
 {
     auto env = info.Env();
     auto shape = m_array.shape();
@@ -68,8 +65,7 @@ Napi::Value XArray<T>::Shape(const Napi::CallbackInfo &info)
     return nodeReturn;
 }
 
-template <typename T>
-Napi::Value XArray<T>::ToArray(const Napi::CallbackInfo &info)
+Napi::Value Tensor::ToArray(const Napi::CallbackInfo &info)
 {
 
     auto env = info.Env();
@@ -89,8 +85,7 @@ Napi::Value XArray<T>::ToArray(const Napi::CallbackInfo &info)
     return nodeReturn;
 }
 
-template <typename T>
-EXArrayType XArray<T>::GetType()
+EXArrayType Tensor::GetType()
 {
     if (std::is_same<T, float>::value)
     {
@@ -106,20 +101,19 @@ EXArrayType XArray<T>::GetType()
     }
 }
 
-template <typename T>
-Napi::Function XArray<T>::GetClass(Napi::Env env)
+Napi::Function Tensor::GetClass(Napi::Env env)
 {
-    return DefineClass(env, "XArray", {
-                                          XArray::InstanceMethod("toArray", &XArray::ToArray),
-                                          XArray::InstanceMethod("shape", &XArray::Shape),
+    return DefineClass(env, "Tensor", {
+                                          Tensor::InstanceMethod("toArray", &Tensor::ToArray),
+                                          Tensor::InstanceMethod("shape", &Tensor::Shape),
                                       });
 }
 
 Napi::Object Init(Napi::Env env, Napi::Object exports)
 {
-    exports.Set(Napi::String::New(env, "XArrayInt"), XArray<int>::GetClass(env));
-    exports.Set(Napi::String::New(env, "XArrayFloat"), XArray<float>::GetClass(env));
-    exports.Set(Napi::String::New(env, "XArrayDouble"), XArray<double>::GetClass(env));
+    exports.Set(Napi::String::New(env, "XArrayInt"), Tensor<int>::GetClass(env));
+    exports.Set(Napi::String::New(env, "XArrayFloat"), Tensor<float>::GetClass(env));
+    exports.Set(Napi::String::New(env, "XArrayDouble"), Tensor<double>::GetClass(env));
     return exports;
 }
 

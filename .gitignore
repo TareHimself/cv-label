@@ -94,3 +94,5 @@ projects/
 *.pyc
 *.onnx
 **/build/**
+**/libtorch/**
+*.zip

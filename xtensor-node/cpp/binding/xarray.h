@@ -13,10 +13,10 @@ enum EXArrayType
 };
 
 template <typename T>
-class XArray : public Napi::ObjectWrap<XArray<T>>
+class Tensor : public Napi::ObjectWrap<Tensor<T>>
 {
 public:
-    XArray(const Napi::CallbackInfo &);
+    Tensor(const Napi::CallbackInfo &);
 
     Napi::Value Shape(const Napi::CallbackInfo &);
 

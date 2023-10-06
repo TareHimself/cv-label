@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/cpp/**",
-                "${APPDATA}/../Local/node-gyp/Cache/**/include/node"
+                "${APPDATA}/../Local/node-gyp/Cache/**/include/node",
+                "${workspaceFolder}/libtorch/include"
             ],
             "defines": [
                 "_DEBUG",
