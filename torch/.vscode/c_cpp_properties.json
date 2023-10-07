@@ -4,9 +4,9 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/cpp/**",
+                "${workspaceFolder}/src/**",
                 "${APPDATA}/../Local/node-gyp/Cache/**/include/node",
-                "${workspaceFolder}/libtorch/include"
+                "${workspaceFolder}/deps/libtorch/include"
             ],
             "defines": [
                 "_DEBUG",

@@ -1,18 +1,25 @@
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
-
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch")
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch/share/cmake/Torch")
-
 # Name of the project (will be the name of the plugin)
 project(addon)
 
 set(CMAKE_CXX_STANDARD 14)
 
 
+set(PYTORCH_VERSION 2.1.0)
+
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/deps/libtorch)
+  file(DOWNLOAD https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-${PYTORCH_VERSION}%2Bcpu.zip ${CMAKE_CURRENT_SOURCE_DIR}/torch.zip SHOW_PROGRESS)
+  file(ARCHIVE_EXTRACT INPUT ${CMAKE_CURRENT_SOURCE_DIR}/torch.zip DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/deps VERBOSE)
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/deps/libtorch")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/deps/libtorch/share/cmake/Torch")
+
+
 find_package(Torch REQUIRED)
 
 # Build a shared library named after the project from the files in `src/`
-file(GLOB SOURCE_FILES "cpp/binding/*.cc" "cpp/binding/*.h")
+file(GLOB SOURCE_FILES "src/*.cc" "src/*.h")
 
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES} ${CMAKE_JS_SRC})
 
@@ -26,7 +33,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_JS_INC})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 # Include N-API wrappers
-target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/node_modules/node-addon-api" "cpp" "cpp/xtl" "cpp/xtensor")
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/node_modules/node-addon-api" "src" )
 
 # Libtorch
 target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
