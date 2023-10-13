@@ -4,6 +4,8 @@ import {
   Yolov8Segmentation,
 } from "./computer-vision/models/yolo";
 import * as fs from "fs";
+import { v4 as uuidv4 } from "uuid";
+import path from "path";
 import { ipcMain } from "../ipc-impl";
 import { GenericComputerVisionModel } from "./computer-vision/models";
 import { ECVModelType, ValueOf } from "../types";
@@ -12,6 +14,7 @@ import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
 import { FilesImporter } from "./computer-vision/importers/files";
 import { ComputerVisionExporter } from "./computer-vision/exporters";
 import { ComputerVisionImporter } from "./computer-vision/importers";
+import { getProjectsPath } from "./utils";
 
 const IMPORTERS: ComputerVisionImporter[] = [
   new YoloV8Importer(),
@@ -156,9 +159,11 @@ ipcMain.handle("loadModel", async (modelType, modelPath) => {
 });
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-ipcMain.handle("importSamples", async (id) => {
+ipcMain.handle("importSamples", async (projectId, importerId) => {
   return (
-    (await IMPORTERS.find((a) => a.id === id)?.importIntoProject("test")) ?? []
+    (await IMPORTERS.find((a) => a.id === importerId)?.importIntoProject(
+      projectId
+    )) ?? []
   );
 });
 
@@ -196,6 +201,16 @@ ipcMain.handle("getSupportedModels", async () => {
     id: a.id as unknown as string,
     displayName: a.name,
   }));
+});
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ipcMain.handle("createProject", async (_name) => {
+  const projectId = uuidv4().replace(/-/g, "");
+  await fs.promises.mkdir(path.join(getProjectsPath(), projectId), {
+    recursive: true,
+  });
+
+  return projectId;
 });
 
 // In this file you can include the rest of your app's specific main process

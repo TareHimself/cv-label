@@ -4,7 +4,7 @@ import time
 import torch.nn.functional as F
 import torchvision
 import cv2
-
+# Ultimate goal is to migrate all of this to nodejs/c++ using https://github.com/nodeml
 
 def masks2segments_scaled(masks,original_size: tuple[int,int], strategy='largest'):
     """

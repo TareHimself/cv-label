@@ -12,7 +12,7 @@ export class ComputerVisionImporter {
     this.id = uuidv4();
   }
 
-  async importIntoProject(projectName: string): Promise<ISample[]> {
+  async importIntoProject(projectId: string): Promise<ISample[]> {
     const imported = await this.import();
 
     return await withNodeWorker(
@@ -59,7 +59,7 @@ export class ComputerVisionImporter {
           ).map((c) => c.value)
         );
       },
-      path.join(getProjectsPath(), projectName),
+      path.join(getProjectsPath(), projectId),
       imported
     );
   }

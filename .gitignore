@@ -97,3 +97,4 @@ projects/
 **/libtorch/**
 *.zip
 **/deps/**
+*.tmp

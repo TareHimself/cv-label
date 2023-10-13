@@ -1,9 +1,11 @@
 /* eslint-disable import/no-named-as-default */
 import { configureStore } from "@reduxjs/toolkit";
 import EditorSlice from "./slices/editor";
+import ProjectsSlice from "./slices/projects";
 export const store = configureStore({
   reducer: {
     editor: EditorSlice,
+    projects: ProjectsSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -67,10 +67,11 @@ export type IRendererToMainEvents = {
     modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
   ) => Promise<CvLabel[] | undefined>;
-  importSamples: (id: string) => Promise<ISample[]>;
+  importSamples: (projectId: string, importerId: string) => Promise<ISample[]>;
   getImporters: () => Promise<IPluginInfo[]>;
   getSupportedModels: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
+  createProject: (name: string) => Promise<string | undefined>;
 };
 
 export type IMainToRendererEvents = {
@@ -90,19 +91,15 @@ interface IPluginInfo {
 }
 interface CvLabelBase {
   classIndex: number;
+  points: CvLabelSegmentPoint[];
   type: ELabelType;
 }
 
 export interface CvBoxLabel extends CvLabelBase {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
   type: ELabelType.BOX;
 }
 
 export interface CvSegmentLabel extends CvLabelBase {
-  points: CvLabelSegmentPoint[];
   type: ELabelType.SEGMENT;
 }
 
@@ -138,9 +135,14 @@ export type EditorSliceState = {
   availableImporters: IPluginInfo[];
 };
 
+export type ProjectsSliceState = {
+  projectId: string | undefined;
+};
+
 export type AppSliceState = {
   state: {
     editor: EditorSliceState;
+    projects: ProjectsSliceState;
   };
 };
 

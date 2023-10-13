@@ -11,7 +11,7 @@ import {
 } from "react-icons/md";
 import { FaUndoAlt, FaRedoAlt, FaFileImport } from "react-icons/fa";
 import BoxContainer from "./BoxContainer";
-import ActionPanelIcon from "./ActionPanelIcon";
+import Icon from "../Icon";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import {
   autoLabel,
@@ -146,25 +146,25 @@ export default function Editor() {
       )}
       <div className="editor-layer">
         <EditorActionPanel position="bottom">
-          <ActionPanelIcon
+          <Icon
             icon={AiOutlineZoomIn}
             onClicked={() => {
               dispatch(setSampleScale(sampleScale + 0.1));
             }}
           />
-          <ActionPanelIcon
+          <Icon
             icon={MdOutlineNavigateBefore}
             onClicked={() => {
               dispatch(setCurrentSample(currentSampleIndex - 1));
             }}
           />
-          <ActionPanelIcon
+          <Icon
             icon={MdOutlineNavigateNext}
             onClicked={() => {
               dispatch(setCurrentSample(currentSampleIndex + 1));
             }}
           />
-          <ActionPanelIcon
+          <Icon
             icon={AiOutlineZoomOut}
             onClicked={() => {
               dispatch(setSampleScale(sampleScale - 0.1));
@@ -172,28 +172,28 @@ export default function Editor() {
           />
         </EditorActionPanel>
         <EditorActionPanel position="right">
-          <ActionPanelIcon
+          <Icon
             icon={PiHandPalmBold}
             isActive={editorMode === EEditorMode.SELECT}
             onClicked={() => {
               dispatch(setEditorMode(EEditorMode.SELECT));
             }}
           />
-          <ActionPanelIcon
+          <Icon
             icon={BsBoundingBoxCircles}
             isActive={editorMode === EEditorMode.CREATE_BOX}
             onClicked={() => {
               dispatch(setEditorMode(EEditorMode.CREATE_BOX));
             }}
           />
-          <ActionPanelIcon
+          <Icon
             icon={PiPolygonLight}
             isActive={editorMode === EEditorMode.CREATE_SEGMENT}
             onClicked={() => {
               dispatch(setEditorMode(EEditorMode.CREATE_SEGMENT));
             }}
           />
-          <ActionPanelIcon
+          <Icon
             icon={MdAutoAwesome}
             isActive={labeler !== undefined}
             onClicked={useCallback(() => {
@@ -211,9 +211,9 @@ export default function Editor() {
           />
         </EditorActionPanel>
         <EditorActionPanel position="left">
-          <ActionPanelIcon icon={BsFiles} />
-          <ActionPanelIcon icon={MdLabel} />
-          <ActionPanelIcon
+          <Icon icon={BsFiles} />
+          <Icon icon={MdLabel} />
+          <Icon
             icon={FaFileImport}
             onClicked={() => {
               console.log("Using importer", importers[0]);
@@ -224,8 +224,8 @@ export default function Editor() {
               );
             }}
           />
-          <ActionPanelIcon icon={FaUndoAlt} />
-          <ActionPanelIcon icon={FaRedoAlt} />
+          <Icon icon={FaUndoAlt} />
+          <Icon icon={FaRedoAlt} />
         </EditorActionPanel>
       </div>
     </div>

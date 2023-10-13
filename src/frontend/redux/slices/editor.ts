@@ -69,12 +69,17 @@ const fetchPlugins = createAsyncThunk("editor/plugins/load", async () => {
   };
 });
 
-const importSamples = createAsyncThunk(
-  "editor/samples/load",
-  async ({ id }: { id: string }) => {
-    return await window.bridge.importSamples(id);
+const importSamples = createAsyncThunk<
+  ISample[],
+  { id: string },
+  AppSliceState
+>("editor/samples/load", async ({ id }, thunk) => {
+  const state = thunk.getState().projects;
+  if (state.projectId) {
+    return await window.bridge.importSamples(state.projectId, id);
   }
-);
+  return [];
+});
 
 const loadModel = createAsyncThunk(
   "editor/labeler/load",
@@ -136,13 +141,13 @@ export const EditorSlice = createSlice({
   initialState,
   reducers: {
     addLabels: (state, action: PayloadAction<CvLabel[]>) => {
-      const current = state.samples[state.sampleIndex];
+      const current = state.samples[state.sampleList[state.sampleIndex]];
       if (current !== undefined) {
         current.labels.push(...action.payload);
       }
     },
     editLabel: (state, action: PayloadAction<[number, CvLabel]>) => {
-      const current = state.samples[state.sampleIndex];
+      const current = state.samples[state.sampleList[state.sampleIndex]];
       if (current !== undefined) {
         current.labels[action.payload[0]] = action.payload[1];
       }

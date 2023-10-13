@@ -1,7 +1,7 @@
 import React from "react";
 import { IconType } from "react-icons";
 
-export type ActionPanelIconProps = {
+export type IconProps = {
   icon: IconType;
   iconSize?: number;
   disabled?: boolean;
@@ -9,14 +9,14 @@ export type ActionPanelIconProps = {
   isActive?: boolean;
   onClicked?: () => void;
 };
-export default function ActionPanelIcon({
+export default function Icon({
   icon,
   onClicked,
   iconSize,
   disabled,
   style,
   isActive,
-}: ActionPanelIconProps) {
+}: IconProps) {
   const Icon = icon;
   const size = iconSize ?? 20;
   return (
