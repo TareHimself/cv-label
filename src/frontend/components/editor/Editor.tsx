@@ -201,8 +201,8 @@ export default function Editor() {
               if (labeler === undefined) {
                 dispatch(
                   loadModel({
-                    modelType: ECVModelType.Yolov8Detect,
-                    modelPath: "./detection.torchscript",
+                    modelType: ECVModelType.Yolov8Seg,
+                    modelPath: "./seg.torchscript",
                   })
                 );
               } else {
