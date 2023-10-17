@@ -5,6 +5,10 @@ import { v4 as uuidv4 } from "uuid";
 import { AsyncReturnType } from "@types";
 import { fork, ChildProcess } from "child_process";
 
+const workersPath = path.join(process.cwd(), "workers");
+fs.mkdirSync(workersPath, {
+  recursive: true,
+});
 export async function withNodeWorker<A extends unknown[], R>(
   func: (...args: A) => Promise<R>,
   ...args: A
@@ -18,7 +22,7 @@ export async function withNodeWorker<A extends unknown[], R>(
         })
     }`;
 
-  const tempFilePath = path.join(process.cwd(), `worker-func-${uuidv4()}.js`);
+  const tempFilePath = path.join(workersPath, `worker-func-${uuidv4()}.js`);
 
   await fs.promises.writeFile(tempFilePath, tempScript);
 
@@ -133,7 +137,7 @@ export async function createWorker<
     }
     `;
 
-  const tempFilePath = path.join(process.cwd(), `worker-${uuidv4()}.js`);
+  const tempFilePath = path.join(workersPath, `worker-${uuidv4()}.js`);
 
   await fs.promises.writeFile(tempFilePath, tempScript);
 
@@ -157,7 +161,7 @@ export async function withNodeProcess<A extends unknown[], R>(
     func(...data.args).then((a) => process.send(a));
   });`;
 
-  const tempFilePath = path.join(process.cwd(), `process-func-${uuidv4()}.js`);
+  const tempFilePath = path.join(workersPath, `process-func-${uuidv4()}.js`);
 
   await fs.promises.writeFile(tempFilePath, tempScript);
 
@@ -259,10 +263,9 @@ export async function createProcess<
     });
     `;
 
-  const tempFilePath = path.join(process.cwd(), `process-${uuidv4()}.js`);
+  const tempFilePath = path.join(workersPath, `process-${uuidv4()}.js`);
 
   await fs.promises.writeFile(tempFilePath, tempScript);
-
   const worker = fork(tempFilePath);
 
   worker.send({

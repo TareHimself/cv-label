@@ -2,8 +2,8 @@ import Polygon from "@components/Polygon";
 import { setLabelIndex } from "@redux/exports";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import {
-  CvBoxLabel,
-  CvSegmentLabel,
+  CvBoxAnnotation,
+  CvSegmentAnnotation,
   EEditorMode,
   ELabelType,
   LabelOverlayProps,
@@ -22,7 +22,7 @@ function DrawBox({
   onUpdated,
   isEditable,
   onClicked,
-}: DrawProps<CvBoxLabel>) {
+}: DrawProps<CvBoxAnnotation>) {
   const labelerRect = useAppSelector((s) => s.editor.labelerRect);
   const imageInfo = useAppSelector((s) => s.editor.sampleImageInfo);
 
@@ -31,7 +31,10 @@ function DrawBox({
     labelerRect.height / imageInfo.height,
   ];
 
-  const { x1, y1, x2, y2 } = label;
+  const [pts1, pts2] = label.points;
+
+  const [x1, y1] = pts1;
+  const [x2, y2] = pts2;
 
   const pointsRaw: [number, number][] = [
     [x1, y1],
@@ -51,10 +54,16 @@ function DrawBox({
       onDragCompleted={(newPoints) => {
         onUpdated({
           ...label,
-          x1: Math.min(...newPoints.map((a) => a[0])) / scaleX,
-          y1: Math.min(...newPoints.map((a) => a[1])) / scaleY,
-          x2: Math.max(...newPoints.map((a) => a[0])) / scaleX,
-          y2: Math.max(...newPoints.map((a) => a[1])) / scaleY,
+          points: [
+            [
+              Math.min(...newPoints.map((a) => a[0])) / scaleX,
+              Math.min(...newPoints.map((a) => a[1])) / scaleY,
+            ],
+            [
+              Math.max(...newPoints.map((a) => a[0])) / scaleX,
+              Math.max(...newPoints.map((a) => a[1])) / scaleY,
+            ],
+          ],
         });
         return newPoints;
       }}
@@ -71,7 +80,7 @@ function DrawSegment({
   onUpdated,
   isEditable,
   onClicked,
-}: DrawProps<CvSegmentLabel>) {
+}: DrawProps<CvSegmentAnnotation>) {
   const labelerRect = useAppSelector((s) => s.editor.labelerRect);
   const imageInfo = useAppSelector((s) => s.editor.sampleImageInfo);
 

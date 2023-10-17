@@ -95,16 +95,16 @@ export class YoloV8Importer extends ComputerVisionImporter {
                     .map((c) => c.split(" ").map(parseFloat));
                   return {
                     path: imageFile,
-                    labels: labels.map(([cls, x, y, w, h]) => {
+                    annotations: labels.map(([cls, x, y, w, h]) => {
                       const x1 = x * width - (w * width) / 2;
                       const y1 = y * height - (h * height) / 2;
                       const x2 = x1 + w * width;
                       const y2 = y1 + h * height;
                       return {
-                        x1: x1,
-                        y1: y1,
-                        x2: x2,
-                        y2: y2,
+                        points: [
+                          [x1, y1],
+                          [x2, y2],
+                        ],
                         classIndex: Math.floor(cls),
                         type: boxLabelType as ELabelType.BOX,
                       };
@@ -118,7 +118,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
 
               return {
                 path: imageFile,
-                labels: [],
+                annotations: [],
                 added: sqliteNowProxy(),
               } as ISample;
             })

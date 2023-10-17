@@ -99,4 +99,7 @@ export function sqliteNow() {
   );
 }
 
+export function sleep(time: number) {
+  return new Promise<void>((r) => setTimeout(r, time));
+}
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

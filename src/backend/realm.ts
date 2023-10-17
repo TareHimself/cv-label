@@ -1,17 +1,39 @@
+import { CvAnnotation } from "@types";
 import Realm, { ObjectSchema } from "realm";
 
-class Labels extends Realm.Object<Labels> {
-  _id!: number;
-  name!: string;
-  status?: string;
+const annotationsSchema = {
+  name: "Annotations",
+  embedded: true,
+  properties:
+};
+class Annotation extends Realm.Object<Annotation> {
+  id!: string;
+  ext!: string;
+  annotations!: CvAnnotation[];
   owner_id?: string;
   static schema: ObjectSchema = {
-    name: "Task",
+    name: "Annotation",
     properties: {
-      _id: "int",
-      name: "string",
-      status: "string?",
-      owner_id: "string?",
+      id: "string",
+      ext: "string",
+      labels: { type: "list", objectType: { type: "list", objectType: "Address" } },
+      added_at: "string?",
+    },
+    primaryKey: "_id",
+  };
+}
+class Sample extends Realm.Object<Sample> {
+  id!: string;
+  ext!: string;
+  annotations!: CvAnnotation[];
+  owner_id?: string;
+  static schema: ObjectSchema = {
+    name: "Sample",
+    properties: {
+      id: "string",
+      ext: "string",
+      labels: { type: "list", objectType: "Annotation" },
+      added_at: "string?",
     },
     primaryKey: "_id",
   };

@@ -98,3 +98,6 @@ projects/
 *.zip
 **/deps/**
 *.tmp
+*.torchscript
+*.pt
+/workers/*

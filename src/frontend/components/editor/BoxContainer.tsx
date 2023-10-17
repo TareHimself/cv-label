@@ -9,11 +9,11 @@ import {
 } from "@redux/exports";
 import useMouseUp from "@hooks/useMouseUp";
 import useElementRect from "@hooks/useElementRect";
-import { CvLabel } from "@types";
+import { CvAnnotation } from "@types";
 
 export type BoxContainerProps = {
-  tempLabels?: CvLabel[];
-  onTempLabelUpdated?: (update: CvLabel, idx: number) => void;
+  tempLabels?: CvAnnotation[];
+  onTempLabelUpdated?: (update: CvAnnotation, idx: number) => void;
 };
 
 export default function BoxContainer(props: BoxContainerProps) {
@@ -98,7 +98,7 @@ export default function BoxContainer(props: BoxContainerProps) {
       />
       {!isLoadingSample && (
         <LabelOverlay
-          labels={currentSample.labels}
+          labels={currentSample.annotations}
           onLabelUpdated={(idx, u) => {
             dispatch(editLabel([idx, u]));
           }}

@@ -87,14 +87,15 @@ export default function Editor() {
 
   useEffect(() => {
     if (
-      labeler &&
+      labeler !== undefined &&
       currentSample &&
       lastIndexLabeled !== currentSampleIndex &&
-      currentSample.labels.length === 0
+      currentSample.annotations.length === 0
     ) {
+      console.log("Labeling", currentSample);
       dispatch(
         autoLabel({
-          index: currentSampleIndex,
+          samplePath: currentSample.path,
         })
       );
       setLastIndexLabeled(currentSampleIndex);
@@ -197,11 +198,11 @@ export default function Editor() {
             icon={MdAutoAwesome}
             isActive={labeler !== undefined}
             onClicked={useCallback(() => {
-              if (!labeler) {
+              if (labeler === undefined) {
                 dispatch(
                   loadModel({
-                    modelType: ECVModelType.Yolov8Seg,
-                    modelPath: "./yolo-seg.onnx",
+                    modelType: ECVModelType.Yolov8Detect,
+                    modelPath: "./detection.torchscript",
                   })
                 );
               } else {
@@ -216,10 +217,14 @@ export default function Editor() {
           <Icon
             icon={FaFileImport}
             onClicked={() => {
-              console.log("Using importer", importers[0]);
+              console.log(
+                "Using importer",
+                importers.find((d) => d.displayName === "Files")
+              );
               dispatch(
                 importSamples({
-                  id: importers[0].id,
+                  id:
+                    importers.find((d) => d.displayName === "Files")?.id ?? "",
                 })
               );
             }}

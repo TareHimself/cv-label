@@ -11,6 +11,7 @@ export class FilesImporter extends ComputerVisionImporter {
 
   override async import(): Promise<ISample[]> {
     const dialogResult = await dialog.showOpenDialog({
+      title: "Select Files To Add To Project",
       properties: ["multiSelections", "openFile"],
     });
 
@@ -21,7 +22,7 @@ export class FilesImporter extends ComputerVisionImporter {
     return dialogResult.filePaths.map((a) => {
       return {
         path: a,
-        labels: [],
+        annotations: [],
         added: sqliteNow(),
       };
     });

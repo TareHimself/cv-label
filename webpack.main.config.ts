@@ -2,8 +2,6 @@ import type { Configuration } from "webpack";
 
 import path from "path";
 import { rules } from "./webpack.rules";
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const nodeExternals = require("webpack-node-externals");
 
 export const mainConfig: Configuration = {
   /**
@@ -22,12 +20,12 @@ export const mainConfig: Configuration = {
       "@types": path.resolve(__dirname, path.join("src", "types.ts")),
     },
   },
-  // externals: {
-  //   electron: "commonjs2 electron",
-  // },
-    externals: [
-      nodeExternals(),
-  ],
+  externals: {
+    sharp: "commonjs sharp",
+    "@nodeml/torch": "commonjs @nodeml/torch",
+    "@node-rs/xxhash": "commonjs @node-rs/xxhash",
+  },
+
   // optimization: {
   //   minimize: false,
   // },

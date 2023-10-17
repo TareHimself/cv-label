@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
-  CvLabel,
+  CvAnnotation,
   ECVModelType,
   ICVModelInferenceResults,
   ValueOf,
@@ -8,12 +8,12 @@ import {
 import { InferenceSession } from "onnxruntime-node";
 
 export type GenericComputerVisionModel = ComputerVisionModel<
-  CvLabel[],
+  CvAnnotation[],
   ValueOf<typeof ECVModelType>
 >;
 
 export default class ComputerVisionModel<
-  PredictionResult extends CvLabel[],
+  PredictionResult extends CvAnnotation[],
   Model extends ValueOf<typeof ECVModelType>
 > {
   modelType: ECVModelType;

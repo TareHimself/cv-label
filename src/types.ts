@@ -66,7 +66,7 @@ export type IRendererToMainEvents = {
   doInference: (
     modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
-  ) => Promise<CvLabel[] | undefined>;
+  ) => Promise<CvAnnotation[] | undefined>;
   importSamples: (projectId: string, importerId: string) => Promise<ISample[]>;
   getImporters: () => Promise<IPluginInfo[]>;
   getSupportedModels: () => Promise<IPluginInfo[]>;
@@ -79,8 +79,8 @@ export type IMainToRendererEvents = {
 };
 
 export type LabelOverlayProps = PropsWithChildren<{
-  labels: CvLabel[];
-  onLabelUpdated: (idx: number, label: CvLabel) => void;
+  labels: CvAnnotation[];
+  onLabelUpdated: (idx: number, label: CvAnnotation) => void;
 }>;
 
 export type CvLabelSegmentPoint = [number, number];
@@ -95,19 +95,19 @@ interface CvLabelBase {
   type: ELabelType;
 }
 
-export interface CvBoxLabel extends CvLabelBase {
+export interface CvBoxAnnotation extends CvLabelBase {
   type: ELabelType.BOX;
 }
 
-export interface CvSegmentLabel extends CvLabelBase {
+export interface CvSegmentAnnotation extends CvLabelBase {
   type: ELabelType.SEGMENT;
 }
 
-export type CvLabel = CvBoxLabel | CvSegmentLabel;
+export type CvAnnotation = CvBoxAnnotation | CvSegmentAnnotation;
 
 export interface ISample {
   path: string;
-  labels: CvLabel[];
+  annotations: CvAnnotation[];
   added: number;
 }
 

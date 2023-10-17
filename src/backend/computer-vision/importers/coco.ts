@@ -1,6 +1,6 @@
 import { dialog } from "electron";
 import { ComputerVisionImporter } from ".";
-import { CvLabel, CvSegmentLabel, ELabelType, ISample } from "@types";
+import { CvAnnotation, CvSegmentAnnotation, ELabelType, ISample } from "@types";
 import { withNodeWorker } from "@root/backend/worker";
 import { sqliteNow as sqliteNowMain } from "@root/utils";
 interface ICocoDataset {
@@ -100,7 +100,7 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
                           points.push(d.slice(i, i + 2) as [number, number]);
                         }
 
-                        const label: CvSegmentLabel = {
+                        const label: CvSegmentAnnotation = {
                           points: points,
                           classIndex: c.category_id,
                           type: segmentLabelType as ELabelType.SEGMENT,
@@ -111,7 +111,7 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
                     );
 
                     return t;
-                  }, [] as CvLabel[]),
+                  }, [] as CvAnnotation[]),
                 added: sqliteNowProxy(),
               };
             });

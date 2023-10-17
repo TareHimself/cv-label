@@ -43,7 +43,7 @@ export class ComputerVisionImporter {
 
               return {
                 path: newName,
-                labels: sample.labels,
+                annotations: sample.annotations,
                 added: sample.added,
               };
             } catch (error) {

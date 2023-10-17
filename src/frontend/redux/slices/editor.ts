@@ -7,7 +7,7 @@ import { wrap } from "@root/utils";
 import {
   AppSliceState,
   BasicRect,
-  CvLabel,
+  CvAnnotation,
   ECVModelType,
   EditorSliceState,
   EEditorMode,
@@ -104,27 +104,26 @@ const unloadModel = createAsyncThunk("editor/labeler/unload", async () => {
 
 const autoLabel = createAsyncThunk<
   {
-    index: number;
-    result: CvLabel[] | undefined;
+    samplePath: string;
+    result: CvAnnotation[] | undefined;
   },
-  { index: number },
+  { samplePath: string },
   AppSliceState
->("editor/labeler/auto", async ({ index }, thunk) => {
+>("editor/labeler/auto", async ({ samplePath }, thunk) => {
   return await toast.promise(
     async () => {
       const state = thunk.getState().editor;
       const modelType = state.activeLabeler;
-      const sample = state.samples[index];
-      if (!modelType) {
+      if (modelType == undefined) {
         return {
-          index,
+          samplePath,
           result: undefined,
         };
       }
 
       return {
-        index,
-        result: await window.bridge.doInference(modelType, sample.path),
+        samplePath,
+        result: await window.bridge.doInference(modelType, samplePath),
       };
     },
     {
@@ -140,16 +139,16 @@ export const EditorSlice = createSlice({
   // `createSlice` will infer the state type from the `initialState` argument
   initialState,
   reducers: {
-    addLabels: (state, action: PayloadAction<CvLabel[]>) => {
+    addLabels: (state, action: PayloadAction<CvAnnotation[]>) => {
       const current = state.samples[state.sampleList[state.sampleIndex]];
       if (current !== undefined) {
-        current.labels.push(...action.payload);
+        current.annotations.push(...action.payload);
       }
     },
-    editLabel: (state, action: PayloadAction<[number, CvLabel]>) => {
+    editLabel: (state, action: PayloadAction<[number, CvAnnotation]>) => {
       const current = state.samples[state.sampleList[state.sampleIndex]];
       if (current !== undefined) {
-        current.labels[action.payload[0]] = action.payload[1];
+        current.annotations[action.payload[0]] = action.payload[1];
       }
     },
     addSamples: (state, action: PayloadAction<ISample[]>) => {
@@ -289,8 +288,9 @@ export const EditorSlice = createSlice({
       }
     });
     builder.addCase(autoLabel.fulfilled, (state, action) => {
-      if (action.payload.result) {
-        state.samples[action.payload.index].labels = action.payload.result;
+      if (action.payload.result !== undefined) {
+        state.samples[action.payload.samplePath].annotations =
+          action.payload.result;
       }
     });
     builder.addCase(fetchPlugins.fulfilled, (state, action) => {
