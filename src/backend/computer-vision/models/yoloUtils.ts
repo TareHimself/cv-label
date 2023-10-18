@@ -1,5 +1,5 @@
 import * as torch from "@nodeml/torch";
-
+import * as cv from "@nodeml/opencv"
 export function clipBoxes(boxes: torch.Tensor<"float">, shape: number[]) {
   boxes.get("...", 0).clamp(0, shape[1]);
   boxes.get("...", 1).clamp(0, shape[0]);
@@ -16,7 +16,6 @@ export function scaleBoxes(
   const maxDim = Math.max(...img0Shape);
   const diffX = Math.floor((maxDim - img0Shape[1]) / 2);
   const diffY = Math.floor((maxDim - img0Shape[0]) / 2);
-  console.log("Max", maxDim);
   for (let idx = 0; idx < boxes.shape[0]; idx++) {
     const box = boxes.get(idx);
     box.set(box.get(0).div(img1Shape[1]).mul(maxDim).sub(diffX), 0);
@@ -41,16 +40,16 @@ export function xywh2xyxy(x: torch.Tensor<"float">) {
 
 export function nonMaxSuppression(
   prediction: torch.Tensor<"float">,
+  numClasses: number,
   conf_thres = 0.25,
   iou_thres = 0.45,
   agnostic = false,
   max_det = 300,
   max_time_img = 0.05,
   max_nms = 30000,
-  max_wh = 7680
+  max_wh = 7680,
 ): torch.Tensor<"float">[] {
   const batchSize = prediction.shape[0];
-  const numClasses = prediction.shape[1] - 4;
   const numMask = prediction.shape[1] - numClasses - 4;
   const maskStartIndex = 4 + numClasses;
   const candidates = torch.greater(
@@ -94,9 +93,7 @@ export function nonMaxSuppression(
     ];
     let i = torch.vision.ops.nms(boxes, scores, iou_thres);
     i = i.get([null, max_det]);
-    // console.log("SHAPES", boxes.shape, scores.shape, boxes.dtype, scores.dtype);
-    // let i = boxes;
-    // i = i.get([], max_det);
+
     output[idx] = x.get(i);
   }
 
@@ -156,15 +153,28 @@ export function cropMask(
 //     return segments
 
 
-export function masks2segmentsScaled(masks: torch.Tensor<'int32'>,originalSize: [number,number]){
-  const segments: [number,number][] = []
+export function masks2segmentsScaled(masks: torch.Tensor<'int32'>, originalSize: [number, number]) {
+  const segments: [number, number][][] = []
   const maxDim = Math.max(...originalSize)
   const diffX = Math.round((maxDim - originalSize[0]) / 2)
   const diffY = Math.round((maxDim - originalSize[1]) / 2)
-  for(let i = 0; i < masks.shape[0]; i++){
-    const mask = masks.get(i)
-    console.log(mask.shape)
+  for (let i = 0; i < masks.shape[0]; i++) {
+
+    const mask = torch.nn.functional.interpolate(masks.get(i).unsqueeze(0).unsqueeze(0), [maxDim, maxDim], 'area').get(0).get(0).mul(255).clamp(0, 255).type('uint8').get([diffY, diffY + originalSize[1]], [diffX, diffX + originalSize[0]]).clone()
+    
+    const [maskH, maskW] = mask.shape;
+
+    const mat = new cv.Mat(mask.toArray(), maskW, maskH, 1)
+    
+    const contours = cv.findContours(mat, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE).map(c => ({
+      contour: c,
+      arcLength: cv.arcLength(c, true)
+    })).sort((a, b) => b.arcLength - a.arcLength)
+
+    segments.push(cv.approxPolyDp(contours[0].contour, 0.006 * contours[0].arcLength, true))
   }
+
+  return segments
 }
 
 export function processMaskUpsample(
@@ -173,6 +183,7 @@ export function processMaskUpsample(
   bboxes: torch.Tensor<"float">,
   shape: [number, number]
 ) {
+
   const [c, mh, mw] = protos.shape; // c, mh, mw = protos.shape  # CHW
   let masks = masksIn
     .matmul(protos.type("float").view(c, -1))
@@ -181,7 +192,8 @@ export function processMaskUpsample(
     .type("float"); // masks = (masks_in @ protos.float().view(c, -1)).sigmoid().view(-1, mh, mw)
   masks = torch.nn.functional.interpolate(masks.get(null), shape, "bilinear", {
     alignCorners: false,
-  }); // masks = F.interpolate(masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
+    antiAlias: false
+  }).get(0); // masks = F.interpolate(masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
   masks = cropMask(masks, bboxes); // masks = crop_mask(masks, bboxes)  # CHW
   return torch.greater(masks, 0.5).type("int32"); // masks.gt_(0.5)
 }

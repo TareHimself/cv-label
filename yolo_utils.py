@@ -43,6 +43,7 @@ def masks2segments_scaled(masks,original_size: tuple[int,int], strategy='largest
     diff_y = int((max_dim - original_size[1]) / 2)
 
     for x in masks.int().cpu().numpy().astype('uint8'):
+        print("MASK",x.shape)
         x = cv2.resize(x,(max_dim,max_dim),interpolation=cv2.INTER_CUBIC)[diff_y:diff_y + original_size[1], diff_x:diff_x + original_size[0]]
         saved += 1
         c = cv2.findContours(x * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
@@ -141,17 +142,17 @@ def non_max_suppression(
     assert 0 <= iou_thres <= 1, f'Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0'
     if isinstance(prediction, (list, tuple)):  # YOLOv8 model in validation model, output = (inference_out, loss_out)
         prediction = prediction[0]  # select only inference output
-
+    print(prediction.shape)
     device = prediction.device
     mps = 'mps' in device.type  # Apple MPS
     if mps:  # MPS not fully supported yet, convert tensors to CPU before NMS
         prediction = prediction.cpu()
     bs = prediction.shape[0]  # batch size
-    nc = nc or (prediction.shape[1] - 4)  # number of classes
-    nm = prediction.shape[1] - nc - 4
+    #nc = nc or (prediction.shape[1] - 4)  # number of classes
+    nm = prediction.shape[1] - (nc + 4)
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
-
+    print(nc,nm,bs,prediction.shape,prediction.shape[1])
     # Settings
     # min_wh = 2  # (pixels) minimum box width and height
     time_limit = 0.5 + max_time_img * bs  # seconds to quit after
@@ -181,7 +182,7 @@ def non_max_suppression(
 
         # Detections matrix nx6 (xyxy, conf, cls)
         box, cls, mask = x.split((4, nc, nm), 1)
-
+        print("MASKS",nm,mask.shape,prediction.shape[1])
         if False:
             i, j = torch.where(cls > conf_thres)
             x = torch.cat((box[i], x[i, 4 + j, None], j[:, None].float(), mask[i]), 1)
@@ -189,6 +190,8 @@ def non_max_suppression(
             conf, j = cls.max(1, keepdim=True)
             x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
 
+
+        print(x.shape)
         # Filter by class
         # if classes is not None:
         #     x = x[(x[:, 5:6] == torch.tensor(classes, device=x.device)).any(1)]
@@ -205,7 +208,7 @@ def non_max_suppression(
         boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
         i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
         i = i[:max_det]  # limit detections
-
+        print(x.shape)
         # # Experimental
         # merge = False  # use merge-NMS
         # if merge and (1 < n < 3E3):  # Merge NMS (boxes merged using weighted mean)
@@ -217,7 +220,8 @@ def non_max_suppression(
         #     redundant = True  # require redundant detections
         #     if redundant:
         #         i = i[iou.sum(1) > 1]  # require redundancy
-
+        print(x[i].shape)
+        print(i.shape)
         output[xi] = x[i]
         if mps:
             output[xi] = output[xi].to(device)

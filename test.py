@@ -2,10 +2,10 @@ import torch
 import cv2
 import torchvision
 import numpy as np
-from yolo_utils import non_max_suppression, scale_boxes
+from yolo_utils import non_max_suppression, process_mask_upsample, scale_boxes
 
-x = cv2.imread("test.jpg")
-modu = torch.jit.load("detection.torchscript")
+x = cv2.imread("sample2.jpg")
+modu = torch.jit.load("seg.torchscript")
 
 
 def get_padding(image):
@@ -30,9 +30,9 @@ original_size = x.shape
 
 img_h, img_w, img_c = x.shape
 input = torch.from_numpy(x)
-print(input.shape)
+
 input = input.transpose(0, 2).transpose(1, 2).unsqueeze(0)
-print(input.shape)
+
 maxDim = max(img_w, img_h)
 hw = (maxDim - img_w) / 2
 hh = (maxDim - img_h) / 2
@@ -49,22 +49,24 @@ input = torch.nn.functional.interpolate(
     ),
     [640, 640],
 )
-print(input.shape)
 
 torchvision.io.write_png(input.squeeze(0), "hope.png")
 input = input.float() / 255
 with torch.no_grad():
-    output = modu(input)
-    print(output.shape)
+    output,masks = modu(input)
 
-    preds = non_max_suppression(prediction=output)
+    preds = non_max_suppression(prediction=output,nc=2)
 
     pred = preds[0]
 
-    pred[:, :4] = scale_boxes([640, 640], pred[:, :4], [img_h, img_w])
     print(pred.shape)
+
+    masks = process_mask_upsample(masks[0], pred[:, 6:], pred[:, :4], [img_h,img_w])  # HWC
+
+    pred[:, :4] = scale_boxes([640, 640], pred[:, :4], [img_h, img_w])
+
     result = pred.numpy().tolist()
-    print(len(result), result[0])
+
 
 # # cv2.imshow("Padded", x)
 # # cv2.waitKey()

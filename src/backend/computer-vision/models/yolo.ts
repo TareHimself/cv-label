@@ -22,8 +22,8 @@ abstract class Yolov8<
   Model extends ECVModelType.Yolov8Detect | ECVModelType.Yolov8Seg
 > extends ComputerVisionModel<
   Model extends ECVModelType.Yolov8Detect
-    ? CvBoxAnnotation[]
-    : CvSegmentAnnotation[],
+  ? CvBoxAnnotation[]
+  : CvSegmentAnnotation[],
   Model
 > {
   model: torch.jit.Module<Yolov8TorchscriptModelResult<Model>>;
@@ -68,7 +68,7 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
     let data = await torch.vision.io.readImage(imagePath);
 
     const [imgDims, imgHeight, imgWidth] = data.shape;
-    console.log("INITIAL", imgDims, imgHeight, imgWidth);
+
     if (imgDims > 3) {
       data = data.get([1, null]);
     }
@@ -83,7 +83,7 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
           halfHeight,
           halfHeight,
         ]),
-        [640, 640],'nearest'
+        [640, 640], 'nearest'
       )
       .type(torch.types.float)
       .div(255);
@@ -92,7 +92,7 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
       width: imgWidth,
       height: imgHeight,
     };
-    
+
     await sleep(100); // Induced delay to free up event loop
 
     console.time("FORWARD");
@@ -100,7 +100,7 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
     console.timeEnd("FORWARD");
     await sleep(100); // Induced delay to free up event loop
     console.time("NMS");
-    const preds = nonMaxSuppression(result);
+    const preds = nonMaxSuppression(result, result.shape[1] - 4);
     console.timeEnd("NMS");
     await sleep(100); // Induced delay to free up event loop
     const pred = preds[0];
@@ -154,7 +154,7 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
     let data = await torch.vision.io.readImage(imagePath);
 
     const [imgDims, imgHeight, imgWidth] = data.shape;
-    console.log("INITIAL", imgDims, imgHeight, imgWidth);
+
     if (imgDims > 3) {
       data = data.get([1, null]);
     }
@@ -169,7 +169,7 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
           halfHeight,
           halfHeight,
         ]),
-        [640, 640],'nearest'
+        [640, 640], 'nearest'
       )
       .type(torch.types.float)
       .div(255);
@@ -178,15 +178,15 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
       width: imgWidth,
       height: imgHeight,
     };
-    
+
     await sleep(100); // Induced delay to free up event loop
 
     console.time("FORWARD");
-    const [boxes,masksPred] = await this.model.forward(input);
+    const [boxes, masksPred] = await this.model.forward(input);
     console.timeEnd("FORWARD");
     await sleep(100); // Induced delay to free up event loop
     console.time("NMS");
-    const preds = nonMaxSuppression(boxes);
+    const preds = nonMaxSuppression(boxes, boxes.shape[1] - (4 + 32));
     console.timeEnd("NMS");
     await sleep(100); // Induced delay to free up event loop
 
@@ -194,32 +194,20 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
 
     const pred = preds[0];
 
-    if(!pred.shape[0]){
+    if (!pred.shape[0]) {
       return []
     }
+    console.time("Mask Extraction");
+    const masksUpsampled = processMaskUpsample(proto, pred.get([], [6, null]), pred.get([], [null, 4]), [640, 640])
+    const segments = masks2segmentsScaled(masksUpsampled, [inputDims.width, inputDims.height])
+    console.timeEnd("Mask Extraction");
+    return segments.map((seg) => {
 
-    const masksUpsampled = processMaskUpsample(proto,pred.get([],[null,6]),pred.get([],[null,4]),[640,640])
-    const segments = masks2segmentsScaled(masksUpsampled,[inputDims.width,inputDims.height])
-    // const scaled = scaleBoxes([640, 640], pred.get([], [null, 4]), [
-    //   inputDims.height,
-    //   inputDims.width,
-    // ]);
-    // pred.set(scaled, [], [null, 4]);
-
-    // const allBoxes: CvBoxAnnotation[] = [];
-
-
-    // for (let i = 0; i < pred.shape[0]; i++) {
-    //   const a = pred.get(i).get([0, null]).toArray();
-    //   allBoxes.push({
-    //     points: [
-    //       [a[0], a[1]],
-    //       [a[2], a[3]],
-    //     ],
-    //     type: ELabelType.BOX,
-    //     classIndex: Math.round(a[4]),
-    //   });
-    // }
-    return [];
+      return {
+        points: seg,
+        type: ELabelType.SEGMENT,
+        classIndex: Math.round(boxes.get(0).get(4).type('int32').toArray()[0]),
+      }
+    })
   }
 }
