@@ -89,7 +89,7 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
             const samples: ISample[] = dataset.images.map((img) => {
               return {
                 path: path.join(datasetPath, folder, img.file_name),
-                labels: dataset.annotations
+                annotations: dataset.annotations
                   .filter((a) => a.image_id === img.id)
                   .reduce((t, c) => {
                     t.push(

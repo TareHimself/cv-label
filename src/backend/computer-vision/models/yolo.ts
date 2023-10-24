@@ -4,10 +4,8 @@ import {
   CvSegmentAnnotation,
   ECVModelType,
   ELabelType,
-  ICVModelInferenceResults,
 } from "@types";
 import path from "path";
-import sharp from "sharp";
 import * as torch from "@nodeml/torch";
 import { masks2segmentsScaled, nonMaxSuppression, processMaskUpsample, scaleBoxes } from "./yoloUtils";
 import { sleep } from "@root/utils";
@@ -35,9 +33,6 @@ abstract class Yolov8<
     this.model = model;
   }
 }
-
-type Yolov8DetectionResult =
-  ICVModelInferenceResults[ECVModelType.Yolov8Detect];
 
 type Yolov8TorchscriptModelResult<
   Model extends ECVModelType.Yolov8Detect | ECVModelType.Yolov8Seg
@@ -197,10 +192,8 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
     if (!pred.shape[0]) {
       return []
     }
-    console.time("Mask Extraction");
     const masksUpsampled = processMaskUpsample(proto, pred.get([], [6, null]), pred.get([], [null, 4]), [640, 640])
     const segments = masks2segmentsScaled(masksUpsampled, [inputDims.width, inputDims.height])
-    console.timeEnd("Mask Extraction");
     return segments.map((seg) => {
 
       return {

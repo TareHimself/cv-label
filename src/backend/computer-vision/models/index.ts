@@ -2,10 +2,8 @@
 import {
   CvAnnotation,
   ECVModelType,
-  ICVModelInferenceResults,
   ValueOf,
 } from "@types";
-import { InferenceSession } from "onnxruntime-node";
 
 export type GenericComputerVisionModel = ComputerVisionModel<
   CvAnnotation[],
@@ -20,13 +18,6 @@ export default class ComputerVisionModel<
 
   constructor(modelId: Model) {
     this.modelType = modelId;
-  }
-
-  static getSessionOptions() {
-    const opts: InferenceSession.SessionOptions = {
-      executionProviders: ["cpu"],
-    };
-    return opts;
   }
 
   public async predict(imagePath: string): Promise<PredictionResult> {

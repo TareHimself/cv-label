@@ -9,10 +9,10 @@ export const rules: Required<ModuleOptions>['rules'] = [
     use: 'node-loader',
   },
   {
-    test: /[/\\]node_modules[/\\].+\.(m?js|node)$/,
+    test:  /\.(m?js|node)$/,///[/\\]node_modules[/\\].+\.(m?js|node)$/,
     parser: { amd: false },
     use: {
-      loader: '@vercel/webpack-asset-relocator-loader',
+      loader: '@marshallofsound/webpack-asset-relocator-loader',
       options: {
         outputAssetBase: 'native_modules',
       },

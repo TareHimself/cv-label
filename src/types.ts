@@ -18,36 +18,12 @@ export const enum EEditorMode {
   CREATE_SEGMENT,
 }
 
-export interface ICVModelInferenceResults {
-  [ECVModelType.Yolov8Detect]: {
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    class: number;
-    confidence: number;
-  }[];
-  [ECVModelType.Yolov8Seg]: {
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    class: number;
-    confidence: number;
-    mask: [number, number][];
-  }[];
-}
-
 export type BasicRect = {
   height: number;
   width: number;
   x: number;
   y: number;
 };
-
-export type InferenceResult<
-  T extends ValueOf<typeof ECVModelType> = ValueOf<typeof ECVModelType>
-> = ICVModelInferenceResults[T];
 
 export type IRendererToMainEvents = {
   getPreloadPath: () => string;
