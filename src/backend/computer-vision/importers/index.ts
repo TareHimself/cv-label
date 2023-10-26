@@ -3,6 +3,7 @@ import { ISample } from "@types";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { getProjectsPath } from "@root/backend/utils";
+import { DatabaseImages, DatabaseSample, createOrOpenProject } from "@root/backend/db";
 export class ComputerVisionImporter {
   name: string;
   id: string;
@@ -29,17 +30,25 @@ export class ComputerVisionImporter {
           recursive: true,
         });
 
+        await createOrOpenProject(projectPath)
+
         return await Promise.allSettled(
           files.map(async (sample) => {
             try {
-              const newName = path.join(
-                projectPath,
-                xxh64(await fs.promises.readFile(sample.path)).toString() +
-                  "." +
-                  path.basename(sample.path).split(".").reverse()[0]
-              );
 
-              await fs.promises.copyFile(sample.path, newName);
+
+              const newName = xxh64(await fs.promises.readFile(sample.path)).toString();
+
+              DatabaseImages.create({
+                id: newName,
+                data: await fs.promises.readFile(sample.path)
+              })
+
+              const annotationsConverted = 
+              await DatabaseSample.create({
+                id: newName,
+                annotations: 
+              })
 
               return {
                 path: newName,

@@ -28,7 +28,6 @@ const config: ForgeConfig = {
     new WebpackPlugin({
       mainConfig,
       renderer: {
-        nodeIntegration: true,
         config: rendererConfig,
         entryPoints: [
           {
