@@ -7,12 +7,13 @@ import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-nati
 import { WebpackPlugin } from "@electron-forge/plugin-webpack";
 import { mainConfig } from "./webpack.main.config";
 import { rendererConfig } from "./webpack.renderer.config";
-import CopyExternalsPlugin from "./copy-externals";
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const ForgeExternalsPlugin = require('@timfish/forge-externals-plugin');
+import { } from '@electron-forge/shared-types';
+import ExternalsPlugin from "./externals";
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: "**/*.dll"
+    }
   },
   rebuildConfig: {},
   makers: [
@@ -22,10 +23,12 @@ const config: ForgeConfig = {
     new MakerDeb({}),
   ],
   plugins: [
+    
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
       mainConfig,
       renderer: {
+        nodeIntegration: true,
         config: rendererConfig,
         entryPoints: [
           {
@@ -42,9 +45,14 @@ const config: ForgeConfig = {
       packageSourceMaps: true,
       devContentSecurityPolicy: `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: * blob: app:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app: blob:; media-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app:;`,
     }),
-    new CopyExternalsPlugin({
-      externals: ["sharp","@nodeml/torch","@nodeml/opencv","@node-rs/xxhash"]
-    })
+    new ExternalsPlugin({
+      externals: ["sharp","@nodeml/torch","@nodeml/opencv"]
+    }),
+    // new ForgeExternalsPlugin({
+    //   externals: ["sharp", "@nodeml/torch", "@nodeml/opencv"],
+    //   includeDeps: true
+    // })
+    
   ],
   
 
