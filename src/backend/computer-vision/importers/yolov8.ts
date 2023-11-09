@@ -21,13 +21,14 @@ export class YoloV8Importer extends ComputerVisionImporter {
 
     return await withNodeWorker(
       async (datasetPath, boxLabelType) => {
-        const [fs, path, sharp] = eval(
-          `[require('fs'),require('path'),require('sharp')]`
+        const [fs, path, sharp, uuid] = eval(
+          `[require('fs'),require('path'),require('sharp'),require('uuid')]`
         ) as [
-          typeof import("fs"),
-          typeof import("path"),
-          typeof import("sharp")
-        ];
+            typeof import("fs"),
+            typeof import("path"),
+            typeof import("sharp"),
+            typeof import("uuid"),
+          ];
 
         const immediateFolders = await fs.promises.readdir(datasetPath);
 
@@ -67,9 +68,9 @@ export class YoloV8Importer extends ComputerVisionImporter {
                   return undefined;
                 })
                 .filter((c) => c !== undefined) as {
-                file: string;
-                metadata: import("sharp").Metadata;
-              }[]
+                  file: string;
+                  metadata: import("sharp").Metadata;
+                }[]
           );
 
           const samples = await Promise.all(
@@ -91,6 +92,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
                     .split("\n")
                     .map((c) => c.split(" ").map(parseFloat));
                   return {
+
                     path: imageFile,
                     annotations: labels.map(([cls, x, y, w, h]) => {
                       const x1 = x * width - (w * width) / 2;
@@ -98,11 +100,20 @@ export class YoloV8Importer extends ComputerVisionImporter {
                       const x2 = x1 + w * width;
                       const y2 = y1 + h * height;
                       return {
-                        points: [
-                          [x1, y1],
-                          [x2, y2],
+                        id: uuid.v4(),
+                        points: [{
+                          id: uuid.v4(),
+                          x: x1,
+                          y: y1,
+
+                        },
+                        {
+                          id: uuid.v4(),
+                          x: x2,
+                          y: y2,
+                        }
                         ],
-                        classIndex: Math.floor(cls),
+                        class: Math.floor(cls),
                         type: boxLabelType as ELabelType.BOX,
                       };
                     }),

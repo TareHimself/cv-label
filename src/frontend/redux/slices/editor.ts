@@ -42,7 +42,6 @@ const initialState: EditorSliceState = {
     x: 0,
     y: 0,
   },
-  loadedImage: null,
   isLoadingCurrentSample: false,
   sampleImageInfo: {
     width: 0,
@@ -113,21 +112,22 @@ const autoLabel = createAsyncThunk<
   },
   { samplePath: string },
   AppSliceState
->("editor/labeler/auto", async ({ samplePath }, thunk) => {
+>("editor/labeler/auto", async ({ samplePath: sampleId }, thunk) => {
   return await toast.promise(
     async () => {
       const state = thunk.getState().editor;
+      const projectsState = thunk.getState().projects
       const modelType = state.activeLabeler;
       if (modelType == undefined) {
         return {
-          samplePath,
+          samplePath: sampleId,
           result: undefined,
         };
       }
 
       return {
-        samplePath,
-        result: await window.bridge.doInference(modelType, samplePath),
+        samplePath: sampleId,
+        result: await window.bridge.doInference(modelType, `${projectsState.projectId}/images/${sampleId}`),
       };
     },
     {
@@ -168,7 +168,6 @@ export const EditorSlice = createSlice({
         state.sampleIndex = targetIdx;
         state.currentLabelIndex = -1;
         state.isLoadingCurrentSample = true;
-        state.loadedImage = null;
       }
     },
     resetSampleScale: (state) => {
@@ -271,11 +270,16 @@ export const EditorSlice = createSlice({
     builder.addCase(loadModel.fulfilled, (state, action) => {
       state.activeLabeler = action.payload;
     });
+    builder.addCase(loadModel.pending, (state, action) => {
+      state.activeLabeler = action.meta.arg.modelType
+    });
     builder.addCase(unloadModel.fulfilled, (state, action) => {
       if (action.payload) {
         state.activeLabeler = undefined;
       }
+
     });
+    
     builder.addCase(autoLabel.fulfilled, (state, action) => {
       if (action.payload.result !== undefined) {
         const sample = state.samples[action.payload.samplePath]
@@ -283,7 +287,6 @@ export const EditorSlice = createSlice({
           sample.annotations =
           action.payload.result;
         }
-        
       }
     });
     builder.addCase(fetchPlugins.fulfilled, (state, action) => {
@@ -295,7 +298,6 @@ export const EditorSlice = createSlice({
       if(action.payload !== undefined){
         state.samples[action.payload.id] = action.payload
       }
-      
     });
     builder.addCase(loadAllSamples.fulfilled, (state, action) => {
       state.sampleIds.push(...action.payload)

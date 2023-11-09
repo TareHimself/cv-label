@@ -55,9 +55,10 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
 
     return await withNodeWorker(
       async (datasetPath, segmentLabelType) => {
-        const [fs, path] = eval(`[require('fs'),require('path')]`) as [
+        const [fs, path,uuid] = eval(`[require('fs'),require('path'),require('uuid')]`) as [
           typeof import("fs"),
-          typeof import("path")
+          typeof import("path"),
+          typeof import('uuid')
         ];
 
         const immediateFolders = await fs.promises.readdir(datasetPath);
@@ -85,15 +86,21 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
                   .reduce((t, c) => {
                     t.push(
                       ...c.segmentation.map((d) => {
-                        const points: [number, number][] = [];
+                        const points: INewSample['annotations'][0]['points'] = [];
 
                         for (let i = 0; i < d.length; i += 2) {
-                          points.push(d.slice(i, i + 2) as [number, number]);
+                          const point = d.slice(i, i + 2) as [number, number]
+                          points.push({
+                            id: uuid.v4(),
+                            x: point[0],
+                            y: point[1]
+                          });
                         }
 
                         const label: CvSegmentAnnotation = {
+                          id: uuid.v4(),
                           points: points,
-                          classIndex: c.category_id,
+                          class: c.category_id,
                           type: segmentLabelType as ELabelType.SEGMENT,
                         };
 

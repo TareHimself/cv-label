@@ -148,7 +148,7 @@ ipcMain.handle("doInference", async (_modelType, imagePath) => {
   }
 
   try {
-    return await detector.predict(imagePath);
+    return await detector.predict(path.normalize(path.join(getProjectsPath(),imagePath)));
   } catch (error) {
     console.error(error);
     return undefined;

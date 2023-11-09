@@ -7,6 +7,7 @@ import {
 } from "@types";
 import path from "path";
 import * as torch from "@nodeml/torch";
+import {v4 as uuidv4, } from 'uuid'
 import { masks2segmentsScaled, nonMaxSuppression, processMaskUpsample, scaleBoxes } from "./yoloUtils";
 import { sleep } from "@root/utils";
 
@@ -110,12 +111,19 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
     for (let i = 0; i < pred.shape[0]; i++) {
       const a = pred.get(i).get([0, null]).toArray();
       allBoxes.push({
-        points: [
-          [a[0], a[1]],
-          [a[2], a[3]],
-        ],
+        id: uuidv4(),
+        points: [{
+          id: uuidv4(),
+          x: a[0],
+          y: a[1]
+        },
+        {
+          id: uuidv4(),
+          x: a[2],
+          y: a[3],
+        }],
         type: ELabelType.BOX,
-        classIndex: Math.round(a[4]),
+        class: Math.round(a[4]),
       });
     }
 
@@ -197,9 +205,16 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
     return segments.map((seg) => {
 
       return {
-        points: seg,
+        id: uuidv4(),
+        points: seg.map((s) => {
+          return {
+            id: uuidv4(),
+            x: s[0],
+            y: s[1]
+          }
+        }),
         type: ELabelType.SEGMENT,
-        classIndex: Math.round(boxes.get(0).get(4).type('int32').toArray()[0]),
+        class: Math.round(boxes.get(0).get(4).type('int32').toArray()[0]),
       }
     })
   }

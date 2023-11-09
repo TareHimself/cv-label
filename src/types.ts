@@ -118,7 +118,6 @@ export type EditorSliceState = {
   labelerContainerRect: BasicRect;
   labelerRect: BasicRect;
   editorRect: BasicRect;
-  loadedImage: HTMLImageElement | null;
   isLoadingCurrentSample: boolean;
   sampleImageInfo: {
     width: number;

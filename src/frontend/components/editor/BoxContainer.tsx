@@ -1,16 +1,82 @@
-import { useCallback, useEffect, useId, useState } from "react";
-import LabelOverlay from "./LabelOverlay";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
-import {
-  editLabel,
-  onImageLoaded,
-  setLabelerRect,
-  setScrollDelta,
-} from "@redux/exports";
+import { onImageLoaded, setLabelerRect, setScrollDelta } from "@redux/exports";
 import useMouseUp from "@hooks/useMouseUp";
 import useElementRect from "@hooks/useElementRect";
 import { CvAnnotation } from "@types";
-import Canvas from "@frontend/canvas";
+import Canvas, {
+  ICanvasPrepData,
+  ICanvasDrawData,
+  CanvasController,
+} from "@frontend/canvas";
+import { store } from "@redux/store";
+
+interface ILabelerControllerConfig {
+  renderWidth: number;
+  renderHeight: number;
+}
+class LabelerController extends CanvasController<CanvasRenderingContext2D> {
+  config: ILabelerControllerConfig;
+  constructor(config: ILabelerControllerConfig) {
+    super();
+    this.config = config;
+  }
+
+  getState(){
+    return store.getState();
+  }
+
+  override onBegin(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
+    data.canvas.width = this.config.renderWidth;
+    data.canvas.height = this.config.renderHeight;
+  }
+
+  override getContext(
+    canvas: HTMLCanvasElement
+  ): CanvasRenderingContext2D | null {
+    return canvas.getContext("2d");
+  }
+
+  override draw(data: ICanvasDrawData<CanvasRenderingContext2D>): void {
+    const state = this.getState()
+
+    const currentSample =
+      state.editor.samples[state.editor.sampleIds[state.editor.sampleIndex]];
+
+    if (currentSample === undefined) {
+      return;
+    }
+
+    const { ctx } = data;
+
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    const [scaleX, scaleY] = [
+      state.editor.labelerRect.width / state.editor.sampleImageInfo.width,
+      state.editor.labelerRect.height / state.editor.sampleImageInfo.height,
+    ];
+
+    for (const annotation of currentSample.annotations) {
+      ctx.beginPath();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 1;
+
+      const firstPoint = annotation.points[0];
+
+      ctx.moveTo(firstPoint.x * scaleX, firstPoint.y * scaleY);
+
+      for (const point of annotation.points.slice(1)) {
+        ctx.lineTo(point.x * scaleX, point.y * scaleY);
+      }
+
+      ctx.lineTo(firstPoint.x * scaleX, firstPoint.y * scaleY);
+
+      ctx.stroke();
+    }
+  }
+}
 
 export type BoxContainerProps = {
   tempLabels?: CvAnnotation[];
@@ -22,21 +88,23 @@ export default function BoxContainer(props: BoxContainerProps) {
 
   const [isDraggingImage, setIsDraggingImage] = useState(false);
 
-  const currentSampleId = useAppSelector(s => s.editor.sampleIds[s.editor.sampleIndex])
+  const currentSampleId = useAppSelector(
+    (s) => s.editor.sampleIds[s.editor.sampleIndex]
+  );
 
   const currentSample = useAppSelector(
-    (s) => s.editor.samples[s.editor.sampleIds[s.editor.sampleIndex]]
+    (s) => s.editor.samples[currentSampleId]
   );
 
   const isLoadingSample = useAppSelector(
     (s) => s.editor.isLoadingCurrentSample
   );
 
-  const projectId = useAppSelector(s => s.projects.projectId)
+  const projectId = useAppSelector((s) => s.projects.projectId);
 
   const imageId = useId();
 
-  const activeImage = useAppSelector(s => s.editor.loadedImage)
+  const labelerRect = useAppSelector((s) => s.editor.labelerRect);
 
   useEffect(() => {
     if (isDraggingImage) {
@@ -76,7 +144,18 @@ export default function BoxContainer(props: BoxContainerProps) {
     )
   );
 
-  if (currentSample === undefined) {
+  const currentSampleIsValid = currentSample !== undefined;
+
+  const canvasController = useMemo(
+    () =>
+      new LabelerController({
+        renderHeight: labelerRect.height,
+        renderWidth: labelerRect.width,
+      }),
+    [labelerRect.height, labelerRect.width]
+  );
+
+  if (!currentSampleIsValid) {
     return <></>;
   }
 
@@ -99,13 +178,18 @@ export default function BoxContainer(props: BoxContainerProps) {
           dispatch(onImageLoaded(e.currentTarget));
         }}
         id={imageId}
-      // style={{
-      //   maxHeight: `${labelerRect.height}px`,
-      // }}
+        // style={{
+        //   maxHeight: `${labelerRect.height}px`,
+        // }}
       />
-      {activeImage !== null && (
-        <Canvas<CanvasRenderingContext2D> width={activeImage.width} height={activeImage.height} getContext={useCallback((c) => c.getContext('2d'), [])} render={useCallback((d) => {/** */ }, [])} />
-      )}
+      <Canvas<CanvasRenderingContext2D>
+        width={labelerRect.width}
+        height={labelerRect.height}
+        controller={canvasController}
+        style={{
+          position: "absolute",
+        }}
+      />
 
       {/* {!isLoadingSample && props.tempLabels?.length && (
         <LabelOverlay
