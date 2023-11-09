@@ -10,7 +10,6 @@ import {
 import useMouseUp from "@hooks/useMouseUp";
 import useElementRect from "@hooks/useElementRect";
 import { CvAnnotation } from "@types";
-import Canvas from "@frontend/canvas";
 
 export type BoxContainerProps = {
   tempLabels?: CvAnnotation[];
@@ -35,8 +34,6 @@ export default function BoxContainer(props: BoxContainerProps) {
   const projectId = useAppSelector(s => s.projects.projectId)
 
   const imageId = useId();
-
-  const activeImage = useAppSelector(s => s.editor.loadedImage)
 
   useEffect(() => {
     if (isDraggingImage) {
@@ -99,15 +96,20 @@ export default function BoxContainer(props: BoxContainerProps) {
           dispatch(onImageLoaded(e.currentTarget));
         }}
         id={imageId}
-      // style={{
-      //   maxHeight: `${labelerRect.height}px`,
-      // }}
+        // style={{
+        //   maxHeight: `${labelerRect.height}px`,
+        // }}
       />
-      {activeImage !== null && (
-        <Canvas<CanvasRenderingContext2D> width={activeImage.width} height={activeImage.height} getContext={useCallback((c) => c.getContext('2d'), [])} render={useCallback((d) => {/** */ }, [])} />
+      {(!isLoadingSample && currentSample !== undefined) && (
+        <LabelOverlay
+          labels={currentSample.annotations}
+          onLabelUpdated={(idx, u) => {
+            dispatch(editLabel([idx, u]));
+          }}
+        />
       )}
 
-      {/* {!isLoadingSample && props.tempLabels?.length && (
+      {!isLoadingSample && props.tempLabels?.length && (
         <LabelOverlay
           labels={props.tempLabels}
           onLabelUpdated={(idx, u) => {
@@ -116,7 +118,7 @@ export default function BoxContainer(props: BoxContainerProps) {
             }
           }}
         />
-      )} */}
+      )}
     </div>
   );
 }
