@@ -45,7 +45,7 @@ const config: ForgeConfig = {
       devContentSecurityPolicy: `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: * blob: app:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app: blob:; media-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app:;`,
     }),
     new ExternalsPlugin({
-      externals: ["sharp","@nodeml/torch","@nodeml/opencv"]
+      externals: ["sharp","@nodeml/torch","@nodeml/opencv","realm"]
     }),
     // new ForgeExternalsPlugin({
     //   externals: ["sharp", "@nodeml/torch", "@nodeml/opencv"],

@@ -1,4 +1,4 @@
-import { ISample } from "@types";
+import { INewSample } from "@types";
 import { v4 as uuidv4 } from "uuid";
 
 export class ComputerVisionExporter {
@@ -11,7 +11,7 @@ export class ComputerVisionExporter {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async export(samples: ISample[]): Promise<boolean> {
+  async export(samples: INewSample[]): Promise<boolean> {
     throw new Error("Exporter not implemented");
   }
 }

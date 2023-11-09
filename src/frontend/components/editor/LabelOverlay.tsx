@@ -31,16 +31,13 @@ function DrawBox({
     labelerRect.height / imageInfo.height,
   ];
 
-  const [pts1, pts2] = label.points;
-
-  const [x1, y1] = pts1;
-  const [x2, y2] = pts2;
+  const [pt1, pt2] = label.points;
 
   const pointsRaw: [number, number][] = [
-    [x1, y1],
-    [x2, y1],
-    [x2, y2],
-    [x1, y2],
+    [pt1.x, pt1.y],
+    [pt2.x, pt1.y],
+    [pt2.x, pt2.y],
+    [pt1.x, pt2.y],
   ];
 
   const pointsScaled: [number, number][] = pointsRaw.map((b) => [

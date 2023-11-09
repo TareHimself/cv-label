@@ -15,7 +15,9 @@ import Icon from "../Icon";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import {
   autoLabel,
+  fetchSample,
   importSamples,
+  loadAllSamples,
   loadModel,
   setCurrentSample,
   setEditorMode,
@@ -45,13 +47,17 @@ export default function Editor() {
 
   const editorRef = useRef<HTMLDivElement | null>(null);
 
-  const currentSample = useAppSelector(
-    (s) => s.editor.samples[s.editor.sampleList[s.editor.sampleIndex]]
-  );
+  const currentSampleIndex = useAppSelector((s) => s.editor.sampleIndex);
 
+  const currentSampleId = useAppSelector(s => s.editor.sampleIds[s.editor.sampleIndex])
+
+  const currentSample = useAppSelector(
+    (s) => s.editor.samples[currentSampleId]
+  );
+  
   const editorMode = useAppSelector((s) => s.editor.mode);
 
-  const currentSampleIndex = useAppSelector((s) => s.editor.sampleIndex);
+  console.log("Current Sample",currentSample,currentSampleIndex)
 
   const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
 
@@ -77,6 +83,19 @@ export default function Editor() {
     )
   );
 
+  useEffect(()=>{
+    if(currentSample === undefined){
+      dispatch(fetchSample({
+        id: currentSampleId
+      }))
+    }
+  },[currentSample, currentSampleId, dispatch])
+
+
+  useEffect(()=>{
+    dispatch(loadAllSamples())
+  },[dispatch])
+
   // useEffect(() => {
   //   dispatch(
   //     importSamples({
@@ -95,7 +114,7 @@ export default function Editor() {
       console.log("Labeling", currentSample);
       dispatch(
         autoLabel({
-          samplePath: currentSample.path,
+          samplePath: currentSample.id,
         })
       );
       setLastIndexLabeled(currentSampleIndex);

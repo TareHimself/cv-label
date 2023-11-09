@@ -1,7 +1,6 @@
-import { ISample } from "@types";
+import { INewSample } from "@types";
 import { ComputerVisionImporter } from ".";
 import { dialog } from "electron";
-import { sqliteNow } from "@root/utils";
 
 export class FilesImporter extends ComputerVisionImporter {
   constructor() {
@@ -9,7 +8,7 @@ export class FilesImporter extends ComputerVisionImporter {
     // this.id = "files";
   }
 
-  override async import(): Promise<ISample[]> {
+  override async import(): Promise<INewSample[]> {
     const dialogResult = await dialog.showOpenDialog({
       title: "Select Files To Add To Project",
       properties: ["multiSelections", "openFile"],
@@ -23,7 +22,6 @@ export class FilesImporter extends ComputerVisionImporter {
       return {
         path: a,
         annotations: [],
-        added: sqliteNow(),
       };
     });
   }

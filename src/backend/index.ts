@@ -15,6 +15,7 @@ import { FilesImporter } from "./computer-vision/importers/files";
 import { ComputerVisionExporter } from "./computer-vision/exporters";
 import { ComputerVisionImporter } from "./computer-vision/importers";
 import { getProjectsPath } from "./utils";
+import { createOrOpenProject, DatabaseAnnotation, DatabaseSample } from "./db";
 
 const IMPORTERS: ComputerVisionImporter[] = [
   new YoloV8Importer(),
@@ -72,14 +73,24 @@ if (require("electron-squirrel-startup")) {
   app.quit();
 }
 
+const PROJECTS_URI_REGEX = /app:[/]+projects\/([\d\w]+)\/([\d\w/]+)/
+
 const createWindow = async () => {
   protocol.handle("app", async (req) => {
-    const { host, pathname } = new URL(req.url);
-    if (host === "file") {
+
+    if (PROJECTS_URI_REGEX.test(req.url)) {
+      console.log("URI",req.url.match(PROJECTS_URI_REGEX))
+
+      const [projectId,accessPath] = req.url.match(PROJECTS_URI_REGEX)?.slice(1) ?? ["",""]
+
+      const itemPath = path.resolve(path.normalize(path.join(getProjectsPath(),projectId, accessPath))); 
+
+      console.log("ITem Path",itemPath)
       return new Response(
-        await fs.promises.readFile(decodeURI(pathname.slice(1))),
+        await fs.promises.readFile(itemPath),
         {}
       );
+
     }
 
     return new Response(undefined, {
@@ -206,12 +217,41 @@ ipcMain.handle("getSupportedModels", async () => {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 ipcMain.handle("createProject", async (_name) => {
   const projectId = uuidv4().replace(/-/g, "");
-  await fs.promises.mkdir(path.join(getProjectsPath(), projectId), {
+  const projectPath = path.join(getProjectsPath(), projectId)
+  await fs.promises.mkdir(projectPath, {
     recursive: true,
   });
 
+  await createOrOpenProject(projectPath)
+
   return projectId;
 });
+
+ipcMain.handle("getSample", async (sampleId) => {
+  const sampleData = await DatabaseSample.findByPk(sampleId).then(c => c?.get({ plain: true }))
+  if (sampleData === undefined) {
+    return undefined
+  }
+
+  return {
+    id: sampleData.id,
+    annotations: [],
+    createdAt: sampleData.createdAt
+  }
+})
+
+ipcMain.handle("getSampleIds", async () => {
+  return await DatabaseSample.findAll({
+    attributes : ['id'],
+    order: [['createdAt','DESC']]
+  }).then(c => c.map(d => d.get('id')))
+})
+
+ipcMain.handle("activateProject", async (projectId) => {
+  const projectPath = path.join(getProjectsPath(), projectId)
+  await createOrOpenProject(projectPath)
+  return true
+})
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.

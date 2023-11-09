@@ -1,9 +1,10 @@
-import { withNodeWorker } from "@root/backend/worker";
-import { ISample } from "@types";
+import { INewSample } from "@types";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { getProjectsPath } from "@root/backend/utils";
-import { DatabaseImages, DatabaseSample, createOrOpenProject } from "@root/backend/db";
+import { DatabaseAnnotation, DatabasePoint, DatabaseSample, createOrOpenProject } from "@root/backend/db";
+import * as fs from 'fs'
+import { xxh64 } from '@node-rs/xxhash'
 export class ComputerVisionImporter {
   name: string;
   id: string;
@@ -13,67 +14,75 @@ export class ComputerVisionImporter {
     this.id = uuidv4();
   }
 
-  async importIntoProject(projectId: string): Promise<ISample[]> {
+  async importIntoProject(projectId: string): Promise<string[]> {
     const imported = await this.import();
 
-    return await withNodeWorker(
-      async (projectPath, files) => {
-        const [fs, path, { xxh64 }] = eval(
-          `[require('fs'),require('path'),require('@node-rs/xxhash')]`
-        ) as [
-          typeof import("fs"),
-          typeof import("path"),
-          typeof import("@node-rs/xxhash")
-        ];
+    const projectPath = path.join(getProjectsPath(), projectId);
 
-        await fs.promises.mkdir(projectPath, {
-          recursive: true,
-        });
+    try{
+      await fs.promises.mkdir(projectPath, {
+        recursive: true,
+      });
+    }catch(e) {
+      /** */
+    }
 
-        await createOrOpenProject(projectPath)
+    try{
+      await fs.promises.mkdir(path.join(projectPath,'images'), {
+        recursive: true,
+      });
+    }catch(e) {
+      /** */
+    }
 
-        return await Promise.allSettled(
-          files.map(async (sample) => {
-            try {
+    await createOrOpenProject(projectPath)
 
+    return await Promise.all(imported.map(async (data) => {
+      const newName = xxh64(await fs.promises.readFile(data.path)).toString();
 
-              const newName = xxh64(await fs.promises.readFile(sample.path)).toString();
+      await fs.promises.copyFile(data.path,path.join(projectPath,"images",newName));
 
-              DatabaseImages.create({
-                id: newName,
-                data: await fs.promises.readFile(sample.path)
-              })
+      try {
 
-              const annotationsConverted = 
-              await DatabaseSample.create({
-                id: newName,
-                annotations: 
-              })
+        const annotationIds = await Promise.all(data.annotations.map(async (ann) => {
+          const annotationId = uuidv4();
 
-              return {
-                path: newName,
-                annotations: sample.annotations,
-                added: sample.added,
-              };
-            } catch (error) {
-              console.error(error);
-              throw error;
-            }
+          const pointIds = await Promise.all(ann.points.map(async (pt) => {
+            const pointId = uuidv4();
+
+            await DatabasePoint.create({
+              id: pointId,
+              x: pt.x,
+              y: pt.y
+            })
+
+            return pointId
+          }))
+
+          await DatabaseAnnotation.create({
+            id: annotationId,
+            points: pointIds,
+            type: ann.type,
+            class: ann.class
           })
-        ).then((a) =>
-          (
-            a.filter(
-              (b) => b.status === "fulfilled"
-            ) as PromiseFulfilledResult<ISample>[]
-          ).map((c) => c.value)
-        );
-      },
-      path.join(getProjectsPath(), projectId),
-      imported
-    );
+
+          return annotationId;
+        }))
+
+        await DatabaseSample.create({
+          id: newName,
+          annotations: annotationIds,
+        })
+
+        return newName;
+      } catch (error) {
+        console.error(error);
+        return ""
+      }
+    })).then(c => c.filter(a => a.length > 0))
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected async import(): Promise<ISample[]> {
+  protected async import(): Promise<INewSample[]> {
     throw new Error("Importer not implemented");
   }
 }

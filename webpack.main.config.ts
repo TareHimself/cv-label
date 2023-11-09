@@ -23,6 +23,7 @@ export const mainConfig: Configuration = {
     sharp: "commonjs sharp",
     "@nodeml/torch": "commonjs @nodeml/torch",
     "@nodeml/opencv": "commonjs @nodeml/opencv",
+    "realm": "commonjs realm"
     // "@node-rs/xxhash": "commonjs @node-rs/xxhash",
   },
 

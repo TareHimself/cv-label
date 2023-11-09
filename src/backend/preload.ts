@@ -28,6 +28,9 @@ const exposedApi = ipcRenderer.exposeApi("bridge", {
     ipcRenderer.sendAsync("getSupportedModels", ...args),
   getImporters: (...args) => ipcRenderer.sendAsync("getImporters", ...args),
   createProject: (...args) => ipcRenderer.sendAsync("createProject", ...args),
+  getSample: (...args) => ipcRenderer.sendAsync('getSample',...args),
+  getSampleIds: (...args) => ipcRenderer.sendAsync('getSampleIds',...args),
+  activateProject: (...args) => ipcRenderer.sendAsync('activateProject',...args)
 });
 
 declare global {

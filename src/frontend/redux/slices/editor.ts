@@ -11,13 +11,12 @@ import {
   ECVModelType,
   EditorSliceState,
   EEditorMode,
-  ISample,
   ValueOf,
 } from "@types";
 
 const initialState: EditorSliceState = {
   samples: {},
-  sampleList: [],
+  sampleIds: [],
   sampleIndex: 0,
   activeLabeler: undefined,
   mode: EEditorMode.SELECT,
@@ -61,7 +60,6 @@ const fetchPlugins = createAsyncThunk("editor/plugins/load", async () => {
     window.bridge.getSupportedModels(),
   ]);
 
-  console.log("Fetched", importers, exporters, models);
   return {
     importers,
     exporters,
@@ -69,11 +67,17 @@ const fetchPlugins = createAsyncThunk("editor/plugins/load", async () => {
   };
 });
 
+const fetchSample = createAsyncThunk("editor/samples/fetch", async ({ id }: { id: string}) => {
+  const sample = await window.bridge.getSample(id);
+
+  return sample;
+});
+
 const importSamples = createAsyncThunk<
-  ISample[],
+  string[],
   { id: string },
   AppSliceState
->("editor/samples/load", async ({ id }, thunk) => {
+>("editor/samples/import", async ({ id }, thunk) => {
   const state = thunk.getState().projects;
   if (state.projectId) {
     return await window.bridge.importSamples(state.projectId, id);
@@ -134,44 +138,33 @@ const autoLabel = createAsyncThunk<
   );
 });
 
+const loadAllSamples = createAsyncThunk("editor/samples/load", async () => {
+  return await window.bridge.getSampleIds();
+});
+
 export const EditorSlice = createSlice({
   name: "editor",
   // `createSlice` will infer the state type from the `initialState` argument
   initialState,
   reducers: {
     addLabels: (state, action: PayloadAction<CvAnnotation[]>) => {
-      const current = state.samples[state.sampleList[state.sampleIndex]];
+      const current = state.samples[state.sampleIds[state.sampleIndex]];
       if (current !== undefined) {
         current.annotations.push(...action.payload);
       }
     },
     editLabel: (state, action: PayloadAction<[number, CvAnnotation]>) => {
-      const current = state.samples[state.sampleList[state.sampleIndex]];
+      const current = state.samples[state.sampleIds[state.sampleIndex]];
       if (current !== undefined) {
         current.annotations[action.payload[0]] = action.payload[1];
       }
     },
-    addSamples: (state, action: PayloadAction<ISample[]>) => {
-      for (const sample of action.payload) {
-        if (!state.samples[sample.path]) {
-          state.samples[sample.path] = sample;
-          state.sampleList.push(sample.path);
-        }
-      }
-      // const selectedItem =
-      //   state.sampleIndex !== -1
-      //     ? state.sampleList[state.sampleIndex]
-      //     : undefined;
-
-      //  = Object.keys(state.samples).sort((a,b) =?);
-
-      // if (selectedItem !== undefined) {
-      //   state.sampleIndex = state.sampleList.indexOf(selectedItem);
-      // }
+    addSamples: (state, action: PayloadAction<string[]>) => {
+      state.sampleIds.push(...action.payload);
     },
     setCurrentSample: (state, action: PayloadAction<number>) => {
-      const targetIdx = wrap(action.payload, 0, state.sampleList.length - 1);
-      if (state.sampleList[targetIdx] !== undefined) {
+      const targetIdx = wrap(action.payload, 0, state.sampleIds.length - 1);
+      if (state.sampleIds[targetIdx] !== undefined) {
         state.sampleIndex = targetIdx;
         state.currentLabelIndex = -1;
         state.isLoadingCurrentSample = true;
@@ -272,12 +265,8 @@ export const EditorSlice = createSlice({
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   extraReducers: (builder) => {
     builder.addCase(importSamples.fulfilled, (state, action) => {
-      for (const sample of action.payload) {
-        if (state.samples[sample.path] === undefined) {
-          state.samples[sample.path] = sample;
-          state.sampleList.push(sample.path);
-        }
-      }
+      state.sampleIds.push(...action.payload)
+      console.log("Imported ",action.payload)
     });
     builder.addCase(loadModel.fulfilled, (state, action) => {
       state.activeLabeler = action.payload;
@@ -289,14 +278,27 @@ export const EditorSlice = createSlice({
     });
     builder.addCase(autoLabel.fulfilled, (state, action) => {
       if (action.payload.result !== undefined) {
-        state.samples[action.payload.samplePath].annotations =
+        const sample = state.samples[action.payload.samplePath]
+        if(sample){
+          sample.annotations =
           action.payload.result;
+        }
+        
       }
     });
     builder.addCase(fetchPlugins.fulfilled, (state, action) => {
       state.availableExporters = action.payload.exporters;
       state.availableImporters = action.payload.importers;
       state.availableModels = action.payload.models;
+    });
+    builder.addCase(fetchSample.fulfilled, (state, action) => {
+      if(action.payload !== undefined){
+        state.samples[action.payload.id] = action.payload
+      }
+      
+    });
+    builder.addCase(loadAllSamples.fulfilled, (state, action) => {
+      state.sampleIds.push(...action.payload)
     });
   },
 });
@@ -315,6 +317,6 @@ export const {
   setLabelerContainerRect,
   onImageLoaded,
 } = EditorSlice.actions;
-export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins };
+export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins, fetchSample, loadAllSamples };
 
 export default EditorSlice.reducer;

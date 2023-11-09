@@ -25,6 +25,27 @@ export type BasicRect = {
   y: number;
 };
 
+export interface IDatabasePoint {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export interface IDatabaseAnnotation<T = string[]> {
+  id: string;
+  type: ELabelType;
+  class: number;
+  points: T;
+}
+
+export interface IDatabaseSample<T = string[]> {
+  id: string;
+  annotations: T;
+  createdAt: string;
+}
+
+export type ActiveDatabaseSample = IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]>
+
 export type IRendererToMainEvents = {
   getPreloadPath: () => string;
   windowMinimize: () => void;
@@ -43,11 +64,14 @@ export type IRendererToMainEvents = {
     modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
   ) => Promise<CvAnnotation[] | undefined>;
-  importSamples: (projectId: string, importerId: string) => Promise<ISample[]>;
+  importSamples: (projectId: string, importerId: string) => Promise<string[]>;
   getImporters: () => Promise<IPluginInfo[]>;
   getSupportedModels: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
   createProject: (name: string) => Promise<string | undefined>;
+  getSample: (sampleId: string) => Promise<ActiveDatabaseSample | undefined>
+  getSampleIds: () => Promise<string[]>
+  activateProject: (projectId: string) => Promise<boolean>
 };
 
 export type IMainToRendererEvents = {
@@ -55,7 +79,7 @@ export type IMainToRendererEvents = {
 };
 
 export type LabelOverlayProps = PropsWithChildren<{
-  labels: CvAnnotation[];
+  labels: ActiveDatabaseSample['annotations'];
   onLabelUpdated: (idx: number, label: CvAnnotation) => void;
 }>;
 
@@ -65,31 +89,25 @@ interface IPluginInfo {
   id: string;
   displayName: string;
 }
-interface CvLabelBase {
-  classIndex: number;
-  points: CvLabelSegmentPoint[];
-  type: ELabelType;
-}
 
-export interface CvBoxAnnotation extends CvLabelBase {
+export interface CvBoxAnnotation extends IDatabaseAnnotation<IDatabasePoint[]> {
   type: ELabelType.BOX;
 }
 
-export interface CvSegmentAnnotation extends CvLabelBase {
+export interface CvSegmentAnnotation extends IDatabaseAnnotation<IDatabasePoint[]> {
   type: ELabelType.SEGMENT;
 }
 
 export type CvAnnotation = CvBoxAnnotation | CvSegmentAnnotation;
 
-export interface ISample {
+export interface INewSample {
   path: string;
   annotations: CvAnnotation[];
-  added: number;
 }
 
 export type EditorSliceState = {
-  samples: { [key: string]: ISample };
-  sampleList: string[];
+  samples: { [key: string]: ActiveDatabaseSample | undefined };
+  sampleIds: string[];
   sampleIndex: number;
   currentLabelIndex: number;
   activeLabeler?: ValueOf<typeof ECVModelType>;

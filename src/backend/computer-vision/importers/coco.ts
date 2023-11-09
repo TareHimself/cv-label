@@ -1,8 +1,7 @@
 import { dialog } from "electron";
 import { ComputerVisionImporter } from ".";
-import { CvAnnotation, CvSegmentAnnotation, ELabelType, ISample } from "@types";
+import { CvAnnotation, CvSegmentAnnotation, ELabelType, INewSample } from "@types";
 import { withNodeWorker } from "@root/backend/worker";
-import { sqliteNow as sqliteNowMain } from "@root/utils";
 interface ICocoDataset {
   info: {
     year: string;
@@ -43,7 +42,7 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
   constructor() {
     super("Coco");
   }
-  override async import(): Promise<ISample[]> {
+  override async import(): Promise<INewSample[]> {
     const dialogResult = await dialog.showOpenDialog({
       properties: ["openDirectory"],
     });
@@ -55,16 +54,14 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
     const datasetPath = dialogResult.filePaths[0];
 
     return await withNodeWorker(
-      async (datasetPath, segmentLabelType, nowFunctAsString) => {
+      async (datasetPath, segmentLabelType) => {
         const [fs, path] = eval(`[require('fs'),require('path')]`) as [
           typeof import("fs"),
           typeof import("path")
         ];
 
-        const sqliteNowProxy: typeof sqliteNowMain = eval(nowFunctAsString);
-
         const immediateFolders = await fs.promises.readdir(datasetPath);
-        const allSamples: ISample[] = [];
+        const allSamples: INewSample[] = [];
 
         for (const folder of immediateFolders) {
           const annotationsPath = path.join(
@@ -80,13 +77,7 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
               })
               .then((a) => JSON.parse(a));
 
-            // const categoriesLookup = dataset.categories.reduce((t, c) => {
-            //   t[c.id] = c;
-
-            //   return t;
-            // }, {} as Record<string, ICocoDataset["categories"][0]>);
-
-            const samples: ISample[] = dataset.images.map((img) => {
+            const samples: INewSample[] = dataset.images.map((img) => {
               return {
                 path: path.join(datasetPath, folder, img.file_name),
                 annotations: dataset.annotations
@@ -112,7 +103,6 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
 
                     return t;
                   }, [] as CvAnnotation[]),
-                added: sqliteNowProxy(),
               };
             });
 
@@ -125,8 +115,7 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
         return allSamples;
       },
       datasetPath,
-      ELabelType.SEGMENT,
-      sqliteNowMain.toString()
+      ELabelType.SEGMENT
     );
   }
 }

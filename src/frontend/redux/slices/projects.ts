@@ -15,6 +15,17 @@ const createProject = createAsyncThunk(
   }
 );
 
+const activateProject = createAsyncThunk(
+  "projects/activate",
+  async ({ projectId }: { projectId: string }) => {
+    if (await window.bridge.activateProject(projectId)) {
+      return projectId;
+    }
+
+    return undefined;
+  }
+);
+
 export const ProjectsSlice = createSlice({
   name: "projects",
   // `createSlice` will infer the state type from the `initialState` argument
@@ -25,10 +36,13 @@ export const ProjectsSlice = createSlice({
     builder.addCase(createProject.fulfilled, (state, action) => {
       state.projectId = action.payload;
     });
+    builder.addCase(activateProject.fulfilled, (state, action) => {
+      state.projectId = action.payload;
+    });
   },
 });
 
 // export const {} = ProjectsSlice.actions;
-export { createProject };
+export { createProject, activateProject };
 
 export default ProjectsSlice.reducer;

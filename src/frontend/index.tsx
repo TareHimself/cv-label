@@ -5,6 +5,7 @@ import { store } from "@redux/store";
 import { ToastContainer } from "./react-basic-toast";
 
 const root = document.getElementById("root");
+
 if (root) {
   const rootNode = createRoot(root);
 

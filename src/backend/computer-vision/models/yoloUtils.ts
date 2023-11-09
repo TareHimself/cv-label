@@ -45,7 +45,6 @@ export function nonMaxSuppression(
   iou_thres = 0.45,
   agnostic = false,
   max_det = 300,
-  max_time_img = 0.05,
   max_nms = 30000,
   max_wh = 7680,
 ): torch.Tensor<"float">[] {
@@ -104,6 +103,7 @@ export function cropMask(
   masks: torch.Tensor<"float">,
   boxes: torch.Tensor<"float">
 ): torch.Tensor<"float"> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_, h, w] = masks.shape;
   const [x1, y1, x2, y2] = torch.chunk(boxes.get([], [], null), 4, 1); // x1 shape(n,1,1)
   const r = torch.arange(w, x1.dtype).get(null, null, []); // rows shape(1,1,w)

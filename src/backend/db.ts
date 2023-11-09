@@ -1,69 +1,51 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Sequelize, Model, DataTypes } from "sequelize";
 import path from 'path';
-import { ELabelType } from "@types";
+import { ELabelType, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample } from "@types";
 
-interface IDatabasePoint {
-    id: string;
-    x: string;
-    y: string;
-}
-export class DatabasePoint extends Model<IDatabasePoint,IDatabasePoint> {
 
+export class DatabasePoint extends Model<IDatabasePoint, IDatabasePoint> {
+    declare id: string;
+    declare x: number;
+    declare y: number;
 }
 
 
-export interface IDatabaseAnnotation {
-    id: string;
-    type: ELabelType;
-    class: number;
-    points: string;
-}
-export class DatabaseAnnotation extends Model<IDatabaseAnnotation> {
 
+export class DatabaseAnnotation extends Model<IDatabaseAnnotation<string[]>,IDatabaseAnnotation<string[]>> {
+    declare id: string;
+    declare type: ELabelType;
+    declare class: number;
+    declare points: string[];
 }
 
-export interface IDatabaseSample {
-    id: string;
-    annotations: string
-    added_at: number;
+export class DatabaseSample extends Model<IDatabaseSample<string[]>,Pick<IDatabaseSample<string[]>,'id' | 'annotations'>> {
+    declare id: string;
+    declare annotations: string[];
+    declare createdAt: string;
 }
 
-export class DatabaseSample extends Model<IDatabaseSample> {
-
-}
-
-export interface IDatabaseImages {
-    id: string;
-    data: Buffer
-}
-export class DatabaseImages extends Model<IDatabaseImages,IDatabaseImages> {
-
-}
 
 export interface IActiveProject {
-info: Sequelize;
-images: Sequelize
+    info: Sequelize;
+    path: string
 }
 
 let activeProject: IActiveProject | undefined = undefined;
 
 export async function createOrOpenProject(projectPath: string) {
 
-    if(activeProject){
-        await Promise.all([activeProject.images.close(),activeProject.info.close()])
+    if (activeProject) {
+        if(activeProject.path === projectPath){
+            return
+        }
+        await Promise.all([activeProject.info.close()])
     }
 
     const info = new Sequelize({
         dialect: 'sqlite',
         storage: `${path.join(projectPath, 'info.db')}`
     });
-
-    const images = new Sequelize({
-        dialect: 'sqlite',
-        storage: `${path.join(projectPath, 'images.db')}`
-    });
-
-
 
     DatabaseSample.init({
         id: {
@@ -73,10 +55,34 @@ export async function createOrOpenProject(projectPath: string) {
         annotations: {
             type: DataTypes.STRING
         },
-        added_at: {
-            type: DataTypes.INTEGER
+        createdAt: {
+            type: DataTypes.DATE
         }
-    }, { sequelize: info,tableName: "samples" })
+    }, { sequelize: info, tableName: "samples",updatedAt: false, hooks : {
+        beforeValidate(attributes, options) {
+            if(attributes.annotations !== undefined){
+                attributes.annotations = (attributes.annotations.join(',') as unknown as string[])
+            }
+        },
+        afterFind(instancesOrInstance, options) {
+            if(instancesOrInstance !== null){
+                if(instancesOrInstance instanceof Array){
+                    for(const d of instancesOrInstance){
+                        if(d.annotations === undefined){
+                            break;
+                        }
+                        d.annotations = (d.annotations as unknown as string).split(',')
+                    }
+                }
+                else
+                {
+                    if(instancesOrInstance.annotations !== undefined){
+                        instancesOrInstance.annotations = (instancesOrInstance.annotations as unknown as string).split(',')
+                    }
+                }
+            }
+        },
+    },validate: undefined })
 
 
     DatabaseAnnotation.init({
@@ -92,9 +98,33 @@ export async function createOrOpenProject(projectPath: string) {
             type: DataTypes.INTEGER
         },
         points: {
-            type: DataTypes.STRING
+            type: DataTypes.STRING,
         }
-    }, { sequelize: info,tableName: "annotations" })
+    }, { sequelize: info, tableName: "annotations", hooks: {
+        beforeValidate(attributes, options) {
+            if(attributes.points !== undefined){
+                attributes.points = (attributes.points.join(',') as unknown as string[])
+            }
+        },
+        afterFind(instancesOrInstance, options) {
+            if(instancesOrInstance !== null){
+                if(instancesOrInstance instanceof Array){
+                    for(const d of instancesOrInstance){
+                        if(d.points === undefined){
+                            break;
+                        }
+                        d.points = (d.points as unknown as string).split(',')
+                    }
+                }
+                else
+                {
+                    if(instancesOrInstance.points !== undefined){
+                        instancesOrInstance.points = (instancesOrInstance.points as unknown as string).split(',')
+                    }
+                }
+            }
+        },
+    } })
 
     DatabasePoint.init({
         id: {
@@ -110,20 +140,12 @@ export async function createOrOpenProject(projectPath: string) {
         }
     }, { sequelize: info, tableName: "points" })
 
-
-    DatabaseImages.init({
-        id: {
-            type: DataTypes.STRING,
-            primaryKey: true
-        },
-        data: {
-            type: DataTypes.BLOB
-        }
-    }, { sequelize: images, tableName: "images" })
-
-    activeProject =  {
-        info,images
+    activeProject = {
+        info,
+        path: projectPath
     }
+
+    await Promise.all([DatabaseSample.sync(),DatabaseAnnotation.sync(),DatabasePoint.sync()])
 
     return;
 }

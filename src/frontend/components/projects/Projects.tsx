@@ -1,6 +1,6 @@
 import Icon from "@components/Icon";
 import { useAppDispatch } from "@redux/hooks";
-import { createProject } from "@redux/slices/projects";
+import { activateProject, createProject } from "@redux/slices/projects";
 import { AiOutlinePlus, AiFillFolderOpen } from "react-icons/ai";
 import { useNavigate } from "react-router-dom";
 
@@ -33,8 +33,12 @@ export default function Projects() {
         <Icon
           icon={AiFillFolderOpen}
           iconSize={iconSize}
-          onClicked={() => {
-            navigate(`/projects/2e789a74e4c8458ba7a2d44bad00774a`);
+          onClicked={async () => {
+            await dispatch(activateProject({
+              projectId: "01e9b828de4b4dffa3e44255e33f08d7"
+            }))
+
+            navigate(`/projects/01e9b828de4b4dffa3e44255e33f08d7`)
           }}
         />
         <h3>Open Project</h3>

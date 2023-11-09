@@ -26,5 +26,10 @@
  * ```
  */
 
+window.addEventListener("mousemove", (ev) => {
+    window.mouseScreenX = ev.clientX;
+    window.mouseScreenY = ev.clientY;
+});
+
 import './index.css';
 import './index.tsx'

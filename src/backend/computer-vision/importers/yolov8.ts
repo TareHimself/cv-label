@@ -1,15 +1,14 @@
-import { ELabelType, ISample } from "@types";
+import { ELabelType, INewSample } from "@types";
 import { ComputerVisionImporter } from ".";
 import { dialog } from "electron";
 import { withNodeWorker } from "@root/backend/worker";
-import { sqliteNow as sqliteNowMain } from "@root/utils";
 
 export class YoloV8Importer extends ComputerVisionImporter {
   constructor() {
     super("Yolov8");
   }
 
-  override async import(): Promise<ISample[]> {
+  override async import(): Promise<INewSample[]> {
     const dialogResult = await dialog.showOpenDialog({
       properties: ["openDirectory"],
     });
@@ -21,7 +20,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
     const datasetPath = dialogResult.filePaths[0];
 
     return await withNodeWorker(
-      async (datasetPath, boxLabelType, nowFunctAsString) => {
+      async (datasetPath, boxLabelType) => {
         const [fs, path, sharp] = eval(
           `[require('fs'),require('path'),require('sharp')]`
         ) as [
@@ -30,11 +29,9 @@ export class YoloV8Importer extends ComputerVisionImporter {
           typeof import("sharp")
         ];
 
-        const sqliteNowProxy: typeof sqliteNowMain = eval(nowFunctAsString);
-
         const immediateFolders = await fs.promises.readdir(datasetPath);
 
-        const allSamples: ISample[] = [];
+        const allSamples: INewSample[] = [];
         for (const folder of immediateFolders) {
           if (
             await fs.promises
@@ -109,7 +106,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
                         type: boxLabelType as ELabelType.BOX,
                       };
                     }),
-                  } as ISample;
+                  } as INewSample;
                 } catch (error) {
                   //   console.log(labelPath, error);
                   /* empty */
@@ -119,8 +116,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
               return {
                 path: imageFile,
                 annotations: [],
-                added: sqliteNowProxy(),
-              } as ISample;
+              } as INewSample;
             })
           );
 
@@ -132,8 +128,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
         return allSamples;
       },
       datasetPath,
-      ELabelType.BOX,
-      sqliteNowMain.toString()
+      ELabelType.BOX
     );
   }
 }

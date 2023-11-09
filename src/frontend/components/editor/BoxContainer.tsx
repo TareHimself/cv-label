@@ -21,13 +21,17 @@ export default function BoxContainer(props: BoxContainerProps) {
 
   const [isDraggingImage, setIsDraggingImage] = useState(false);
 
+  const currentSampleId = useAppSelector(s => s.editor.sampleIds[s.editor.sampleIndex])
+
   const currentSample = useAppSelector(
-    (s) => s.editor.samples[s.editor.sampleList[s.editor.sampleIndex]]
+    (s) => s.editor.samples[s.editor.sampleIds[s.editor.sampleIndex]]
   );
 
   const isLoadingSample = useAppSelector(
     (s) => s.editor.isLoadingCurrentSample
   );
+
+  const projectId = useAppSelector(s => s.projects.projectId)
 
   const imageId = useId();
 
@@ -86,7 +90,7 @@ export default function BoxContainer(props: BoxContainerProps) {
       style={{}}
     >
       <img
-        src={`app://file/${currentSample.path}`}
+        src={`app://projects/${projectId}/images/${currentSampleId}`}
         alt="img"
         onLoad={(e) => {
           dispatch(onImageLoaded(e.currentTarget));
@@ -96,7 +100,7 @@ export default function BoxContainer(props: BoxContainerProps) {
         //   maxHeight: `${labelerRect.height}px`,
         // }}
       />
-      {!isLoadingSample && (
+      {(!isLoadingSample && currentSample !== undefined) && (
         <LabelOverlay
           labels={currentSample.annotations}
           onLabelUpdated={(idx, u) => {

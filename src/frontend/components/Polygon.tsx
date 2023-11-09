@@ -1,9 +1,11 @@
 import useMouseUp from "@hooks/useMouseUp";
 import { useAppSelector } from "@redux/hooks";
+import { DatabasePoint } from "@root/backend/db";
+import { IDatabasePoint } from "@types";
 import { useCallback, useEffect, useState } from "react";
 
 export type PolygonProps = {
-  points: [number, number][];
+  points: IDatabasePoint[];
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
@@ -97,7 +99,7 @@ function matchRectDims(
   indexChanged: number,
   oldPos: [number, number],
   newPos: [number, number],
-  rect: [number, number][]
+  rect: IDatabasePoint[]
 ) {
   const neighborIndexes: number[] = [];
 
@@ -112,24 +114,28 @@ function matchRectDims(
   for (const index of neighborIndexes) {
     const item = rect[index];
 
-    if (item[0] === oldPos[0]) {
-      rect[index][0] = newPos[0];
-    } else if (item[1] === oldPos[1]) {
-      rect[index][1] = newPos[1];
+    if (item.x === oldPos[0]) {
+      rect[index].x = newPos[0];
+    } else if (item.y === oldPos[1]) {
+      rect[index].x = newPos[1];
     }
   }
 
-  const x1 = Math.min(...rect.map((a) => a[0]));
-  const y1 = Math.min(...rect.map((a) => a[1]));
-  const x2 = Math.max(...rect.map((a) => a[0]));
-  const y2 = Math.max(...rect.map((a) => a[1]));
+  const x1 = Math.min(...rect.map((a) => a.x));
+  const y1 = Math.min(...rect.map((a) => a.y));
+  const x2 = Math.max(...rect.map((a) => a.x));
+  const y2 = Math.max(...rect.map((a) => a.y));
 
-  const newRect: [number, number][] = [
+  const newRect = [
     [x1, y1],
     [x2, y1],
     [x2, y2],
     [x1, y2],
-  ];
+  ].map((t,idx) => ({
+    id: rect[idx].id,
+    x: t[0],
+    y: t[1]
+  }));
 
   return newRect;
 }
@@ -143,7 +149,12 @@ export default function Polygon(props: PolygonProps) {
     if (isBeingDragged) {
       const callback = (ev: MouseEvent) => {
         setPoints((p) => {
-          return p.map(([x, y]) => [x + ev.movementX, y + ev.movementY]);
+          return p.map((d) => {
+            const newD = {...d}
+            newD.x += ev.movementX
+            newD.y += ev.movementY;
+            return newD
+          });
         });
       };
 
@@ -167,7 +178,7 @@ export default function Polygon(props: PolygonProps) {
   return (
     <>
       <polygon
-        points={points.map((a) => a.join(",")).join(" ")}
+        points={points.map((a) => `${a.x},${a.y}`).join(" ")}
         style={{
           fill: props.fill ?? "rgba(255,0,0,0.1)",
           stroke: props.stroke ?? "green",
@@ -191,17 +202,21 @@ export default function Polygon(props: PolygonProps) {
         //   setIsBeingDragged(false);
         // }}
       />
-      {(props.isEditable ? points : []).map(([x1, y1], pointIdx) => (
+      {(props.isEditable ? points : []).map((pt, pointIdx) => (
         <PolygonControlPoint
-          x={x1}
-          y={y1}
+          x={pt.x}
+          y={pt.y}
           onMoved={(pos) => {
             setPoints((pts) => {
               const oldPt = pts[pointIdx];
-              pts[pointIdx] = pos;
+              pts[pointIdx] = {
+                id: pt.id,
+                x: pos[0],
+                y: pos[1]
+              };
 
               if (props.isRect && props.points.length === 4) {
-                return matchRectDims(pointIdx, oldPt, pos, [...pts]);
+                return matchRectDims(pointIdx, [oldPt.x,oldPt.y], pos, [...pts]);
               }
 
               return [...pts];
@@ -211,9 +226,13 @@ export default function Polygon(props: PolygonProps) {
           onMoveEnded={(pos) => {
             const oldPos = points[pointIdx];
             let oldPts = [...points];
-            oldPts[pointIdx] = pos;
+            oldPts[pointIdx] = {
+                id: pt.id,
+                x: pos[0],
+                y: pos[1]
+              };
             if (props.isRect && props.points.length === 4) {
-              oldPts = matchRectDims(pointIdx, oldPos, pos, oldPts);
+              oldPts = matchRectDims(pointIdx, [oldPos.x,oldPos.y], pos, oldPts);
             }
             setPoints(props.onDragCompleted(oldPts) ?? originalPoints);
           }}
