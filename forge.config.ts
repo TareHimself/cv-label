@@ -7,13 +7,32 @@ import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-nati
 import { WebpackPlugin } from "@electron-forge/plugin-webpack";
 import { mainConfig } from "./webpack.main.config";
 import { rendererConfig } from "./webpack.renderer.config";
-import { } from '@electron-forge/shared-types';
-import ExternalsPlugin from "./externals";
+import * as fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { runCommandAt } from "./webpack.utils";
+
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: {
-      unpack: "**/*.dll"
-    }
+    // asar: {
+    //   // unpack: "**/*.dll"
+    //   unpack: "*"
+    // }
+    asar: false,
+    afterComplete: [(buildPath: string,
+      electronVersion: string,
+      platform: string,
+      arch: string,
+      callback: (err?: Error | null) => void) => {
+      // fs.writeFileSync('zz.txt',buildPath)
+      const commandPath = path.join(buildPath, 'resources', 'app')
+
+      runCommandAt("npm install", commandPath).then(() => {
+        runCommandAt("npm prune --omit=dev", commandPath).then(() => {
+          callback()
+        }).catch((e) => callback(new Error(e)))
+      }).catch((e) => callback(new Error(e)))
+    }]
   },
   rebuildConfig: {},
   makers: [
@@ -23,12 +42,13 @@ const config: ForgeConfig = {
     new MakerDeb({}),
   ],
   plugins: [
-    
-    new AutoUnpackNativesPlugin({}),
+
+    // new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
       mainConfig,
       renderer: {
         config: rendererConfig,
+        nodeIntegration: true,
         entryPoints: [
           {
             html: "./src/frontend/index.html",
@@ -38,22 +58,29 @@ const config: ForgeConfig = {
               js: "./src/backend/preload.ts",
             },
           },
+          {
+            html: "./src/backend_models/index.html",
+            js: "./src/backend_models/index.ts",
+            name: "models_window",
+            preload: {
+              js: "./src/backend_models/preload.ts",
+            },
+          },
         ],
-        // nodeIntegration: true,
       },
       packageSourceMaps: true,
       devContentSecurityPolicy: `default-src 'self' 'unsafe-inline' 'unsafe-eval' data: * blob: app:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app: blob:; media-src 'self' 'unsafe-inline' 'unsafe-eval' data: * app:;`,
     }),
-    new ExternalsPlugin({
-      externals: ["sharp","@nodeml/torch","@nodeml/opencv","realm"]
-    }),
+    // new ExternalsPlugin({
+    //   externals: Object.keys(buildExternalsObject(externals))
+    // }),
     // new ForgeExternalsPlugin({
     //   externals: ["sharp", "@nodeml/torch", "@nodeml/opencv"],
     //   includeDeps: true
     // })
-    
+
   ],
-  
+
 
 };
 

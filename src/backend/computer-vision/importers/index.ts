@@ -1,10 +1,10 @@
 import { INewSample } from "@types";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
-import { getProjectsPath } from "@root/backend/utils";
 import { DatabaseAnnotation, DatabasePoint, DatabaseSample, createOrOpenProject } from "@root/backend/db";
 import * as fs from 'fs'
 import { xxh64 } from '@node-rs/xxhash'
+import { getProjectsPath } from "@root/utils";
 export class ComputerVisionImporter {
   name: string;
   id: string;

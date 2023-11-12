@@ -2,6 +2,8 @@ import type { Configuration } from "webpack";
 
 import path from "path";
 import { rules } from "./webpack.rules";
+import { buildExternalsObject } from "./webpack.utils";
+import { externals } from "./webpack.constants";
 export const mainConfig: Configuration = {
   /**
    * This is the main entry point for your application, it's the first file
@@ -19,15 +21,8 @@ export const mainConfig: Configuration = {
       "@types": path.resolve(__dirname, path.join("src", "types.ts")),
     },
   },
-  externals: {
-    sharp: "commonjs sharp",
-    "@nodeml/torch": "commonjs @nodeml/torch",
-    "@nodeml/opencv": "commonjs @nodeml/opencv",
-    "realm": "commonjs realm"
-    // "@node-rs/xxhash": "commonjs @node-rs/xxhash",
+  externals: buildExternalsObject(externals),
+  optimization: {
+    minimize: false,
   },
-
-  // optimization: {
-  //   minimize: false,
-  // },
 };

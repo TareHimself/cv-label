@@ -54,10 +54,10 @@ export default function Editor() {
   const currentSample = useAppSelector(
     (s) => s.editor.samples[currentSampleId]
   );
+
+  const isLoadingLabeler = useAppSelector(s => s.editor.isLoadingLabeler)
   
   const editorMode = useAppSelector((s) => s.editor.mode);
-
-  console.log("Current Sample",currentSample,currentSampleIndex)
 
   const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
 
@@ -215,13 +215,13 @@ export default function Editor() {
           />
           <Icon
             icon={MdAutoAwesome}
-            isActive={labeler !== undefined}
+            isActive={labeler !== undefined || isLoadingLabeler}
             onClicked={useCallback(() => {
               if (labeler === undefined) {
                 dispatch(
                   loadModel({
-                    modelType: ECVModelType.Yolov8Seg,
-                    modelPath: "./seg.torchscript",
+                    modelType: ECVModelType.Yolov8Detect,
+                    modelPath: "./detection.torchscript",
                   })
                 );
               } else {

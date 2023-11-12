@@ -9,7 +9,8 @@ export default function App() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    dispatch(fetchPlugins());
+    console.log("FETCHING PLUGINS")
+    dispatch(fetchPlugins()).then(c => console.log(c.payload));
   }, [dispatch]);
 
   return (

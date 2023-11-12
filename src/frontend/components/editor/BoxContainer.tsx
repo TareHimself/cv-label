@@ -4,79 +4,8 @@ import { onImageLoaded, setLabelerRect, setScrollDelta } from "@redux/exports";
 import useMouseUp from "@hooks/useMouseUp";
 import useElementRect from "@hooks/useElementRect";
 import { CvAnnotation } from "@types";
-import Canvas, {
-  ICanvasPrepData,
-  ICanvasDrawData,
-  CanvasController,
-} from "@frontend/canvas";
-import { store } from "@redux/store";
-
-interface ILabelerControllerConfig {
-  renderWidth: number;
-  renderHeight: number;
-}
-class LabelerController extends CanvasController<CanvasRenderingContext2D> {
-  config: ILabelerControllerConfig;
-  constructor(config: ILabelerControllerConfig) {
-    super();
-    this.config = config;
-  }
-
-  getState(){
-    return store.getState();
-  }
-
-  override onBegin(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
-    data.canvas.width = this.config.renderWidth;
-    data.canvas.height = this.config.renderHeight;
-  }
-
-  override getContext(
-    canvas: HTMLCanvasElement
-  ): CanvasRenderingContext2D | null {
-    return canvas.getContext("2d");
-  }
-
-  override draw(data: ICanvasDrawData<CanvasRenderingContext2D>): void {
-    const state = this.getState()
-
-    const currentSample =
-      state.editor.samples[state.editor.sampleIds[state.editor.sampleIndex]];
-
-    if (currentSample === undefined) {
-      return;
-    }
-
-    const { ctx } = data;
-
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-    const [scaleX, scaleY] = [
-      state.editor.labelerRect.width / state.editor.sampleImageInfo.width,
-      state.editor.labelerRect.height / state.editor.sampleImageInfo.height,
-    ];
-
-    for (const annotation of currentSample.annotations) {
-      ctx.beginPath();
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 1;
-
-      const firstPoint = annotation.points[0];
-
-      ctx.moveTo(firstPoint.x * scaleX, firstPoint.y * scaleY);
-
-      for (const point of annotation.points.slice(1)) {
-        ctx.lineTo(point.x * scaleX, point.y * scaleY);
-      }
-
-      ctx.lineTo(firstPoint.x * scaleX, firstPoint.y * scaleY);
-
-      ctx.stroke();
-    }
-  }
-}
+import Canvas from "@frontend/canvas";
+import LabelerController from "./LabelerController";
 
 export type BoxContainerProps = {
   tempLabels?: CvAnnotation[];

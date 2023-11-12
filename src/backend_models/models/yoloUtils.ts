@@ -153,25 +153,34 @@ export function cropMask(
 //     return segments
 
 
-export function masks2segmentsScaled(masks: torch.Tensor<'int32'>, originalSize: [number, number]) {
+export async function masks2segmentsScaled(masks: torch.Tensor<'int32'>, originalSize: [number, number]) {
   const segments: [number, number][][] = []
   const maxDim = Math.max(...originalSize)
   const diffX = Math.round((maxDim - originalSize[0]) / 2)
   const diffY = Math.round((maxDim - originalSize[1]) / 2)
+
   for (let i = 0; i < masks.shape[0]; i++) {
 
+    console.time("Interpolate");
+
     const mask = torch.nn.functional.interpolate(masks.get(i).unsqueeze(0).unsqueeze(0), [maxDim, maxDim], 'area').get(0).get(0).mul(255).clamp(0, 255).type('uint8').get([diffY, diffY + originalSize[1]], [diffX, diffX + originalSize[0]]).clone()
-    
+    console.timeEnd("Interpolate");
+
     const [maskH, maskW] = mask.shape;
 
     const mat = new cv.Mat(mask.toArray(), maskW, maskH, 1)
-    
+
+    console.time("find Contours");
     const contours = cv.findContours(mat, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE).map(c => ({
       contour: c,
       arcLength: cv.arcLength(c, true)
     })).sort((a, b) => b.arcLength - a.arcLength)
 
-    segments.push(cv.approxPolyDp(contours[0].contour, 0.006 * contours[0].arcLength, true))
+    console.timeEnd("find Contours");
+
+    console.time("Approx");
+    segments.push(cv.approxPolyDp(contours[0].contour, 0.008 * contours[0].arcLength, true))
+    console.timeEnd("Approx");
   }
 
   return segments

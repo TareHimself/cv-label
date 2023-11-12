@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
-import { toast } from "@frontend/react-basic-toast";
 import { domRectToBasicRect } from "@hooks/useElementRect";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { wrap } from "@root/utils";
+import { createPromise, wrap } from "@root/utils";
 // import { toast } from "react-toastify"
 import {
   AppSliceState,
@@ -13,6 +12,7 @@ import {
   EEditorMode,
   ValueOf,
 } from "@types";
+import { toast } from "react-hot-toast";
 
 const initialState: EditorSliceState = {
   samples: {},
@@ -23,7 +23,7 @@ const initialState: EditorSliceState = {
   sampleScale: 1,
   xScroll: 0,
   yScroll: 0,
-  currentLabelIndex: -1,
+  selectedAnnotationIndex: -1,
   labelerContainerRect: {
     height: 0,
     width: 0,
@@ -43,6 +43,7 @@ const initialState: EditorSliceState = {
     y: 0,
   },
   isLoadingCurrentSample: false,
+  isLoadingLabeler: false,
   sampleImageInfo: {
     width: 0,
     height: 0,
@@ -66,7 +67,7 @@ const fetchPlugins = createAsyncThunk("editor/plugins/load", async () => {
   };
 });
 
-const fetchSample = createAsyncThunk("editor/samples/fetch", async ({ id }: { id: string}) => {
+const fetchSample = createAsyncThunk("editor/samples/fetch", async ({ id }: { id: string }) => {
   const sample = await window.bridge.getSample(id);
 
   return sample;
@@ -113,29 +114,31 @@ const autoLabel = createAsyncThunk<
   { samplePath: string },
   AppSliceState
 >("editor/labeler/auto", async ({ samplePath: sampleId }, thunk) => {
-  return await toast.promise(
-    async () => {
-      const state = thunk.getState().editor;
-      const projectsState = thunk.getState().projects
-      const modelType = state.activeLabeler;
-      if (modelType == undefined) {
-        return {
-          samplePath: sampleId,
-          result: undefined,
-        };
-      }
 
+  return await toast.promise(createPromise(async () => {
+    const state = thunk.getState().editor;
+    const projectsState = thunk.getState().projects
+    const modelType = state.activeLabeler;
+
+    if (modelType == undefined) {
       return {
         samplePath: sampleId,
-        result: await window.bridge.doInference(modelType, `${projectsState.projectId}/images/${sampleId}`),
-      };
-    },
-    {
-      success: (d) => `Added ${d.data.result?.length ?? 0} annotations`,
-      error: `Failed to annotoate`,
-      pending: `Predicting`,
+        result: undefined,
+      }
     }
-  );
+
+    const annotationsToAdd = await window.bridge.doInference(modelType, `${projectsState.projectId}/images/${sampleId}`) ?? [];
+
+
+    return {
+      samplePath: sampleId,
+      result: annotationsToAdd.length > 0  && await window.bridge.createAnnotations(sampleId,annotationsToAdd) ? annotationsToAdd : []
+    }
+  }), {
+    success: (d) => `Added ${d.result?.length ?? 0} annotations`,
+    error: `Failed to annotate`,
+    loading: `Predicting`
+  })
 });
 
 const loadAllSamples = createAsyncThunk("editor/samples/load", async () => {
@@ -166,7 +169,7 @@ export const EditorSlice = createSlice({
       const targetIdx = wrap(action.payload, 0, state.sampleIds.length - 1);
       if (state.sampleIds[targetIdx] !== undefined) {
         state.sampleIndex = targetIdx;
-        state.currentLabelIndex = -1;
+        state.selectedAnnotationIndex = -1;
         state.isLoadingCurrentSample = true;
       }
     },
@@ -213,19 +216,19 @@ export const EditorSlice = createSlice({
           break;
 
         case EEditorMode.CREATE_BOX:
-          state.currentLabelIndex = -1;
+          state.selectedAnnotationIndex = -1;
           break;
 
         case EEditorMode.CREATE_SEGMENT:
-          state.currentLabelIndex = -1;
+          state.selectedAnnotationIndex = -1;
           break;
 
         default:
           break;
       }
     },
-    setLabelIndex: (state, action: PayloadAction<number>) => {
-      state.currentLabelIndex = action.payload;
+    setCurrentAnnotationIndex: (state, action: PayloadAction<number>) => {
+      state.selectedAnnotationIndex = action.payload;
     },
     setScrollDelta: (state, action: PayloadAction<[number, number]>) => {
       const [deltaX, deltaY] = action.payload;
@@ -265,27 +268,27 @@ export const EditorSlice = createSlice({
   extraReducers: (builder) => {
     builder.addCase(importSamples.fulfilled, (state, action) => {
       state.sampleIds.push(...action.payload)
-      console.log("Imported ",action.payload)
+      console.log("Imported ", action.payload)
     });
     builder.addCase(loadModel.fulfilled, (state, action) => {
       state.activeLabeler = action.payload;
+      state.isLoadingLabeler = false
     });
-    builder.addCase(loadModel.pending, (state, action) => {
-      state.activeLabeler = action.meta.arg.modelType
+    builder.addCase(loadModel.pending, (state) => {
+      state.isLoadingLabeler = true;
     });
     builder.addCase(unloadModel.fulfilled, (state, action) => {
       if (action.payload) {
         state.activeLabeler = undefined;
       }
-
     });
-    
+
     builder.addCase(autoLabel.fulfilled, (state, action) => {
       if (action.payload.result !== undefined) {
         const sample = state.samples[action.payload.samplePath]
-        if(sample){
+        if (sample) {
           sample.annotations =
-          action.payload.result;
+            action.payload.result;
         }
       }
     });
@@ -293,9 +296,10 @@ export const EditorSlice = createSlice({
       state.availableExporters = action.payload.exporters;
       state.availableImporters = action.payload.importers;
       state.availableModels = action.payload.models;
+      console.log("IMPORTERS", state.availableImporters)
     });
     builder.addCase(fetchSample.fulfilled, (state, action) => {
-      if(action.payload !== undefined){
+      if (action.payload !== undefined) {
         state.samples[action.payload.id] = action.payload
       }
     });
@@ -314,7 +318,7 @@ export const {
   setLabelerRect,
   setEditorMode,
   setEditorRect,
-  setLabelIndex,
+  setCurrentAnnotationIndex,
   setScrollDelta,
   setLabelerContainerRect,
   onImageLoaded,

@@ -1,3 +1,5 @@
+import path from "path";
+
 export function union(box1: number[], box2: number[]) {
   const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
   const [box2_x1, box2_y1, box2_x2, box2_y2] = box2;
@@ -101,5 +103,15 @@ export function sqliteNow() {
 
 export function sleep(time: number) {
   return new Promise<void>((r) => setTimeout(r, time));
+}
+
+export function getProjectsPath() {
+  return path.join("./", "projects");
+}
+
+export function createPromise<R = unknown,Args extends unknown[] = unknown[]>(func: (...args: Args) => Promise<R>,...args: Args){
+  return new Promise<R>((res,rej)=>{
+      func(...args).then(res).catch(rej);
+  })
 }
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

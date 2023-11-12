@@ -1,21 +1,19 @@
+
+import './db'
 import { app, BrowserWindow, protocol } from "electron";
-import {
-  Yolov8Detection,
-  Yolov8Segmentation,
-} from "./computer-vision/models/yolo";
 import * as fs from "fs";
-import { v4 as uuidv4 } from "uuid";
 import path from "path";
-import { ipcMain } from "../ipc-impl";
-import { GenericComputerVisionModel } from "./computer-vision/models";
-import { ECVModelType, ValueOf } from "../types";
+import 'sqlite3'
+import '@node-rs/xxhash'
+import { mainToModels, mainToRenderer } from "../ipc-impl";
 import { YoloV8Importer } from "./computer-vision/importers/yolov8";
 import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
 import { FilesImporter } from "./computer-vision/importers/files";
 import { ComputerVisionExporter } from "./computer-vision/exporters";
 import { ComputerVisionImporter } from "./computer-vision/importers";
-import { getProjectsPath } from "./utils";
-import { createOrOpenProject, DatabaseAnnotation, DatabaseSample } from "./db";
+import { getProjectsPath } from '@root/utils';
+
+let modelsWindow: BrowserWindow | undefined = undefined;
 
 const IMPORTERS: ComputerVisionImporter[] = [
   new YoloV8Importer(),
@@ -25,28 +23,6 @@ const IMPORTERS: ComputerVisionImporter[] = [
 
 const EXPORTERS: ComputerVisionExporter[] = [];
 
-let detector: GenericComputerVisionModel | undefined = undefined;
-let detectorModelPath = "";
-
-const POSSIBLE_DETECTORS: Record<
-  ValueOf<typeof ECVModelType>,
-  {
-    id: ValueOf<typeof ECVModelType>;
-    name: string;
-    create: (modelPath: string) => Promise<GenericComputerVisionModel>;
-  }
-> = {
-  [ECVModelType.Yolov8Detect]: {
-    id: ECVModelType.Yolov8Detect,
-    name: "Yolov8 Detection",
-    create: (...args) => Yolov8Detection.create(...args),
-  },
-  [ECVModelType.Yolov8Seg]: {
-    id: ECVModelType.Yolov8Seg,
-    name: "Yolo8 Segmentation",
-    create: (...args) => Yolov8Segmentation.create(...args),
-  },
-};
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -67,6 +43,11 @@ declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+declare const MODELS_WINDOW_WEBPACK_ENTRY: string;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+declare const MODELS_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+
 // ipcMain.handle("getPreloadPath", () => MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY);
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require("electron-squirrel-startup")) {
@@ -79,13 +60,11 @@ const createWindow = async () => {
   protocol.handle("app", async (req) => {
 
     if (PROJECTS_URI_REGEX.test(req.url)) {
-      console.log("URI",req.url.match(PROJECTS_URI_REGEX))
 
-      const [projectId,accessPath] = req.url.match(PROJECTS_URI_REGEX)?.slice(1) ?? ["",""]
+      const [projectId, accessPath] = req.url.match(PROJECTS_URI_REGEX)?.slice(1) ?? ["", ""]
 
-      const itemPath = path.resolve(path.normalize(path.join(getProjectsPath(),projectId, accessPath))); 
+      const itemPath = path.resolve(path.normalize(path.join(getProjectsPath(), projectId, accessPath)));
 
-      console.log("ITem Path",itemPath)
       return new Response(
         await fs.promises.readFile(itemPath),
         {}
@@ -98,6 +77,23 @@ const createWindow = async () => {
     });
   });
 
+  modelsWindow = new BrowserWindow({
+    show: true,
+    webPreferences: {
+      preload: MODELS_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      nodeIntegrationInWorker: true,
+      nodeIntegration: true,
+      contextIsolation: false
+    },
+    autoHideMenuBar: true,
+  });
+
+  await modelsWindow.loadURL(MODELS_WINDOW_WEBPACK_ENTRY)
+
+  modelsWindow.webContents.openDevTools({
+    mode: 'detach'
+  });
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     height: 600,
@@ -105,8 +101,10 @@ const createWindow = async () => {
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegrationInWorker: true,
+      nodeIntegration: true,
+      contextIsolation: false
     },
-    autoHideMenuBar: true,
+    // autoHideMenuBar: true,
   });
 
   mainWindow.setMenu(null);
@@ -115,7 +113,9 @@ const createWindow = async () => {
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  mainWindow.webContents.openDevTools({
+    mode: 'detach'
+  });
 };
 
 // This method will be called when Electron has finished
@@ -141,36 +141,10 @@ app.on("activate", async () => {
   }
 }); //https://github.com/TareHimself/manga-translator/raw/master/assets/examples/solo_leveling.png
 
-ipcMain.handle("doInference", async (_modelType, imagePath) => {
-  if (!detector) {
-    console.error("Inference was attempted with no model");
-    return undefined;
-  }
 
-  try {
-    return await detector.predict(path.normalize(path.join(getProjectsPath(),imagePath)));
-  } catch (error) {
-    console.error(error);
-    return undefined;
-  }
-});
-
-ipcMain.handle("loadModel", async (modelType, modelPath) => {
-  try {
-    if (detector?.modelType !== modelType || detectorModelPath !== modelPath) {
-      detector?.cleanup();
-      detectorModelPath = modelPath;
-      detector = await POSSIBLE_DETECTORS[modelType].create(modelPath);
-    }
-    return true;
-  } catch (error) {
-    console.error(error);
-    return false;
-  }
-});
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-ipcMain.handle("importSamples", async (projectId, importerId) => {
+mainToRenderer.handle("importSamples", async (projectId, importerId) => {
   return (
     (await IMPORTERS.find((a) => a.id === importerId)?.importIntoProject(
       projectId
@@ -178,80 +152,55 @@ ipcMain.handle("importSamples", async (projectId, importerId) => {
   );
 });
 
-ipcMain.handle("unloadModel", async () => {
-  try {
-    if (detector) {
-      const oldDetector = detector;
-      detector = undefined;
-      await oldDetector.cleanup();
-      return true;
-    }
-  } catch (error) {
-    console.error(error);
-  }
 
-  return false;
-});
 
-ipcMain.handle("getImporters", async () => {
+mainToRenderer.handle("getImporters", async () => {
   return IMPORTERS.map((a) => ({
     id: a.id,
     displayName: a.name,
   }));
 });
 
-ipcMain.handle("getExporters", async () => {
+mainToRenderer.handle("getExporters", async () => {
   return EXPORTERS.map((a) => ({
     id: a.id,
     displayName: a.name,
   }));
 });
 
-ipcMain.handle("getSupportedModels", async () => {
-  return Object.values(POSSIBLE_DETECTORS).map((a) => ({
-    id: a.id as unknown as string,
-    displayName: a.name,
-  }));
-});
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-ipcMain.handle("createProject", async (_name) => {
-  const projectId = uuidv4().replace(/-/g, "");
-  const projectPath = path.join(getProjectsPath(), projectId)
-  await fs.promises.mkdir(projectPath, {
-    recursive: true,
-  });
-
-  await createOrOpenProject(projectPath)
-
-  return projectId;
-});
-
-ipcMain.handle("getSample", async (sampleId) => {
-  const sampleData = await DatabaseSample.findByPk(sampleId).then(c => c?.get({ plain: true }))
-  if (sampleData === undefined) {
-    return undefined
-  }
-
-  return {
-    id: sampleData.id,
-    annotations: [],
-    createdAt: sampleData.createdAt
+mainToRenderer.handle("saveImage", async (data) => {
+  try {
+    await fs.promises.writeFile("collision.png", data.replace(/^data:image\/png;base64,/, ""), 'base64')
+    return true;
+  } catch (error) {
+    return false;
   }
 })
 
-ipcMain.handle("getSampleIds", async () => {
-  return await DatabaseSample.findAll({
-    attributes : ['id'],
-    order: [['createdAt','DESC']]
-  }).then(c => c.map(d => d.get('id')))
-})
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("doInference", (...args) => mainToModels.sendAsync(modelsWindow!, "doInference", ...args))
 
-ipcMain.handle("activateProject", async (projectId) => {
-  const projectPath = path.join(getProjectsPath(), projectId)
-  await createOrOpenProject(projectPath)
-  return true
-})
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("getSupportedModels", (...args) => mainToModels.sendAsync(modelsWindow!, "getSupportedModels", ...args))
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("loadModel", (...args) => mainToModels.sendAsync(modelsWindow!, "loadModel", ...args))
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("selectModel", (...args) => mainToModels.sendAsync(modelsWindow!, "selectModel", ...args))
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("unloadModel", (...args) => mainToModels.sendAsync(modelsWindow!, "unloadModel", ...args))
+
+// selectModel: (...args) => ipcRenderer.sendAsync("selectModel", ...args),
+//   loadModel: (...args) => ipcRenderer.sendAsync("loadModel", ...args),
+//   doInference: (...args) => ipcRenderer.sendAsync("doInference", ...args),
+//   unloadModel: (...args) => ipcRenderer.sendAsync("unloadModel", ...args),
+//   getModel: (...args) => ipcRenderer.sendSync("getModel", ...args),
+//   getSupportedModels: (...args) => ipcRenderer.sendAsync("getSupportedModels", ...args),
+
+
+
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.

@@ -1,5 +1,9 @@
 {
   "compilerOptions": {
+    "types": [
+      "offscreencanvas",
+      "offscreenrenderingcontext"
+    ],
     "target": "es2017",
     "allowJs": true,
     "strict": true,
@@ -11,6 +15,7 @@
     "outDir": "dist",
     "moduleResolution": "node",
     "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
     "jsx": "react-jsx",
     "baseUrl": "./src", // This must be specified if "paths" is.
     "paths": {
@@ -38,7 +43,9 @@
     },
   },
   "include": [
-    "src/**/*"],
+    "src/**/*",
+    "src/**/*.d.ts"
+  ],
   "exclude": [
     "node_modules"
   ]

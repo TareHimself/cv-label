@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { Provider } from "react-redux";
 import { store } from "@redux/store";
-import { ToastContainer } from "./react-basic-toast";
+import { Toaster } from "react-hot-toast";
 
 const root = document.getElementById("root");
 
@@ -12,11 +12,15 @@ if (root) {
   rootNode.render(
     <Provider store={store}>
       <App />
-      <ToastContainer
+      <Toaster
+        position="bottom-right"
+        reverseOrder={false}
+      />
+      {/* <ToastContainer
         style={{ bottom: "10px", right: "10px" }}
         fadeInTime={100}
         fadeOutTime={100}
-      />
+      /> */}
     </Provider>
   );
 }

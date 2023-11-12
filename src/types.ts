@@ -53,6 +53,21 @@ export type IRendererToMainEvents = {
   windowClose: () => void;
   getPlatform: () => NodeJS.Platform;
   isDev: () => boolean;
+  importSamples: (projectId: string, importerId: string) => Promise<string[]>;
+  getImporters: () => Promise<IPluginInfo[]>;
+  getExporters: () => Promise<IPluginInfo[]>;
+  createProject: (name: string) => Promise<string | undefined>;
+  getSample: (sampleId: string) => Promise<ActiveDatabaseSample | undefined>
+  getSampleIds: () => Promise<string[]>
+  activateProject: (projectId: string) => Promise<boolean>
+  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation<IDatabasePoint[]>[]) => Promise<boolean>
+  removeAnnotations: (sampleId: string, annotations: string[]) => Promise<boolean>
+  createPoints: (annotationId: string, points: string[]) => Promise<boolean>
+  updatePoints: (points: IDatabasePoint[]) => Promise<boolean>
+  removePoints: (sampleId:string,annotationId: string, points: string[]) => Promise<boolean>
+  saveImage: (imageString: string) => Promise<boolean>
+
+
   selectModel: () => Promise<string | undefined>;
   loadModel: (
     modelType: ValueOf<typeof ECVModelType>,
@@ -64,14 +79,23 @@ export type IRendererToMainEvents = {
     modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
   ) => Promise<CvAnnotation[] | undefined>;
-  importSamples: (projectId: string, importerId: string) => Promise<string[]>;
-  getImporters: () => Promise<IPluginInfo[]>;
   getSupportedModels: () => Promise<IPluginInfo[]>;
-  getExporters: () => Promise<IPluginInfo[]>;
-  createProject: (name: string) => Promise<string | undefined>;
-  getSample: (sampleId: string) => Promise<ActiveDatabaseSample | undefined>
-  getSampleIds: () => Promise<string[]>
-  activateProject: (projectId: string) => Promise<boolean>
+};
+
+export type IMainToModelsBackendEvents = {
+  getPreloadPath: () => string;
+  selectModel: () => Promise<string | undefined>;
+  loadModel: (
+    modelType: ValueOf<typeof ECVModelType>,
+    modelPath: string
+  ) => Promise<boolean>;
+  unloadModel: () => Promise<boolean>;
+  getModel: () => ECVModelType;
+  doInference: (
+    modelType: ValueOf<typeof ECVModelType>,
+    imagePath: string
+  ) => Promise<CvAnnotation[] | undefined>;
+  getSupportedModels: () => Promise<IPluginInfo[]>;
 };
 
 export type IMainToRendererEvents = {
@@ -109,7 +133,7 @@ export type EditorSliceState = {
   samples: { [key: string]: ActiveDatabaseSample | undefined };
   sampleIds: string[];
   sampleIndex: number;
-  currentLabelIndex: number;
+  selectedAnnotationIndex: number;
   activeLabeler?: ValueOf<typeof ECVModelType>;
   mode: EEditorMode;
   sampleScale: number;
@@ -119,6 +143,7 @@ export type EditorSliceState = {
   labelerRect: BasicRect;
   editorRect: BasicRect;
   isLoadingCurrentSample: boolean;
+  isLoadingLabeler: boolean;
   sampleImageInfo: {
     width: number;
     height: number;
@@ -148,3 +173,9 @@ export interface IImporterInfo {
 export type AsyncReturnType<T extends (...args: any) => Promise<any>> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   T extends (...args: any) => Promise<infer R> ? R : any;
+
+
+export type Vector2D = {
+  x: number;
+  y: number;
+}

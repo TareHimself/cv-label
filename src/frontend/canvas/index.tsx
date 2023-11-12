@@ -1,18 +1,20 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useEffect, useId } from 'react'
 
-export interface ICanvasDrawData<ContextType extends RenderingContext> {
-  canvas: HTMLCanvasElement;
+
+export type CleanupFn = () => void;
+
+export type RenderingContextType = (RenderingContext | OffscreenRenderingContext)
+
+export interface ICanvasDrawData<ContextType extends RenderingContextType> {
   ctx: ContextType;
-  step: DOMHighResTimeStamp;
 }
 
 export interface ICanvasPrepData<ContextType extends RenderingContext> {
-  canvas: HTMLCanvasElement;
   ctx: ContextType;
 }
 
-export class CanvasController<ContextType extends RenderingContext = RenderingContext> {
+export class CanvasController<ContextType extends RenderingContext = RenderingContext,DrawData extends ICanvasDrawData<ContextType> = ICanvasDrawData<ContextType>> {
 
   onBegin(data: ICanvasPrepData<ContextType>){
     /** */
@@ -26,10 +28,35 @@ export class CanvasController<ContextType extends RenderingContext = RenderingCo
     throw new Error("Get Context Not Implemented For Controller");
   }
 
-  draw(data: ICanvasDrawData<ContextType>){
+  draw(data: DrawData){
     throw new Error("Draw Not Implemented For Controller");
   }
 }
+
+// class BasicCanvasController extends CanvasController<CanvasRenderingContext2D>{
+//   isActive = false;
+//   onBegin(data: ICanvasPrepData<CanvasRenderingContext2D>){
+//     this.isActive = true;
+
+//     const callback = ((step: DOMHighResTimeStamp) => {
+//       this.draw({
+//         canvas: data.canvas,
+//         ctx: data.ctx,
+//         step: step
+//       })
+
+//       if(this.isActive){
+//         requestAnimationFrame(callback);
+//       }
+//     }).bind(this)
+    
+//     requestAnimationFrame(callback);
+//   }
+
+//   onEnd(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
+//     this.isActive = false;
+//   }
+// }
 
 export interface CanvasProps<ContextType extends RenderingContext = RenderingContext>{
   controller: CanvasController<ContextType>
@@ -54,33 +81,15 @@ export default function Canvas<ContextType extends RenderingContext>(props: Canv
       // canvasElement.height = editorRect.height;
 
       const ctx = controller.getContext(canvasElement);
-      let isActive = true;
+      
 
       if (ctx) {
         controller.onBegin({
-          canvas: canvasElement,
           ctx: ctx,
         })
 
-        
-        const callback = (step: DOMHighResTimeStamp) => {
-          controller.draw({
-            canvas: canvasElement,
-            ctx: ctx,
-            step: step
-          })
-
-          if(isActive){
-            requestAnimationFrame(callback);
-          }
-        }
-        
-        requestAnimationFrame(callback);
-        
         return () => {
-          isActive = false;
           controller.onEnd({
-            canvas: canvasElement,
             ctx: ctx,
           })
         };

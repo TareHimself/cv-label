@@ -105,8 +105,16 @@ export class IpcRendererTyped<
       off: (...args) => this.off(...args),
       handle: (...args) => this.handle(...args),
     };
-
-    contextBridge.exposeInMainWorld(name, apiFinal);
+    try {
+      contextBridge.exposeInMainWorld(name, apiFinal);
+    } catch (error) {
+      console.error("FAILED TO CREATE CONTEXT BRIDGE");
+      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any)[name] = apiFinal
+    }
+    
+    
     return apiFinal;
   }
 
@@ -368,6 +376,7 @@ export class IpcMainTyped<
     electronIpcMain.on(
       channel,
       async (mainEvent, instanceId: string, ...args) => {
+        console.log("HANDELING",event,...args)
         const execArgs = args as EventParams<EventsFromRenderer, T>;
 
         const result = handler(...execArgs);
@@ -380,6 +389,8 @@ export class IpcMainTyped<
         } else {
           mainEvent.returnValue = result;
         }
+
+        console.log("HANDLED",event,...args)
       }
     );
     return this;

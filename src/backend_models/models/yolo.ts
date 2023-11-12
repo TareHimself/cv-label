@@ -7,9 +7,8 @@ import {
 } from "@types";
 import path from "path";
 import * as torch from "@nodeml/torch";
-import {v4 as uuidv4, } from 'uuid'
+import {v4 as uuidv4 } from 'uuid'
 import { masks2segmentsScaled, nonMaxSuppression, processMaskUpsample, scaleBoxes } from "./yoloUtils";
-import { sleep } from "@root/utils";
 
 export type Yolov8InputType = {
   data: number[];
@@ -89,16 +88,14 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
       height: imgHeight,
     };
 
-    await sleep(100); // Induced delay to free up event loop
-
     console.time("FORWARD");
     const result = await this.model.forward(input);
     console.timeEnd("FORWARD");
-    await sleep(100); // Induced delay to free up event loop
+
     console.time("NMS");
     const preds = nonMaxSuppression(result, result.shape[1] - 4);
     console.timeEnd("NMS");
-    await sleep(100); // Induced delay to free up event loop
+
     const pred = preds[0];
     const scaled = scaleBoxes([640, 640], pred.get([], [null, 4]), [
       inputDims.height,
@@ -154,6 +151,7 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
   override async handlePredict(
     imagePath: string
   ): Promise<CvSegmentAnnotation[]> {
+    console.time("PreProcessing");
     let data = await torch.vision.io.readImage(imagePath);
 
     const [imgDims, imgHeight, imgWidth] = data.shape;
@@ -182,26 +180,31 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
       height: imgHeight,
     };
 
-    await sleep(100); // Induced delay to free up event loop
+    console.timeEnd("PreProcessing");
 
     console.time("FORWARD");
     const [boxes, masksPred] = await this.model.forward(input);
     console.timeEnd("FORWARD");
-    await sleep(100); // Induced delay to free up event loop
+
     console.time("NMS");
     const preds = nonMaxSuppression(boxes, boxes.shape[1] - (4 + 32));
     console.timeEnd("NMS");
-    await sleep(100); // Induced delay to free up event loop
+
+
+    console.time("PostProcessing");
 
     const proto = masksPred.get(0)
 
     const pred = preds[0];
 
     if (!pred.shape[0]) {
+      console.timeEnd("PostProcessing");
       return []
     }
     const masksUpsampled = processMaskUpsample(proto, pred.get([], [6, null]), pred.get([], [null, 4]), [640, 640])
-    const segments = masks2segmentsScaled(masksUpsampled, [inputDims.width, inputDims.height])
+    console.timeEnd("PostProcessing");
+    const segments = await masks2segmentsScaled(masksUpsampled, [inputDims.width, inputDims.height])
+    
     return segments.map((seg) => {
 
       return {

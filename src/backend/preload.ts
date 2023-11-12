@@ -1,36 +1,33 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
-import { ipcRenderer } from "../ipc-impl";
+import { rendererToMain } from "../ipc-impl";
 
-const exposedApi = ipcRenderer.exposeApi("bridge", {
-  getPreloadPath: () => ipcRenderer.sendSync("getPreloadPath"),
-  windowMinimize: () => {
-    ipcRenderer.sendSync("windowMinimize");
-  },
-  windowMaximize: () => {
-    ipcRenderer.sendSync("windowMaximize");
-  },
-  windowClose: () => {
-    ipcRenderer.sendSync("windowClose");
-  },
-  getPlatform: (...args) => ipcRenderer.sendSync("getPlatform", ...args),
-  isDev: (...args) => ipcRenderer.sendSync("isDev", ...args),
-  selectModel: (...args) => ipcRenderer.sendAsync("selectModel", ...args),
-  loadModel: (...args) => ipcRenderer.sendAsync("loadModel", ...args),
-  getModel: (...args) => ipcRenderer.sendSync("getModel", ...args),
-  doInference: (...args) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ipcRenderer.sendAsync("doInference", ...args) as any, // YES I KNOW THIS IS A SIN, FOGIVE ME
-  importSamples: (...args) => ipcRenderer.sendAsync("importSamples", ...args),
-  unloadModel: (...args) => ipcRenderer.sendAsync("unloadModel", ...args),
-  getExporters: (...args) => ipcRenderer.sendAsync("getExporters", ...args),
-  getSupportedModels: (...args) =>
-    ipcRenderer.sendAsync("getSupportedModels", ...args),
-  getImporters: (...args) => ipcRenderer.sendAsync("getImporters", ...args),
-  createProject: (...args) => ipcRenderer.sendAsync("createProject", ...args),
-  getSample: (...args) => ipcRenderer.sendAsync('getSample',...args),
-  getSampleIds: (...args) => ipcRenderer.sendAsync('getSampleIds',...args),
-  activateProject: (...args) => ipcRenderer.sendAsync('activateProject',...args)
+const exposedApi = rendererToMain.exposeApi("bridge", {
+  getPreloadPath: () => rendererToMain.sendSync("getPreloadPath"),
+  windowMinimize: (...args) => rendererToMain.sendSync("windowMinimize", ...args),
+  windowMaximize: (...args) => rendererToMain.sendSync("windowMaximize", ...args),
+  windowClose: (...args) => rendererToMain.sendSync("windowClose", ...args),
+  getPlatform: (...args) => rendererToMain.sendSync("getPlatform", ...args),
+  isDev: (...args) => rendererToMain.sendSync("isDev", ...args),
+  selectModel: (...args) => rendererToMain.sendAsync("selectModel", ...args),
+  loadModel: (...args) => rendererToMain.sendAsync("loadModel", ...args),
+  doInference: (...args) => rendererToMain.sendAsync("doInference", ...args),
+  unloadModel: (...args) => rendererToMain.sendAsync("unloadModel", ...args),
+  getModel: (...args) => rendererToMain.sendSync("getModel", ...args),
+  getSupportedModels: (...args) => rendererToMain.sendAsync("getSupportedModels", ...args),
+  importSamples: (...args) => rendererToMain.sendAsync("importSamples", ...args),
+  getExporters: (...args) => rendererToMain.sendAsync("getExporters", ...args),
+  getImporters: (...args) => rendererToMain.sendAsync("getImporters", ...args),
+  createProject: (...args) => rendererToMain.sendAsync("createProject", ...args),
+  getSample: (...args) => rendererToMain.sendAsync('getSample', ...args),
+  getSampleIds: (...args) => rendererToMain.sendAsync('getSampleIds', ...args),
+  activateProject: (...args) => rendererToMain.sendAsync('activateProject', ...args),
+  createAnnotations: (...args) => rendererToMain.sendAsync("createAnnotations", ...args),
+  removeAnnotations: (...args) => rendererToMain.sendAsync("removeAnnotations", ...args),
+  createPoints: (...args) => rendererToMain.sendAsync("createPoints", ...args),
+  updatePoints: (...args) => rendererToMain.sendAsync("updatePoints", ...args),
+  removePoints: (...args) => rendererToMain.sendAsync("removePoints", ...args),
+  saveImage: (...args) => rendererToMain.sendAsync('saveImage',...args)
 });
 
 declare global {
