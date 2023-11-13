@@ -11,7 +11,7 @@ import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
 import { FilesImporter } from "./computer-vision/importers/files";
 import { ComputerVisionExporter } from "./computer-vision/exporters";
 import { ComputerVisionImporter } from "./computer-vision/importers";
-import { getProjectsPath } from '@root/utils';
+import { getProjectsPath, isDev } from '@root/utils';
 
 let modelsWindow: BrowserWindow | undefined = undefined;
 
@@ -78,7 +78,7 @@ const createWindow = async () => {
   });
 
   modelsWindow = new BrowserWindow({
-    show: true,
+    show: isDev(),
     webPreferences: {
       preload: MODELS_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegrationInWorker: true,
@@ -89,10 +89,6 @@ const createWindow = async () => {
   });
 
   await modelsWindow.loadURL(MODELS_WINDOW_WEBPACK_ENTRY)
-
-  modelsWindow.webContents.openDevTools({
-    mode: 'detach'
-  });
 
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -112,10 +108,21 @@ const createWindow = async () => {
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools({
-    mode: 'detach'
-  });
+  mainWindow.on('closed',() => {
+    modelsWindow?.close()
+    app.quit()
+  })
+
+  if(isDev()){
+    modelsWindow.webContents.openDevTools({
+      mode: 'detach'
+    });
+
+      // Open the DevTools.
+    mainWindow.webContents.openDevTools({
+      mode: 'detach'
+    });
+  }
 };
 
 // This method will be called when Electron has finished

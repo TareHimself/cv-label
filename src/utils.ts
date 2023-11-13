@@ -1,4 +1,5 @@
 import path from "path";
+import { app } from "electron";
 
 export function union(box1: number[], box2: number[]) {
   const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
@@ -113,5 +114,9 @@ export function createPromise<R = unknown,Args extends unknown[] = unknown[]>(fu
   return new Promise<R>((res,rej)=>{
       func(...args).then(res).catch(rej);
   })
+}
+
+export function isDev(){
+  return !app.isPackaged;
 }
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))
