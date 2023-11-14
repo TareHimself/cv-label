@@ -207,61 +207,93 @@ export async function createSampleAnnotationsByPk(sampleId: string, annotations:
     }
 
 
-   try {
-    const sampleAnnotations = sampleData.annotations;
+    try {
+        const sampleAnnotations = sampleData.annotations;
 
-    await Promise.all(annotations.map(async (annotation) => {
-        await DatabaseAnnotation.create({
-            id: annotation.id,
-            class: annotation.class,
-            points: annotation.points.map(c => c.id),
-            type: annotation.type,
+        await Promise.all(annotations.map(async (annotation) => {
+            await DatabaseAnnotation.create({
+                id: annotation.id,
+                class: annotation.class,
+                points: annotation.points.map(c => c.id),
+                type: annotation.type,
+            })
+
+            await Promise.all(annotation.points.map(async (point) => {
+                await DatabasePoint.create({
+                    id: point.id,
+                    x: point.x,
+                    y: point.y
+                })
+            }))
+        }))
+
+        sampleAnnotations.push(...annotations.map(c => c.id))
+
+        await DatabaseSample.update({
+            annotations: sampleAnnotations
+        }, {
+            where: {
+                id: sampleId
+            }
         })
 
-        await Promise.all(annotation.points.map(async (point) => {
-            await DatabasePoint.create({
-                id: point.id,
-                x: point.x,
-                y: point.y
-            })
-        }))
-    }))
+        return true;
+    } catch (error) {
+        console.error(error)
+        return false;
+    }
 
-    sampleAnnotations.push(...annotations.map(c => c.id))
-
-    await DatabaseSample.update({
-        annotations: sampleAnnotations
-    },{
-        where: {
-            id: sampleId
-        }
-    })
-
-    return true;
-   } catch (error) {
-    console.error(error)
-    return false;
-   }
-    
 }
 
 export async function updateSampleAnnotationsByPk(sampleId: string, annotations: IDatabaseAnnotation<IDatabasePoint[]>[]) {
-    // const ids: string[] = []
-    // await Promise.all(annotations.map(async (c) => {
-    //     const result: Partial<typeof c> = c
-    //     const annId = c.id;
-    //     ids.push(annId);
-    //     delete result.id
-    //     const points = result.points !== undefined ? {
-    //         points: result.points.map(c => c.id) 
-    //     } : {}
-    //     await DatabaseAnnotation.update({...result, result.points !== undefined ? result.points?.map(c => c.id) :,{
-    //         where: {
-    //             id: annId
-    //         }
-    //     })
-    // }))
-    // await DatabaseAnnotation.update(update)
+    try {
+        const ids: string[] = []
+
+        await Promise.all(annotations.map(async (c) => {
+            const result: Partial<typeof c> = c
+            const annId = c.id;
+            ids.push(annId);
+            delete result.id
+            const points = result.points !== undefined ? {
+                points: result.points.map(c => c.id)
+            } : {};
+
+            const pointsObj =  result.points === undefined ? {} : {
+                points: result.points.map(c => c.id)
+            }
+
+            const finalResult = {...result, ...pointsObj} as Partial<IDatabaseAnnotation<string[]>>
+
+            await DatabaseAnnotation.update({ ...finalResult },{
+                where: {
+                    id: annId
+                }
+            })
+        }))
+
+        return true;
+    } catch (error) {
+        console.error(error)
+        return false;
+    }
+}
+
+export async function updatePointsByPk(points: IDatabasePoint[]) {
+    try {
+
+        await Promise.all(points.map(async (c) => {
+            await DatabasePoint.update({ x: c.x, y: c.y },{
+                where: {
+                    id: c.id
+                }
+            })
+        }))
+
+        return true;
+    } catch (error) {
+        console.error(error)
+        return false;
+    }
 }
 
 export async function removeSampleAnnotationsByPk(sampleId: string, annotations: string[]) {
@@ -331,7 +363,7 @@ mainToRenderer.handle("activateProject", async (projectId) => {
 
 mainToRenderer.handle("createAnnotations", async (sampleId, annotations) => {
     try {
-        
+
         return await createSampleAnnotationsByPk(sampleId, annotations);
     } catch (error) {
         console.error(error);
@@ -353,7 +385,7 @@ mainToRenderer.handle("removeAnnotations", async (sampleId, annotations) => {
 
 mainToRenderer.handle("createPoints", async (annotationId, points) => {
     try {
-        
+
         return true;
     } catch (error) {
         console.error(error);
@@ -365,7 +397,7 @@ mainToRenderer.handle("createPoints", async (annotationId, points) => {
 mainToRenderer.handle("updatePoints", async (points) => {
     try {
         
-        return true;
+        return await updatePointsByPk(points);
     } catch (error) {
         console.error(error);
     }
@@ -373,9 +405,9 @@ mainToRenderer.handle("updatePoints", async (points) => {
     return false;
 })
 
-mainToRenderer.handle("removePoints", async (sampleId,annotationId, points) => {
+mainToRenderer.handle("removePoints", async (sampleId, annotationId, points) => {
     try {
-        
+
         return true;
     } catch (error) {
         console.error(error);

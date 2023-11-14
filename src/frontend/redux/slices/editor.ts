@@ -145,6 +145,18 @@ const loadAllSamples = createAsyncThunk("editor/samples/load", async () => {
   return await window.bridge.getSampleIds();
 });
 
+
+const updatePoints = createAsyncThunk("editor/samples/annotations/points", async ({ }: ) => {
+  try {
+    window.bridge.updatePoints()
+  } catch (error) {
+    console.error(error)
+  }
+});
+
+
+
+
 export const EditorSlice = createSlice({
   name: "editor",
   // `createSlice` will infer the state type from the `initialState` argument
