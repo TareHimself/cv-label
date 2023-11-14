@@ -161,13 +161,18 @@ polygon {
   width: fit-content;
   left: 0;
   top: 0%;
+  background-color: var(--color-primary);
 }
 
-.side-panel-header {}
+.side-panel-header {
+  height: 50px;
+  width: fit-content;
+}
 
 .side-panel-content {
   display: flex;
   flex-direction: column;
+  width: fit-content;
 }
 
 #start {

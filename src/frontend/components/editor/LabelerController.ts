@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { ICanvasDrawData, CanvasController, ICanvasPrepData, RenderingContextType } from "@frontend/canvas";
 import { generateHitId, subscribeToWindowEvent, watchMouseMovement } from "@frontend/utils";
-import { setCurrentAnnotationIndex } from "@redux/exports";
+import { setCurrentAnnotationIndex, updatePoints } from "@redux/exports";
 import { store } from "@redux/store";
+import { clone } from "@root/utils";
 import { IDatabaseAnnotation, IDatabasePoint, ELabelType, Vector2D } from "@types";
 
 function blobToBase64(blob: Blob) {
@@ -154,6 +155,13 @@ class BoxDrawable extends Drawable {
                         point.x = (startPositions[idx].x + positionDiff.x) / this.scale.x;
                         point.y = (startPositions[idx].y + positionDiff.y) / this.scale.y;
                     })
+                },
+                () => {
+                    store.dispatch(updatePoints({
+                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        annotationIndex: this.drawerIndex,
+                        points: this.annotation.points
+                    }))
                 })
             }
             else
@@ -191,6 +199,14 @@ class BoxDrawable extends Drawable {
                     point.y = (startPosition.y + positionDiff.y) / this.scale.y;
 
                     console.log("Moving Control point")
+                },() => {
+                    store.dispatch(updatePoints({
+                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        annotationIndex: this.drawerIndex,
+                        points: [
+                            point
+                        ]
+                    }))
                 })
 
                 mouseDownEvent.stopPropagation();
@@ -299,6 +315,13 @@ class SegmentationDrawable extends Drawable {
                         point.x = (startPositions[idx].x + positionDiff.x) / this.scale.x;
                         point.y = (startPositions[idx].y + positionDiff.y) / this.scale.y;
                     })
+                },
+                () => {
+                    store.dispatch(updatePoints({
+                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        annotationIndex: this.drawerIndex,
+                        points: this.annotation.points
+                    }))
                 })
             }
             else
@@ -336,6 +359,14 @@ class SegmentationDrawable extends Drawable {
                     point.y = (startPosition.y + positionDiff.y) / this.scale.y;
 
                     console.log("Moving Control point")
+                },() => {
+                    store.dispatch(updatePoints({
+                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        annotationIndex: this.drawerIndex,
+                        points: [
+                            point
+                        ]
+                    }))
                 })
 
                 mouseDownEvent.stopPropagation();
@@ -393,7 +424,8 @@ class SegmentationDrawable extends Drawable {
 
 export default class LabelerController extends CanvasController<CanvasRenderingContext2D> {
     config: ILabelerControllerConfig;
-    drawers: Drawable[];
+    drawers: Drawable[] = [];
+    annotations: IDatabaseAnnotation<IDatabasePoint[]>[] = [];
     reduxState: ReturnType<typeof store.getState> = store.getState();
     lastDrawTime: DOMHighResTimeStamp = 0;
     endCallbacks: (() => void)[] = []
@@ -410,7 +442,6 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     constructor(config: ILabelerControllerConfig) {
         super();
         this.config = config;
-        this.drawers = [];
     }
 
     bindHitEvent(hitId: string,event: BindableMouseEvents, eventCallback: HitTestCallback): HitUnbind {
@@ -534,7 +565,6 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     override onEnd(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
         this.cavasCtx = null;
         this.endCallbacks.forEach(c => c())
-        this.createDrawers([]);
     }
 
     override getContext(
@@ -554,10 +584,10 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
         this.drawers = annotations.map((a, idx) => {
 
-            const drawer = a.type === ELabelType.BOX ? new BoxDrawable(this, a, idx,{
+            const drawer = a.type === ELabelType.BOX ? new BoxDrawable(this, clone(a), idx,{
                 x: scaleX,
                 y: scaleY
-            },this.reduxState.editor.sampleScale) : new SegmentationDrawable(this, a, idx,{
+            },this.reduxState.editor.sampleScale) : new SegmentationDrawable(this, clone(a), idx,{
                 x: scaleX,
                 y: scaleY
             },this.reduxState.editor.sampleScale)
@@ -565,23 +595,26 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
             return drawer;
         })
 
-        console.log("Created new Drawers")
+        this.annotations = clone(annotations);
     }
 
     shouldReplaceDrawers(annotations: IDatabaseAnnotation<IDatabasePoint[]>[]) {
-        if (annotations.length !== this.drawers.length) {
+        if (annotations.length !== this.annotations.length) {
+            console.log("Creating new drawers because the number annotations have changed")
             return true;
         }
 
         for (let i = 0; i < annotations.length; i++) {
-            const annotation = annotations[i];
-            const drawer = this.drawers[i];
+            const reduxAnnotation = annotations[i];
+            const myAnnotation = this.annotations[i];
 
-            if (annotation.id !== drawer.annotation.id || annotation.points.length !== drawer.annotation.points.length) {
+            if (reduxAnnotation.id !== myAnnotation.id || reduxAnnotation.points.length !== myAnnotation.points.length) {
+                console.log("Creating new drawers because the annotation with id",reduxAnnotation.id,"has changed")
                 return true;
             }
 
-            if (JSON.stringify(annotation.points) !== JSON.stringify(drawer.annotation.points)) {
+            if (JSON.stringify(reduxAnnotation.points) !== JSON.stringify(myAnnotation.points)) {
+                console.log("Creating new drawers because the points of the annotation with id",reduxAnnotation.id,"Have changed",reduxAnnotation.points)
                 return true;
             }
         }

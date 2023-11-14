@@ -7,12 +7,12 @@ import { CvAnnotation } from "@types";
 import Canvas from "@frontend/canvas";
 import LabelerController from "./LabelerController";
 
-export type BoxContainerProps = {
+export type LabelerProps = {
   tempLabels?: CvAnnotation[];
   onTempLabelUpdated?: (update: CvAnnotation, idx: number) => void;
 };
 
-export default function BoxContainer(props: BoxContainerProps) {
+export default function Labeler(props: LabelerProps) {
   const dispatch = useAppDispatch();
 
   const [isDraggingImage, setIsDraggingImage] = useState(false);

@@ -187,8 +187,12 @@ export async function findSampleByPk(sampleId: string): Promise<IDatabaseSample<
                     where: {
                         id: annData.points
                     }
-                }).then(d => Promise.all(d.map(async (point) => {
-                    return point.get({ plain: true })
+                }).then(d => Promise.all(d.sort((a,b) => annData.points.indexOf(a.id) - annData.points.indexOf(b.id)).map(async (point) => {
+                    return {
+                        id: point.id,
+                        x: point.x,
+                        y: point.y
+                    }
                 })))
 
             }
@@ -307,7 +311,7 @@ export async function removeSampleAnnotationsByPk(sampleId: string, annotations:
 
 mainToRenderer.handle("getSample", async (sampleId) => {
     try {
-        return findSampleByPk(sampleId)
+        return await findSampleByPk(sampleId)
     } catch (error) {
         console.error(error)
     }
@@ -320,7 +324,7 @@ mainToRenderer.handle("getSampleIds", async () => {
         return await DatabaseSample.findAll({
             attributes: ['id'],
             order: [['createdAt', 'DESC']]
-        }).then(c => c.map(d => d.get('id')))
+        }).then(c => c.map(d => d.id))
     } catch (error) {
         console.error(error);
     }

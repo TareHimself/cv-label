@@ -119,4 +119,8 @@ export function createPromise<R = unknown,Args extends unknown[] = unknown[]>(fu
 export function isDev(){
   return !app.isPackaged;
 }
+
+export function clone<T>(item: T){
+  return JSON.parse(JSON.stringify(item)) as T
+}
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

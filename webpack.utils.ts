@@ -15,7 +15,9 @@ export function findDependencies(toSearch: string, searched: Set<string>, deps: 
 
         const peerDependenciesMeta = Object.keys(packageJson['peerDependenciesMeta'] ?? {}) as string[];
 
-        const allDependencies = new Set([...dependencies, ...peerDependenciesMeta]);
+        const optionalDependencies = Object.keys(packageJson['optionalDependencies'] ?? {}) as string[];
+
+        const allDependencies = new Set([...dependencies, ...peerDependenciesMeta, ...optionalDependencies]);
 
         for (const dep of allDependencies) {
             if (!searched.has(dep)) {

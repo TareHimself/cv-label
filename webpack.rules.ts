@@ -18,7 +18,7 @@ export const rules: Required<ModuleOptions>['rules'] = [
       },
     },
   },
-  {
+  {// Loading typescript files
     test: /\.tsx?$/,
     exclude: /(node_modules|\.webpack)/,
     use: {

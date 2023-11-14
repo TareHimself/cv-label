@@ -10,6 +10,8 @@ import {
   ECVModelType,
   EditorSliceState,
   EEditorMode,
+  IDatabaseAnnotation,
+  IDatabasePoint,
   ValueOf,
 } from "@types";
 import { toast } from "react-hot-toast";
@@ -132,7 +134,7 @@ const autoLabel = createAsyncThunk<
 
     return {
       samplePath: sampleId,
-      result: annotationsToAdd.length > 0  && await window.bridge.createAnnotations(sampleId,annotationsToAdd) ? annotationsToAdd : []
+      result: annotationsToAdd.length > 0 && await window.bridge.createAnnotations(sampleId, annotationsToAdd) ? annotationsToAdd : []
     }
   }), {
     success: (d) => `Added ${d.result?.length ?? 0} annotations`,
@@ -146,12 +148,23 @@ const loadAllSamples = createAsyncThunk("editor/samples/load", async () => {
 });
 
 
-const updatePoints = createAsyncThunk("editor/samples/annotations/points", async ({ }: ) => {
+const updatePoints = createAsyncThunk("editor/samples/annotations/points", async ({ sampleId, annotationIndex, points }: { sampleId: string; annotationIndex: number; points: IDatabasePoint[] }) => {
   try {
-    window.bridge.updatePoints()
+    if (await window.bridge.updatePoints(points)) {
+      return {
+        sampleId,
+        annotationIndex,
+        points: points
+      };
+    }
   } catch (error) {
     console.error(error)
   }
+  return {
+    sampleId,
+    annotationIndex,
+    points: []
+  };
 });
 
 
@@ -318,6 +331,18 @@ export const EditorSlice = createSlice({
     builder.addCase(loadAllSamples.fulfilled, (state, action) => {
       state.sampleIds.push(...action.payload)
     });
+    builder.addCase(updatePoints.fulfilled, (state, action) => {
+      const annotation = state.samples[action.payload.sampleId]?.annotations[action.payload.annotationIndex];
+      if (annotation !== undefined) {
+        action.payload.points.forEach((c) => {
+          const point = annotation.points.find(d => d.id === c.id)
+          if (point !== undefined) {
+            point.x = c.x;
+            point.y = c.y;
+          }
+        })
+      }
+    });
   },
 });
 
@@ -335,6 +360,6 @@ export const {
   setLabelerContainerRect,
   onImageLoaded,
 } = EditorSlice.actions;
-export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins, fetchSample, loadAllSamples };
+export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins, fetchSample, loadAllSamples, updatePoints };
 
 export default EditorSlice.reducer;

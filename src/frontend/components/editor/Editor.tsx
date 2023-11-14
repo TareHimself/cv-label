@@ -10,7 +10,7 @@ import {
   MdLabel,
 } from "react-icons/md";
 import { FaUndoAlt, FaRedoAlt, FaFileImport } from "react-icons/fa";
-import BoxContainer from "./BoxContainer";
+import Labeler from "./Labeler";
 import Icon from "../Icon";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import {
@@ -29,6 +29,7 @@ import {
 import { ECVModelType, EEditorMode } from "@types";
 import useElementRect from "@hooks/useElementRect";
 import Crosshair from "./Crosshair";
+import SidePanel from "./SidePanel";
 
 export default function Editor() {
   const labeler = useAppSelector((s) => s.editor.activeLabeler);
@@ -156,7 +157,7 @@ export default function Editor() {
             transform: `translate(${scrollX}px,${scrollY}px)`,
           }}
         >
-          <BoxContainer />
+          <Labeler />
         </div>
       </div>
       {editorMode === EEditorMode.SELECT && (
@@ -220,8 +221,8 @@ export default function Editor() {
               if (labeler === undefined) {
                 dispatch(
                   loadModel({
-                    modelType: ECVModelType.Yolov8Detect,
-                    modelPath: "./detection.torchscript",
+                    modelType: ECVModelType.Yolov8Seg,
+                    modelPath: "./seg.torchscript",
                   })
                 );
               } else {
@@ -251,6 +252,9 @@ export default function Editor() {
           <Icon icon={FaUndoAlt} />
           <Icon icon={FaRedoAlt} />
         </EditorActionPanel>
+        <SidePanel name={"Samples"} isOpen={true}>
+          
+        </SidePanel>
       </div>
     </div>
   );
