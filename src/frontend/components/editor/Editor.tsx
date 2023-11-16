@@ -50,14 +50,16 @@ export default function Editor() {
 
   const currentSampleIndex = useAppSelector((s) => s.editor.sampleIndex);
 
-  const currentSampleId = useAppSelector(s => s.editor.sampleIds[s.editor.sampleIndex])
+  const currentSampleId = useAppSelector(
+    (s) => s.editor.sampleIds[s.editor.sampleIndex]
+  );
 
   const currentSample = useAppSelector(
     (s) => s.editor.samples[currentSampleId]
   );
 
-  const isLoadingLabeler = useAppSelector(s => s.editor.isLoadingLabeler)
-  
+  const isLoadingLabeler = useAppSelector((s) => s.editor.isLoadingLabeler);
+
   const editorMode = useAppSelector((s) => s.editor.mode);
 
   const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
@@ -84,18 +86,19 @@ export default function Editor() {
     )
   );
 
-  useEffect(()=>{
-    if(currentSample === undefined){
-      dispatch(fetchSample({
-        id: currentSampleId
-      }))
+  useEffect(() => {
+    if (currentSample === undefined) {
+      dispatch(
+        fetchSample({
+          id: currentSampleId,
+        })
+      );
     }
-  },[currentSample, currentSampleId, dispatch])
+  }, [currentSample, currentSampleId, dispatch]);
 
-
-  useEffect(()=>{
-    dispatch(loadAllSamples())
-  },[dispatch])
+  useEffect(() => {
+    dispatch(loadAllSamples());
+  }, [dispatch]);
 
   // useEffect(() => {
   //   dispatch(
@@ -252,8 +255,8 @@ export default function Editor() {
           <Icon icon={FaUndoAlt} />
           <Icon icon={FaRedoAlt} />
         </EditorActionPanel>
-        <SidePanel name={"Samples"} isOpen={true}>
-          
+        <SidePanel name={"Samples"} isOpen={false}>
+          <div style={{ width: "18vw", height: "100%", minWidth: 250 }}></div>
         </SidePanel>
       </div>
     </div>

@@ -184,10 +184,12 @@ polygon {
   gap: 80px;
 }
 
-h3 {
-  font-size: 20px;
+h2, h3 {
   color: var(--color-icon);
   margin: 0px;
+}
+h3 {
+  font-size: 20px;
 }
 
 
