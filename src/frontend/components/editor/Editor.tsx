@@ -30,7 +30,9 @@ import { EEditorMode } from "@types";
 import useElementRect from "@hooks/useElementRect";
 import Crosshair from "./Crosshair";
 import SidePanel from "./SidePanel";
-import { createDialog } from "@frontend/dialog";
+import { closeDialog, createDialog } from "@frontend/dialog";
+import DialogBox from "@components/DialogBox";
+import PluginSelectionList from "./PluginSelectionList";
 
 export default function Editor() {
   const labeler = useAppSelector((s) => s.app.activeLabeler);
@@ -55,9 +57,7 @@ export default function Editor() {
     (s) => s.app.sampleIds[s.app.sampleIndex]
   );
 
-  const currentSample = useAppSelector(
-    (s) => s.app.samples[currentSampleId]
-  );
+  const currentSample = useAppSelector((s) => s.app.samples[currentSampleId]);
 
   const isLoadingLabeler = useAppSelector((s) => s.app.isLoadingLabeler);
 
@@ -66,6 +66,8 @@ export default function Editor() {
   const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
 
   const importers = useAppSelector((s) => s.app.availableImporters);
+
+  const models = useAppSelector((s) => s.app.availableModels);
 
   useElementRect(
     useCallback(() => editorRef.current, []),
@@ -223,18 +225,26 @@ export default function Editor() {
             isActive={labeler !== undefined || isLoadingLabeler}
             onClicked={useCallback(() => {
               if (labeler === undefined) {
+                createDialog((p) => (
+                  <DialogBox
+                    onCloseRequest={() => {
+                      closeDialog(p.id);
+                    }}
+                  >
+                    <PluginSelectionList
+                      plugins={models}
+                      onPluginSelected={(plugin) => {
+                        dispatch(
+                          loadModel({
+                            modelId: plugin.id,
+                          })
+                        );
+                        closeDialog(p.id);
+                      }}
+                    />
+                  </DialogBox>
+                ));
 
-                createDialog(() => (<div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  width: 200,
-                  height: 100,
-                  backgroundColor: "blue",
-              }}>
-          
-              </div>)
-            )
-                
                 // dispatch(
                 //   loadModel({
                 //     modelPath: "./seg.torchscript",
@@ -243,7 +253,7 @@ export default function Editor() {
               } else {
                 dispatch(unloadModel());
               }
-            }, [dispatch, labeler])}
+            }, [dispatch, labeler, models])}
           />
         </EditorActionPanel>
         <EditorActionPanel position="left">

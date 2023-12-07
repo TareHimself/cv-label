@@ -19,11 +19,18 @@ export const DialogSlice = createSlice({
     createDialog: (state, action: PayloadAction<IActiveDialog>) => {
       state.dialogs.push(action.payload);
     },
+    closeDialog: (state, action: PayloadAction<string>) => {
+      const targetId = state.dialogs.findIndex(c => c.data.id === action.payload)
+      if(targetId !== undefined){
+        state.dialogs.splice(targetId,1)
+      }
+    },
   },
 });
 
 export const {
-  createDialog
+  createDialog,
+  closeDialog
 } = DialogSlice.actions;
 
 export default DialogSlice.reducer;

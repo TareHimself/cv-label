@@ -76,7 +76,7 @@ export type IRendererToMainEvents = {
   getSupportedModels: () => Promise<IPluginInfo[]>;
 };
 
-export type IMainToModelsBackendEvents = {
+export type IMainToModelsEvents = {
   getPreloadPath: () => string;
   selectModel: () => Promise<string | undefined>;
   loadModel: (
@@ -100,7 +100,7 @@ export type LabelOverlayProps = PropsWithChildren<{
 
 export type CvLabelSegmentPoint = [number, number];
 
-interface IPluginInfo {
+export interface IPluginInfo {
   id: string;
   displayName: string;
 }

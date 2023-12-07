@@ -13,7 +13,6 @@ const exposedApi = rendererToMain.exposeApi("bridge", {
   loadModel: (...args) => rendererToMain.sendAsync("loadModel", ...args),
   doInference: (...args) => rendererToMain.sendAsync("doInference", ...args),
   unloadModel: (...args) => rendererToMain.sendAsync("unloadModel", ...args),
-  getModel: (...args) => rendererToMain.sendSync("getModel", ...args),
   getSupportedModels: (...args) => rendererToMain.sendAsync("getSupportedModels", ...args),
   importSamples: (...args) => rendererToMain.sendAsync("importSamples", ...args),
   getExporters: (...args) => rendererToMain.sendAsync("getExporters", ...args),

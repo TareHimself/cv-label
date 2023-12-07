@@ -193,7 +193,7 @@ const updatePoints = createAsyncThunk("app/samples/annotations/points", async ({
 
 
 
-export const EditorSlice = createSlice({
+export const AppSlice = createSlice({
   name: "app",
   // `createSlice` will infer the state type from the `initialState` argument
   initialState,
@@ -388,7 +388,7 @@ export const {
   setScrollDelta,
   setLabelerContainerRect,
   onImageLoaded,
-} = EditorSlice.actions;
+} = AppSlice.actions;
 export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins, fetchSample, loadAllSamples, updatePoints, createProject, activateProject };
 
-export default EditorSlice.reducer;
+export default AppSlice.reducer;

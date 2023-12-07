@@ -7,7 +7,7 @@ import {
 import * as torch from "@nodeml/torch";
 import {v4 as uuidv4 } from 'uuid'
 import { masks2segmentsScaled, nonMaxSuppression, processMaskUpsample, scaleBoxes } from "./yoloUtils";
-import { dialog } from "electron";
+import { dialog } from "@electron/remote";
 
 export const enum EYoloModelType {
   Yolov8Detect,

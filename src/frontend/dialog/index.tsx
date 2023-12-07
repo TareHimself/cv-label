@@ -1,34 +1,30 @@
 import { v4 as uuidv4 } from "uuid";
 import { store } from "./redux/store";
-import { createDialog as reduxCreateDialog, useAppSelector } from "./redux";
+import { createDialog as reduxCreateDialog, useAppSelector , closeDialog as reduxCloseDialog} from "./redux";
 import { DialogManagerProps, IActiveDialog } from "./types";
-import { useEffect, useState } from "react";
 import { Provider } from "react-redux";
 import dialogStoreContext from "./redux/context";
 
 export function createDialog(dialog: IActiveDialog["render"]) {
+  const dialogId = uuidv4();
+
   store.dispatch(
     reduxCreateDialog({
       data: {
-        id: uuidv4(),
+        id: dialogId,
       },
       render: dialog,
     })
   );
-  // [{
-  //     data: {
-  //         id: uuidv4(),
-  //     },
-  //     render: () => (<div style={{
-  //         display: 'flex',
-  //         flexDirection: 'column',
-  //         width: 200,
-  //         height: 100,
-  //         backgroundColor: "blue",
-  //     }}>
 
-  //     </div>)
-  //   }]
+  return dialogId
+}
+
+
+export function closeDialog(dialogId: string) {
+  store.dispatch(
+    reduxCloseDialog(dialogId)
+  );
 }
 
 function DialogManagerChild(props: DialogManagerProps) {

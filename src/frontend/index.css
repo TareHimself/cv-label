@@ -68,32 +68,25 @@ button {
   box-sizing: border-box;
   border: none;
   border-radius: 5px;
+  color: var(--color-icon);
   transition: all ease-in-out 200ms;
 }
 
 button svg {
-  color: var(--color-icon);
+  color: inherit;
   transition: all ease-in-out 200ms;
 }
 
 button:hover,
 button.active-icon {
   background-color: var(--color-icon);
-}
-
-button:hover svg,
-button.active-icon svg {
   color: var(--color-secondary);
 }
 
 button:active {
   background-color: var(--color-icon);
-}
-
-button:active svg {
   color: rgb(0, 0, 0);
 }
-
 
 .editor-action-panel[data-pos="top"] {
   height: var(--alt-axis-dim);
@@ -198,4 +191,18 @@ h3 {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+.dialog-box {
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  height: fit-content;
+  padding: 10px;
+  background-color: var(--color-primary);
+  border-radius: 20px;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
 }

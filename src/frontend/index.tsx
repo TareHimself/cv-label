@@ -17,10 +17,11 @@ if (root) {
           display: "flex",
           padding: 0,
           border: 0,
+          background: "transparent"
         }}
-      >
+      />
         <App />
-      </DialogManager>
+      {/* </DialogManager> */}
       <Toaster position="bottom-right" reverseOrder={false} />
       {/* <ToastContainer
         style={{ bottom: "10px", right: "10px" }}

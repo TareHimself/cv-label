@@ -13,6 +13,9 @@ import { ComputerVisionExporter } from "./computer-vision/exporters";
 import { ComputerVisionImporter } from "./computer-vision/importers";
 import { getProjectsPath, isDev } from '@root/utils';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+require('@electron/remote/main').initialize()
+
 let modelsWindow: BrowserWindow | undefined = undefined;
 
 const IMPORTERS: ComputerVisionImporter[] = [
@@ -83,10 +86,15 @@ const createWindow = async () => {
       preload: MODELS_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegrationInWorker: true,
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
     },
     autoHideMenuBar: true,
   });
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require("@electron/remote/main").enable(modelsWindow.webContents)
+  
+  modelsWindow.webContents
 
   await modelsWindow.loadURL(MODELS_WINDOW_WEBPACK_ENTRY)
 
@@ -102,6 +110,9 @@ const createWindow = async () => {
     },
     // autoHideMenuBar: true,
   });
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require("@electron/remote/main").enable(mainWindow.webContents)
 
   mainWindow.setMenu(null);
 

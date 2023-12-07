@@ -376,7 +376,6 @@ export class IpcMainTyped<
     electronIpcMain.on(
       channel,
       async (mainEvent, instanceId: string, ...args) => {
-        console.log("HANDELING",event,...args)
         const execArgs = args as EventParams<EventsFromRenderer, T>;
 
         const result = handler(...execArgs);
@@ -389,8 +388,6 @@ export class IpcMainTyped<
         } else {
           mainEvent.returnValue = result;
         }
-
-        console.log("HANDLED",event,...args)
       }
     );
     return this;
