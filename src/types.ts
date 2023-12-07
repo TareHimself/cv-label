@@ -2,10 +2,7 @@ import { PropsWithChildren } from "react";
 
 export type ValueOf<E> = E[keyof E];
 
-export const enum ECVModelType {
-  Yolov8Detect,
-  Yolov8Seg,
-}
+
 
 export const enum ELabelType {
   BOX,
@@ -70,13 +67,10 @@ export type IRendererToMainEvents = {
 
   selectModel: () => Promise<string | undefined>;
   loadModel: (
-    modelType: ValueOf<typeof ECVModelType>,
-    modelPath: string
+    modelId: string
   ) => Promise<boolean>;
   unloadModel: () => Promise<boolean>;
-  getModel: () => ECVModelType;
   doInference: (
-    modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
   ) => Promise<CvAnnotation[] | undefined>;
   getSupportedModels: () => Promise<IPluginInfo[]>;
@@ -86,13 +80,10 @@ export type IMainToModelsBackendEvents = {
   getPreloadPath: () => string;
   selectModel: () => Promise<string | undefined>;
   loadModel: (
-    modelType: ValueOf<typeof ECVModelType>,
-    modelPath: string
+    modelId: string
   ) => Promise<boolean>;
   unloadModel: () => Promise<boolean>;
-  getModel: () => ECVModelType;
   doInference: (
-    modelType: ValueOf<typeof ECVModelType>,
     imagePath: string
   ) => Promise<CvAnnotation[] | undefined>;
   getSupportedModels: () => Promise<IPluginInfo[]>;
@@ -129,12 +120,13 @@ export interface INewSample {
   annotations: CvAnnotation[];
 }
 
-export type EditorSliceState = {
+export type AppSliceState = {
+  projectId: string | undefined;
   samples: { [key: string]: ActiveDatabaseSample | undefined };
   sampleIds: string[];
   sampleIndex: number;
   selectedAnnotationIndex: number;
-  activeLabeler?: ValueOf<typeof ECVModelType>;
+  activeLabeler?: string;
   mode: EEditorMode;
   sampleScale: number;
   xScroll: number;
@@ -153,14 +145,10 @@ export type EditorSliceState = {
   availableImporters: IPluginInfo[];
 };
 
-export type ProjectsSliceState = {
-  projectId: string | undefined;
-};
 
-export type AppSliceState = {
+export type AppReduxState = {
   state: {
-    editor: EditorSliceState;
-    projects: ProjectsSliceState;
+    app: AppSliceState;
   };
 };
 

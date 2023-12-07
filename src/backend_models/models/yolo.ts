@@ -2,13 +2,17 @@ import ComputerVisionModel from ".";
 import {
   CvBoxAnnotation,
   CvSegmentAnnotation,
-  ECVModelType,
   ELabelType,
 } from "@types";
-import path from "path";
 import * as torch from "@nodeml/torch";
 import {v4 as uuidv4 } from 'uuid'
 import { masks2segmentsScaled, nonMaxSuppression, processMaskUpsample, scaleBoxes } from "./yoloUtils";
+import { dialog } from "electron";
+
+export const enum EYoloModelType {
+  Yolov8Detect,
+  Yolov8Seg,
+}
 
 export type Yolov8InputType = {
   data: number[];
@@ -16,37 +20,47 @@ export type Yolov8InputType = {
   height: number;
 };
 
+export async function selectTorchscriptModel(){
+  const dialogResult = await dialog.showOpenDialog({
+    title: "Select The Torchscript Model",
+    properties: ["openFile"],
+  });
+
+  if (dialogResult.filePaths.length === 0) {
+    return undefined;
+  }
+
+  return dialogResult.filePaths[0];
+}
+
 abstract class Yolov8<
-  Model extends ECVModelType.Yolov8Detect | ECVModelType.Yolov8Seg
+  Model extends EYoloModelType.Yolov8Detect | EYoloModelType.Yolov8Seg
 > extends ComputerVisionModel<
-  Model extends ECVModelType.Yolov8Detect
+  Model extends EYoloModelType.Yolov8Detect
   ? CvBoxAnnotation[]
-  : CvSegmentAnnotation[],
-  Model
-> {
+  : CvSegmentAnnotation[]> {
   model: torch.jit.Module<Yolov8TorchscriptModelResult<Model>>;
   constructor(
-    modelId: Model,
     model: torch.jit.Module<Yolov8TorchscriptModelResult<Model>>
   ) {
-    super(modelId);
+    super();
     this.model = model;
   }
 }
 
 type Yolov8TorchscriptModelResult<
-  Model extends ECVModelType.Yolov8Detect | ECVModelType.Yolov8Seg
-> = Model extends ECVModelType.Yolov8Detect
+  Model extends EYoloModelType.Yolov8Detect | EYoloModelType.Yolov8Seg
+> = Model extends EYoloModelType.Yolov8Detect
   ? torch.Tensor<"float">
   : [torch.Tensor<"float">, torch.Tensor<"float">];
 
-export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
+export class Yolov8Detection extends Yolov8<EYoloModelType.Yolov8Detect> {
   constructor(
     model: torch.jit.Module<
-      Yolov8TorchscriptModelResult<ECVModelType.Yolov8Detect>
+      Yolov8TorchscriptModelResult<EYoloModelType.Yolov8Detect>
     >
   ) {
-    super(ECVModelType.Yolov8Detect, model);
+    super(model);
   }
 
   static inferenceDims = {
@@ -54,8 +68,14 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
     y: 640,
   };
 
-  static async create(modelPath: string) {
-    return new Yolov8Detection(await torch.jit.load(path.resolve(modelPath)));
+  static async create() {
+    const torchScriptModelPath = await selectTorchscriptModel();
+
+    if(torchScriptModelPath === undefined){
+      throw new Error("Failed to find model path");
+    }
+
+    return new Yolov8Detection(await torch.jit.load(torchScriptModelPath));
   }
 
   override async handlePredict(imagePath: string): Promise<CvBoxAnnotation[]> {
@@ -128,13 +148,13 @@ export class Yolov8Detection extends Yolov8<ECVModelType.Yolov8Detect> {
   }
 }
 
-export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
+export class Yolov8Segmentation extends Yolov8<EYoloModelType.Yolov8Seg> {
   constructor(
     model: torch.jit.Module<
-      Yolov8TorchscriptModelResult<ECVModelType.Yolov8Seg>
+      Yolov8TorchscriptModelResult<EYoloModelType.Yolov8Seg>
     >
   ) {
-    super(ECVModelType.Yolov8Seg, model);
+    super(model);
   }
 
   static inferenceDims = {
@@ -142,9 +162,15 @@ export class Yolov8Segmentation extends Yolov8<ECVModelType.Yolov8Seg> {
     y: 640,
   };
 
-  static async create(modelPath: string) {
+  static async create() {
+
+    const torchScriptModelPath = await selectTorchscriptModel();
+
+    if(torchScriptModelPath === undefined){
+      throw new Error("Failed to find model path");
+    }
     return new Yolov8Segmentation(
-      await torch.jit.load(path.resolve(modelPath))
+      await torch.jit.load(torchScriptModelPath)
     );
   }
 

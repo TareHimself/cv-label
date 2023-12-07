@@ -3,6 +3,7 @@ import App from "./App";
 import { Provider } from "react-redux";
 import { store } from "@redux/store";
 import { Toaster } from "react-hot-toast";
+import DialogManager from "./dialog";
 
 const root = document.getElementById("root");
 
@@ -11,11 +12,16 @@ if (root) {
 
   rootNode.render(
     <Provider store={store}>
-      <App />
-      <Toaster
-        position="bottom-right"
-        reverseOrder={false}
-      />
+      <DialogManager
+        defaultStyle={{
+          display: "flex",
+          padding: 0,
+          border: 0,
+        }}
+      >
+        <App />
+      </DialogManager>
+      <Toaster position="bottom-right" reverseOrder={false} />
       {/* <ToastContainer
         style={{ bottom: "10px", right: "10px" }}
         fadeInTime={100}

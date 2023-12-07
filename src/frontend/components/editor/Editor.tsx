@@ -26,45 +26,46 @@ import {
   setSampleScale,
   unloadModel,
 } from "@redux/exports";
-import { ECVModelType, EEditorMode } from "@types";
+import { EEditorMode } from "@types";
 import useElementRect from "@hooks/useElementRect";
 import Crosshair from "./Crosshair";
 import SidePanel from "./SidePanel";
+import { createDialog } from "@frontend/dialog";
 
 export default function Editor() {
-  const labeler = useAppSelector((s) => s.editor.activeLabeler);
+  const labeler = useAppSelector((s) => s.app.activeLabeler);
 
   const dispatch = useAppDispatch();
 
-  const sampleScale = useAppSelector((s) => s.editor.sampleScale);
+  const sampleScale = useAppSelector((s) => s.app.sampleScale);
 
-  const editorRect = useAppSelector((s) => s.editor.editorRect);
+  const editorRect = useAppSelector((s) => s.app.editorRect);
 
-  const scrollX = useAppSelector((s) => s.editor.xScroll);
+  const scrollX = useAppSelector((s) => s.app.xScroll);
 
-  const scrollY = useAppSelector((s) => s.editor.yScroll);
+  const scrollY = useAppSelector((s) => s.app.yScroll);
 
   const labelerContainerRef = useRef<HTMLDivElement | null>(null);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
 
-  const currentSampleIndex = useAppSelector((s) => s.editor.sampleIndex);
+  const currentSampleIndex = useAppSelector((s) => s.app.sampleIndex);
 
   const currentSampleId = useAppSelector(
-    (s) => s.editor.sampleIds[s.editor.sampleIndex]
+    (s) => s.app.sampleIds[s.app.sampleIndex]
   );
 
   const currentSample = useAppSelector(
-    (s) => s.editor.samples[currentSampleId]
+    (s) => s.app.samples[currentSampleId]
   );
 
-  const isLoadingLabeler = useAppSelector((s) => s.editor.isLoadingLabeler);
+  const isLoadingLabeler = useAppSelector((s) => s.app.isLoadingLabeler);
 
-  const editorMode = useAppSelector((s) => s.editor.mode);
+  const editorMode = useAppSelector((s) => s.app.mode);
 
   const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
 
-  const importers = useAppSelector((s) => s.editor.availableImporters);
+  const importers = useAppSelector((s) => s.app.availableImporters);
 
   useElementRect(
     useCallback(() => editorRef.current, []),
@@ -222,12 +223,23 @@ export default function Editor() {
             isActive={labeler !== undefined || isLoadingLabeler}
             onClicked={useCallback(() => {
               if (labeler === undefined) {
-                dispatch(
-                  loadModel({
-                    modelType: ECVModelType.Yolov8Seg,
-                    modelPath: "./seg.torchscript",
-                  })
-                );
+
+                createDialog(() => (<div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: 200,
+                  height: 100,
+                  backgroundColor: "blue",
+              }}>
+          
+              </div>)
+            )
+                
+                // dispatch(
+                //   loadModel({
+                //     modelPath: "./seg.torchscript",
+                //   })
+                // );
               } else {
                 dispatch(unloadModel());
               }
@@ -255,9 +267,9 @@ export default function Editor() {
           <Icon icon={FaUndoAlt} />
           <Icon icon={FaRedoAlt} />
         </EditorActionPanel>
-        <SidePanel name={"Samples"} isOpen={false}>
+        {/* <SidePanel name={"Samples"} isOpen={false}>
           <div style={{ width: "18vw", height: "100%", minWidth: 250 }}></div>
-        </SidePanel>
+        </SidePanel> */}
       </div>
     </div>
   );

@@ -18,22 +18,22 @@ export default function Labeler(props: LabelerProps) {
   const [isDraggingImage, setIsDraggingImage] = useState(false);
 
   const currentSampleId = useAppSelector(
-    (s) => s.editor.sampleIds[s.editor.sampleIndex]
+    (s) => s.app.sampleIds[s.app.sampleIndex]
   );
 
   const currentSample = useAppSelector(
-    (s) => s.editor.samples[currentSampleId]
+    (s) => s.app.samples[currentSampleId]
   );
 
   const isLoadingSample = useAppSelector(
-    (s) => s.editor.isLoadingCurrentSample
+    (s) => s.app.isLoadingCurrentSample
   );
 
-  const projectId = useAppSelector((s) => s.projects.projectId);
+  const projectId = useAppSelector((s) => s.app.projectId);
 
   const imageId = useId();
 
-  const labelerRect = useAppSelector((s) => s.editor.labelerRect);
+  const labelerRect = useAppSelector((s) => s.app.labelerRect);
 
   useEffect(() => {
     if (isDraggingImage) {

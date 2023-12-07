@@ -1,34 +1,31 @@
-import { GenericComputerVisionModel } from "@root/backend_models/models";
+import ComputerVisionModel from "@root/backend_models/models";
 import { Yolov8Detection, Yolov8Segmentation } from "@root/backend_models/models/yolo";
 import { getProjectsPath } from "@root/utils";
-import { ValueOf, ECVModelType } from "@types";
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid'
+
+interface IDetectorInfo {
+    id: string;
+    name: string;
+    create: () => Promise<ComputerVisionModel>
+}
+
+let detector: ComputerVisionModel | undefined = undefined;
 
 
-let detector: GenericComputerVisionModel | undefined = undefined;
-let detectorModelPath = "";
-
-const POSSIBLE_DETECTORS: Record<
-    ValueOf<typeof ECVModelType>,
-    {
-        id: ValueOf<typeof ECVModelType>;
-        name: string;
-        create: (modelPath: string) => Promise<GenericComputerVisionModel>;
-    }
-> = {
-    [ECVModelType.Yolov8Detect]: {
-        id: ECVModelType.Yolov8Detect,
+const DETECTORS: IDetectorInfo[] = [{
+        id: uuidv4(),
         name: "Yolov8 Detection",
-        create: (...args) => Yolov8Detection.create(...args),
+        create: Yolov8Detection.create
     },
-    [ECVModelType.Yolov8Seg]: {
-        id: ECVModelType.Yolov8Seg,
-        name: "Yolo8 Segmentation",
-        create: (...args) => Yolov8Segmentation.create(...args),
-    },
-};
+    {
+        id: uuidv4(),
+        name: "Yolov8 Segmentation",
+        create: Yolov8Segmentation.create
+    }
+]
 
-window.backendModels.handle("doInference", async (_modelType, imagePath) => {
+window.backendModels.handle("doInference", async (imagePath) => {
     if (!detector) {
         console.error("Inference was attempted with no model");
         return undefined;
@@ -45,14 +42,16 @@ window.backendModels.handle("doInference", async (_modelType, imagePath) => {
     }
 });
 
-window.backendModels.handle("loadModel", async (modelType, modelPath) => {
+window.backendModels.handle("loadModel", async (modelId) => {
     try {
-        if (detector?.modelType !== modelType || detectorModelPath !== modelPath) {
+        if (detector !== undefined) {
             detector?.cleanup();
-            detectorModelPath = modelPath;
-            detector = await POSSIBLE_DETECTORS[modelType].create(modelPath);
+            detector = undefined;
         }
-        return true;
+
+        detector = await DETECTORS.find(c => c.id === modelId)?.create()
+
+        return detector !== undefined;
     } catch (error) {
         console.error(error);
         return false;
@@ -75,8 +74,8 @@ window.backendModels.handle("unloadModel", async () => {
 });
 
 window.backendModels.handle("getSupportedModels", async () => {
-    return Object.values(POSSIBLE_DETECTORS).map((a) => ({
-        id: a.id as unknown as string,
+    return DETECTORS.map((a) => ({
+        id: a.id,
         displayName: a.name,
     }));
 });

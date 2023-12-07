@@ -1,6 +1,6 @@
 import Icon from "@components/Icon";
 import { useAppDispatch } from "@redux/hooks";
-import { activateProject, createProject } from "@redux/slices/projects";
+import { activateProject, createProject } from "@redux/slices/app";
 import { AiOutlinePlus, AiFillFolderOpen } from "react-icons/ai";
 import { useNavigate } from "react-router-dom";
 

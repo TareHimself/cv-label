@@ -4,19 +4,17 @@ import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { createPromise, wrap } from "@root/utils";
 // import { toast } from "react-toastify"
 import {
-  AppSliceState,
+  AppReduxState,
   BasicRect,
   CvAnnotation,
-  ECVModelType,
-  EditorSliceState,
+  AppSliceState,
   EEditorMode,
-  IDatabaseAnnotation,
   IDatabasePoint,
-  ValueOf,
 } from "@types";
 import { toast } from "react-hot-toast";
 
-const initialState: EditorSliceState = {
+const initialState: AppSliceState = {
+  projectId: undefined,
   samples: {},
   sampleIds: [],
   sampleIndex: 0,
@@ -55,7 +53,25 @@ const initialState: EditorSliceState = {
   availableModels: [],
 };
 
-const fetchPlugins = createAsyncThunk("editor/plugins/load", async () => {
+const createProject = createAsyncThunk(
+  "projects/create",
+  async ({ projectName }: { projectName: string }) => {
+    return await window.bridge.createProject(projectName);
+  }
+);
+
+const activateProject = createAsyncThunk(
+  "projects/activate",
+  async ({ projectId }: { projectId: string }) => {
+    if (await window.bridge.activateProject(projectId)) {
+      return projectId;
+    }
+
+    return undefined;
+  }
+);
+
+const fetchPlugins = createAsyncThunk("app/plugins/load", async () => {
   const [importers, exporters, models] = await Promise.all([
     window.bridge.getImporters(),
     window.bridge.getExporters(),
@@ -69,7 +85,7 @@ const fetchPlugins = createAsyncThunk("editor/plugins/load", async () => {
   };
 });
 
-const fetchSample = createAsyncThunk("editor/samples/fetch", async ({ id }: { id: string }) => {
+const fetchSample = createAsyncThunk("app/samples/fetch", async ({ id }: { id: string }) => {
   const sample = await window.bridge.getSample(id);
 
   return sample;
@@ -78,9 +94,9 @@ const fetchSample = createAsyncThunk("editor/samples/fetch", async ({ id }: { id
 const importSamples = createAsyncThunk<
   string[],
   { id: string },
-  AppSliceState
->("editor/samples/import", async ({ id }, thunk) => {
-  const state = thunk.getState().projects;
+  AppReduxState
+>("app/samples/import", async ({ id }, thunk) => {
+  const state = thunk.getState().app;
   if (state.projectId) {
     return await window.bridge.importSamples(state.projectId, id);
   }
@@ -88,23 +104,31 @@ const importSamples = createAsyncThunk<
 });
 
 const loadModel = createAsyncThunk(
-  "editor/labeler/load",
+  "app/labeler/load",
   async ({
-    modelType,
-    modelPath,
+    modelId
   }: {
-    modelType: ValueOf<typeof ECVModelType>;
-    modelPath: string;
+    modelId: string
   }) => {
-    if (await window.bridge.loadModel(modelType, modelPath)) {
-      return modelType;
-    }
+    try {
+      return await toast.promise(createPromise(async () => {
+        if (await window.bridge.loadModel(modelId)) {
+          return modelId;
+        }
 
-    return undefined;
+        throw new Error("Failed to load model")
+      }), {
+        success: `Loaded Model`,
+        error: (e) => e instanceof Error ? e.message : "Unknown Error Loading Model",
+        loading: `Loading Model`
+      })
+    } catch (error) {
+      return undefined;
+    }
   }
 );
 
-const unloadModel = createAsyncThunk("editor/labeler/unload", async () => {
+const unloadModel = createAsyncThunk("app/labeler/unload", async () => {
   return await window.bridge.unloadModel();
 });
 
@@ -114,12 +138,11 @@ const autoLabel = createAsyncThunk<
     result: CvAnnotation[] | undefined;
   },
   { samplePath: string },
-  AppSliceState
->("editor/labeler/auto", async ({ samplePath: sampleId }, thunk) => {
+  AppReduxState
+>("app/labeler/auto", async ({ samplePath: sampleId }, thunk) => {
 
   return await toast.promise(createPromise(async () => {
-    const state = thunk.getState().editor;
-    const projectsState = thunk.getState().projects
+    const state = thunk.getState().app;
     const modelType = state.activeLabeler;
 
     if (modelType == undefined) {
@@ -129,7 +152,7 @@ const autoLabel = createAsyncThunk<
       }
     }
 
-    const annotationsToAdd = await window.bridge.doInference(modelType, `${projectsState.projectId}/images/${sampleId}`) ?? [];
+    const annotationsToAdd = await window.bridge.doInference(`${state.projectId}/images/${sampleId}`) ?? [];
 
 
     return {
@@ -137,18 +160,18 @@ const autoLabel = createAsyncThunk<
       result: annotationsToAdd.length > 0 && await window.bridge.createAnnotations(sampleId, annotationsToAdd) ? annotationsToAdd : []
     }
   }), {
-    success: (d) => `Added ${d.result?.length ?? 0} annotations`,
+    success: (d) => `Added ${d.result?.length ?? 0}  annotations`,
     error: `Failed to annotate`,
     loading: `Predicting`
   })
 });
 
-const loadAllSamples = createAsyncThunk("editor/samples/load", async () => {
+const loadAllSamples = createAsyncThunk("app/samples/load", async () => {
   return await window.bridge.getSampleIds();
 });
 
 
-const updatePoints = createAsyncThunk("editor/samples/annotations/points", async ({ sampleId, annotationIndex, points }: { sampleId: string; annotationIndex: number; points: IDatabasePoint[] }) => {
+const updatePoints = createAsyncThunk("app/samples/annotations/points", async ({ sampleId, annotationIndex, points }: { sampleId: string; annotationIndex: number; points: IDatabasePoint[] }) => {
   try {
     if (await window.bridge.updatePoints(points)) {
       return {
@@ -171,7 +194,7 @@ const updatePoints = createAsyncThunk("editor/samples/annotations/points", async
 
 
 export const EditorSlice = createSlice({
-  name: "editor",
+  name: "app",
   // `createSlice` will infer the state type from the `initialState` argument
   initialState,
   reducers: {
@@ -343,6 +366,12 @@ export const EditorSlice = createSlice({
         })
       }
     });
+    builder.addCase(createProject.fulfilled, (state, action) => {
+      state.projectId = action.payload;
+    });
+    builder.addCase(activateProject.fulfilled, (state, action) => {
+      state.projectId = action.payload;
+    });
   },
 });
 
@@ -360,6 +389,6 @@ export const {
   setLabelerContainerRect,
   onImageLoaded,
 } = EditorSlice.actions;
-export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins, fetchSample, loadAllSamples, updatePoints };
+export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins, fetchSample, loadAllSamples, updatePoints, createProject, activateProject };
 
 export default EditorSlice.reducer;

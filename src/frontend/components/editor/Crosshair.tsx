@@ -139,7 +139,7 @@ export default function Crosshair(props: CrosshairProps) {
   const lineColor = "white" ?? props.lineColor;
   const circleColor = "white" ?? props.circleColor;
 
-  const editorRect = useAppSelector((s) => s.editor.editorRect);
+  const editorRect = useAppSelector((s) => s.app.editorRect);
 
   return (
     <Canvas<CanvasRenderingContext2D>

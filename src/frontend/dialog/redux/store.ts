@@ -1,9 +1,11 @@
 /* eslint-disable import/no-named-as-default */
 import { configureStore } from "@reduxjs/toolkit";
-import AppSlice from "./slices/app";
+import DialogSlice from "./slices/dialog";
+import { connect, createDispatchHook } from "react-redux";
+import dialogStoreContext from "./context";
 export const store = configureStore({
   reducer: {
-    app: AppSlice,
+    dialog: DialogSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -15,3 +17,6 @@ export const store = configureStore({
 export type RootState = ReturnType<typeof store.getState>;
 // Inferred type: {posts: PostsState, comments: CommentsState, users: UsersState}
 export type AppDispatch = typeof store.dispatch;
+
+
+

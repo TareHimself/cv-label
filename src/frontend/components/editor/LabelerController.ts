@@ -158,7 +158,7 @@ class BoxDrawable extends Drawable {
                 },
                 () => {
                     store.dispatch(updatePoints({
-                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        sampleId: this.owner.reduxState.app.sampleIds[this.owner.reduxState.app.sampleIndex],
                         annotationIndex: this.drawerIndex,
                         points: this.annotation.points
                     }))
@@ -201,7 +201,7 @@ class BoxDrawable extends Drawable {
                     console.log("Moving Control point")
                 },() => {
                     store.dispatch(updatePoints({
-                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        sampleId: this.owner.reduxState.app.sampleIds[this.owner.reduxState.app.sampleIndex],
                         annotationIndex: this.drawerIndex,
                         points: [
                             point
@@ -318,7 +318,7 @@ class SegmentationDrawable extends Drawable {
                 },
                 () => {
                     store.dispatch(updatePoints({
-                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        sampleId: this.owner.reduxState.app.sampleIds[this.owner.reduxState.app.sampleIndex],
                         annotationIndex: this.drawerIndex,
                         points: this.annotation.points
                     }))
@@ -361,7 +361,7 @@ class SegmentationDrawable extends Drawable {
                     console.log("Moving Control point")
                 },() => {
                     store.dispatch(updatePoints({
-                        sampleId: this.owner.reduxState.editor.sampleIds[this.owner.reduxState.editor.sampleIndex],
+                        sampleId: this.owner.reduxState.app.sampleIds[this.owner.reduxState.app.sampleIndex],
                         annotationIndex: this.drawerIndex,
                         points: [
                             point
@@ -522,11 +522,11 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
             this.reduxState = store.getState();
 
             const currentSample =
-                this.reduxState.editor.samples[this.reduxState.editor.sampleIds[this.reduxState.editor.sampleIndex]];
+                this.reduxState.app.samples[this.reduxState.app.sampleIds[this.reduxState.app.sampleIndex]];
 
             const annotations = currentSample?.annotations ?? [];
 
-            this.selectedControlPoint = this.reduxState.editor.selectedAnnotationIndex;
+            this.selectedControlPoint = this.reduxState.app.selectedAnnotationIndex;
 
             if (this.shouldReplaceDrawers(annotations)) {
                 this.createDrawers(JSON.parse(JSON.stringify(annotations)))
@@ -578,8 +578,8 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         this.drawers = [];
 
         const [scaleX, scaleY] = [
-            this.reduxState.editor.labelerRect.width / this.reduxState.editor.sampleImageInfo.width,
-            this.reduxState.editor.labelerRect.height / this.reduxState.editor.sampleImageInfo.height,
+            this.reduxState.app.labelerRect.width / this.reduxState.app.sampleImageInfo.width,
+            this.reduxState.app.labelerRect.height / this.reduxState.app.sampleImageInfo.height,
         ];
 
         this.drawers = annotations.map((a, idx) => {
@@ -587,10 +587,10 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
             const drawer = a.type === ELabelType.BOX ? new BoxDrawable(this, clone(a), idx,{
                 x: scaleX,
                 y: scaleY
-            },this.reduxState.editor.sampleScale) : new SegmentationDrawable(this, clone(a), idx,{
+            },this.reduxState.app.sampleScale) : new SegmentationDrawable(this, clone(a), idx,{
                 x: scaleX,
                 y: scaleY
-            },this.reduxState.editor.sampleScale)
+            },this.reduxState.app.sampleScale)
             drawer.onCreate();
             return drawer;
         })
@@ -626,7 +626,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
         // const delta = data.step - this.lastDrawTime;
 
-        const currentSample = this.reduxState.editor.samples[this.reduxState.editor.sampleIds[this.reduxState.editor.sampleIndex]];
+        const currentSample = this.reduxState.app.samples[this.reduxState.app.sampleIds[this.reduxState.app.sampleIndex]];
 
         if (currentSample === undefined) {
             return;
