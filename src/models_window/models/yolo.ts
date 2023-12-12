@@ -4,10 +4,11 @@ import {
   CvSegmentAnnotation,
   ELabelType,
 } from "@types";
-import * as torch from "@nodeml/torch";
 import {v4 as uuidv4 } from 'uuid'
 import { masks2segmentsScaled, nonMaxSuppression, processMaskUpsample, scaleBoxes } from "./yoloUtils";
-import { dialog } from "@electron/remote";
+import { dialog, require as remoteRequire } from "@electron/remote";
+import type torchTypes from '@nodeml/torch'
+const torch: typeof import('@nodeml/torch') = remoteRequire("@nodeml/torch");
 
 export const enum EYoloModelType {
   Yolov8Detect,
@@ -39,9 +40,9 @@ abstract class Yolov8<
   Model extends EYoloModelType.Yolov8Detect
   ? CvBoxAnnotation[]
   : CvSegmentAnnotation[]> {
-  model: torch.jit.Module<Yolov8TorchscriptModelResult<Model>>;
+  model:  torchTypes.jit.Module<Yolov8TorchscriptModelResult<Model>>;
   constructor(
-    model: torch.jit.Module<Yolov8TorchscriptModelResult<Model>>
+    model: torchTypes.jit.Module<Yolov8TorchscriptModelResult<Model>>
   ) {
     super();
     this.model = model;
@@ -51,12 +52,12 @@ abstract class Yolov8<
 type Yolov8TorchscriptModelResult<
   Model extends EYoloModelType.Yolov8Detect | EYoloModelType.Yolov8Seg
 > = Model extends EYoloModelType.Yolov8Detect
-  ? torch.Tensor<"float">
-  : [torch.Tensor<"float">, torch.Tensor<"float">];
+  ? torchTypes.Tensor<"float">
+  : [torchTypes.Tensor<"float">, torchTypes.Tensor<"float">];
 
 export class Yolov8Detection extends Yolov8<EYoloModelType.Yolov8Detect> {
   constructor(
-    model: torch.jit.Module<
+    model: torchTypes.jit.Module<
       Yolov8TorchscriptModelResult<EYoloModelType.Yolov8Detect>
     >
   ) {
@@ -150,7 +151,7 @@ export class Yolov8Detection extends Yolov8<EYoloModelType.Yolov8Detect> {
 
 export class Yolov8Segmentation extends Yolov8<EYoloModelType.Yolov8Seg> {
   constructor(
-    model: torch.jit.Module<
+    model: torchTypes.jit.Module<
       Yolov8TorchscriptModelResult<EYoloModelType.Yolov8Seg>
     >
   ) {

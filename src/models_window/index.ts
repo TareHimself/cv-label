@@ -1,5 +1,5 @@
-import ComputerVisionModel from "@root/backend_models/models";
-import { Yolov8Detection, Yolov8Segmentation } from "@root/backend_models/models/yolo";
+import ComputerVisionModel from "@root/models_window/models";
+import { Yolov8Detection, Yolov8Segmentation } from "@root/models_window/models/yolo";
 import { getProjectsPath } from "@root/utils";
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid'

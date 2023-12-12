@@ -59,11 +59,11 @@ const config: ForgeConfig = {
             },
           },
           {
-            html: "./src/backend_models/index.html",
-            js: "./src/backend_models/index.ts",
+            html: "./src/models_window/index.html",
+            js: "./src/models_window/index.ts",
             name: "models_window",
             preload: {
-              js: "./src/backend_models/preload.ts",
+              js: "./src/models_window/preload.ts",
             },
           },
         ],
