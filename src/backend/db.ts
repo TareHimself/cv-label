@@ -48,7 +48,8 @@ export async function createOrOpenProject(projectPath: string) {
 
     const info = new Sequelize({
         dialect: 'sqlite',
-        storage: `${path.join(projectPath, 'info.db')}`
+        storage: `${path.join(projectPath, 'info.db')}`,
+        logging: false,
     });
 
     DatabaseSample.init({

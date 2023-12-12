@@ -16,7 +16,7 @@ export default function PluginSelectionList(props: PluginSelectionListProps) {
     }}>
     {props.plugins.map((plugin) => {
 
-        return <button onClick={() => {
+        return <button key={plugin.id} className='plugin-list-item' onClick={() => {
             props.onPluginSelected(plugin)
         }}>{plugin.displayName}</button>
     })}

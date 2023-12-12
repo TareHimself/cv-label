@@ -1,3 +1,5 @@
+import createLogger from '@root/logger';
+createLogger('main');
 
 import './db'
 import { app, BrowserWindow, protocol } from "electron";
@@ -93,8 +95,6 @@ const createWindow = async () => {
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   require("@electron/remote/main").enable(modelsWindow.webContents)
-  
-  modelsWindow.webContents
 
   await modelsWindow.loadURL(MODELS_WINDOW_WEBPACK_ENTRY)
 

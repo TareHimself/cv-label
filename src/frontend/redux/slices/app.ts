@@ -15,8 +15,9 @@ import { toast } from "react-hot-toast";
 
 const initialState: AppSliceState = {
   projectId: undefined,
-  samples: {},
+  loadedSamples: {},
   sampleIds: [],
+  samplesPendingAutoLabel: [],
   sampleIndex: 0,
   activeLabeler: undefined,
   mode: EEditorMode.SELECT,
@@ -98,7 +99,11 @@ const importSamples = createAsyncThunk<
 >("app/samples/import", async ({ id }, thunk) => {
   const state = thunk.getState().app;
   if (state.projectId) {
-    return await window.bridge.importSamples(state.projectId, id);
+    return toast.promise(window.bridge.importSamples(state.projectId, id),{
+      success: (d) => `Imported ${(d as string[]).length} Samples`,
+      loading: "Importing Samples",
+      error: "Failed To Import Samples"
+    });
   }
   return [];
 });
@@ -137,21 +142,23 @@ const autoLabel = createAsyncThunk<
     samplePath: string;
     result: CvAnnotation[] | undefined;
   },
-  { samplePath: string },
+  { sampleId: string },
   AppReduxState
->("app/labeler/auto", async ({ samplePath: sampleId }, thunk) => {
-
+>("app/labeler/auto", async ({ sampleId }, thunk) => {
+  console.log("Thunk called")
   return await toast.promise(createPromise(async () => {
     const state = thunk.getState().app;
-    const modelType = state.activeLabeler;
+    const modelId = state.activeLabeler;
 
-    if (modelType == undefined) {
+    if (modelId == undefined) {
+      console.log("Failed to label, model is undefined")
       return {
         samplePath: sampleId,
         result: undefined,
       }
     }
 
+    console.log("Labeling")
     const annotationsToAdd = await window.bridge.doInference(`${state.projectId}/images/${sampleId}`) ?? [];
 
 
@@ -167,13 +174,22 @@ const autoLabel = createAsyncThunk<
 });
 
 const loadAllSamples = createAsyncThunk("app/samples/load", async () => {
-  return await window.bridge.getSampleIds();
+  return toast.promise(window.bridge.getSampleIds(),{
+    success: (d) => `${(d as string[]).length} Samples Fetched`,
+    loading: "Fetching Sample ID's",
+    error: "Failed To Fetch Samples"
+  }) ?? [];
+
 });
 
 
 const updatePoints = createAsyncThunk("app/samples/annotations/points", async ({ sampleId, annotationIndex, points }: { sampleId: string; annotationIndex: number; points: IDatabasePoint[] }) => {
   try {
-    if (await window.bridge.updatePoints(points)) {
+    if (await toast.promise(window.bridge.updatePoints(points),{
+      success: `Points Updated`,
+      loading: "Updating Points",
+      error: "Failed To Update Points. Reverting"
+    })) {
       return {
         sampleId,
         annotationIndex,
@@ -199,13 +215,13 @@ export const AppSlice = createSlice({
   initialState,
   reducers: {
     addLabels: (state, action: PayloadAction<CvAnnotation[]>) => {
-      const current = state.samples[state.sampleIds[state.sampleIndex]];
+      const current = state.loadedSamples[state.sampleIds[state.sampleIndex]];
       if (current !== undefined) {
         current.annotations.push(...action.payload);
       }
     },
     editLabel: (state, action: PayloadAction<[number, CvAnnotation]>) => {
-      const current = state.samples[state.sampleIds[state.sampleIndex]];
+      const current = state.loadedSamples[state.sampleIds[state.sampleIndex]];
       if (current !== undefined) {
         current.annotations[action.payload[0]] = action.payload[1];
       }
@@ -331,9 +347,14 @@ export const AppSlice = createSlice({
       }
     });
 
+    builder.addCase(autoLabel.pending, (state, action) => {
+      state.samplesPendingAutoLabel.push(action.meta.arg.sampleId)
+    });
+
     builder.addCase(autoLabel.fulfilled, (state, action) => {
+      state.samplesPendingAutoLabel.splice(state.samplesPendingAutoLabel.indexOf(action.meta.arg.sampleId),1)
       if (action.payload.result !== undefined) {
-        const sample = state.samples[action.payload.samplePath]
+        const sample = state.loadedSamples[action.payload.samplePath]
         if (sample) {
           sample.annotations =
             action.payload.result;
@@ -348,14 +369,14 @@ export const AppSlice = createSlice({
     });
     builder.addCase(fetchSample.fulfilled, (state, action) => {
       if (action.payload !== undefined) {
-        state.samples[action.payload.id] = action.payload
+        state.loadedSamples[action.payload.id] = action.payload
       }
     });
     builder.addCase(loadAllSamples.fulfilled, (state, action) => {
       state.sampleIds.push(...action.payload)
     });
     builder.addCase(updatePoints.fulfilled, (state, action) => {
-      const annotation = state.samples[action.payload.sampleId]?.annotations[action.payload.annotationIndex];
+      const annotation = state.loadedSamples[action.payload.sampleId]?.annotations[action.payload.annotationIndex];
       if (annotation !== undefined) {
         action.payload.points.forEach((c) => {
           const point = annotation.points.find(d => d.id === c.id)

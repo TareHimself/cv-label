@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import EditorActionPanel from "./EditorActionPanel";
 import { AiOutlineZoomIn, AiOutlineZoomOut } from "react-icons/ai";
 import { BsBoundingBoxCircles, BsFiles } from "react-icons/bs";
@@ -29,7 +29,7 @@ import {
 import { EEditorMode } from "@types";
 import useElementRect from "@hooks/useElementRect";
 import Crosshair from "./Crosshair";
-import SidePanel from "./SidePanel";
+//import SidePanel from "./SidePanel";
 import { closeDialog, createDialog } from "@frontend/dialog";
 import DialogBox from "@components/DialogBox";
 import PluginSelectionList from "./PluginSelectionList";
@@ -57,17 +57,17 @@ export default function Editor() {
     (s) => s.app.sampleIds[s.app.sampleIndex]
   );
 
-  const currentSample = useAppSelector((s) => s.app.samples[currentSampleId]);
+  const currentSample = useAppSelector((s) => s.app.loadedSamples[currentSampleId]);
 
   const isLoadingLabeler = useAppSelector((s) => s.app.isLoadingLabeler);
 
   const editorMode = useAppSelector((s) => s.app.mode);
 
-  const [lastIndexLabeled, setLastIndexLabeled] = useState(-1);
-
   const importers = useAppSelector((s) => s.app.availableImporters);
 
   const models = useAppSelector((s) => s.app.availableModels);
+
+  const samplesPendingAutoLabel = useAppSelector((s) => s.app.samplesPendingAutoLabel)
 
   useElementRect(
     useCallback(() => editorRef.current, []),
@@ -104,7 +104,7 @@ export default function Editor() {
   }, [dispatch]);
 
   // useEffect(() => {
-  //   dispatch(
+  //   dispatch(f
   //     importSamples({
   //       id: "files",
   //     })
@@ -114,31 +114,17 @@ export default function Editor() {
   useEffect(() => {
     if (
       labeler !== undefined &&
-      currentSample &&
-      lastIndexLabeled !== currentSampleIndex &&
-      currentSample.annotations.length === 0
+      currentSample !== undefined &&
+      currentSample.annotations.length === 0 && !samplesPendingAutoLabel.includes(currentSample.id)
     ) {
-      console.log("Labeling", currentSample);
+      console.log("Labeling", currentSample.id);
       dispatch(
         autoLabel({
-          samplePath: currentSample.id,
+          sampleId: currentSample.id,
         })
       );
-      setLastIndexLabeled(currentSampleIndex);
     }
-  }, [currentSample, currentSampleIndex, dispatch, lastIndexLabeled, labeler]);
-
-  // useEffect(() => {
-  //   if (currentSample && currentSample.labels.length === 0) {
-  //     labeler.loadModel("./yolo-seg.onnx").then(() => {
-  //       labeler.predict(currentSample.path).then((a) => {
-  //         if (a !== undefined) {
-  //           dispatch(addLabels(a));
-  //         }
-  //       });
-  //     });
-  //   }
-  // }, [currentSample, dispatch, labeler]);
+  }, [currentSample, currentSampleIndex, dispatch, labeler, samplesPendingAutoLabel]);
 
   return (
     <div id={"editor"} ref={(r) => (editorRef.current = r)}>
@@ -244,12 +230,6 @@ export default function Editor() {
                     />
                   </DialogBox>
                 ));
-
-                // dispatch(
-                //   loadModel({
-                //     modelPath: "./seg.torchscript",
-                //   })
-                // );
               } else {
                 dispatch(unloadModel());
               }
@@ -262,16 +242,25 @@ export default function Editor() {
           <Icon
             icon={FaFileImport}
             onClicked={() => {
-              console.log(
-                "Using importer",
-                importers.find((d) => d.displayName === "Files")
-              );
-              dispatch(
-                importSamples({
-                  id:
-                    importers.find((d) => d.displayName === "Files")?.id ?? "",
-                })
-              );
+              createDialog((p) => (
+                <DialogBox
+                  onCloseRequest={() => {
+                    closeDialog(p.id);
+                  }}
+                >
+                  <PluginSelectionList
+                    plugins={importers}
+                    onPluginSelected={(plugin) => {
+                      dispatch(
+                        importSamples({
+                          id: plugin.id,
+                        })
+                      );
+                      closeDialog(p.id);
+                    }}
+                  />
+                </DialogBox>
+              ));
             }}
           />
           <Icon icon={FaUndoAlt} />

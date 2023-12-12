@@ -1,3 +1,6 @@
+import createLogger from '@root/logger';
+createLogger('models');
+
 import ComputerVisionModel from "@root/models_window/models";
 import { Yolov8Detection, Yolov8Segmentation } from "@root/models_window/models/yolo";
 import { getProjectsPath } from "@root/utils";
@@ -74,6 +77,7 @@ window.backendModels.handle("unloadModel", async () => {
 });
 
 window.backendModels.handle("getSupportedModels", async () => {
+    
     return DETECTORS.map((a) => ({
         id: a.id,
         displayName: a.name,

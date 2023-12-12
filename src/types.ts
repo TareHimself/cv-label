@@ -122,8 +122,9 @@ export interface INewSample {
 
 export type AppSliceState = {
   projectId: string | undefined;
-  samples: { [key: string]: ActiveDatabaseSample | undefined };
+  loadedSamples: { [key: string]: ActiveDatabaseSample | undefined };
   sampleIds: string[];
+  samplesPendingAutoLabel: string[];
   sampleIndex: number;
   selectedAnnotationIndex: number;
   activeLabeler?: string;

@@ -25,6 +25,8 @@
  *  });
  * ```
  */
-
+import createLogger from '@root/logger';
+createLogger('display');
+window.debugHitTest = false
 import './index.css';
 import './index'

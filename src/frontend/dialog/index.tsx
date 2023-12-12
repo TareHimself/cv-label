@@ -31,7 +31,6 @@ function DialogManagerChild(props: DialogManagerProps) {
 
     // const [dialogs,setDialogs] = useState<IActiveDialog[]>([]);
   const dialogs = useAppSelector((s) => {
-    console.log("STORE",s)
     return s.dialog.dialogs
   });
 

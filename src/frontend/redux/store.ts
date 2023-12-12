@@ -1,6 +1,10 @@
 /* eslint-disable import/no-named-as-default */
 import { configureStore } from "@reduxjs/toolkit";
+import { enableMapSet } from "immer";
 import AppSlice from "./slices/app";
+
+enableMapSet()
+
 export const store = configureStore({
   reducer: {
     app: AppSlice,

@@ -243,6 +243,21 @@ class BoxDrawable extends Drawable {
                 this.drawControlPoint(ctx,point.x * this.scale.x, point.y * this.scale.y,4,"white",1,"black")
             }
         }
+
+        if(window.debugHitTest){
+            const fillColor = `rgba(${this.drawableHitId},0.3)`;
+
+            this.drawPolygon(ctx,points,(a) => ({x: a.x * this.scale.x, y: a.y * this.scale.y}),fillColor,true,true,1);
+
+            if (this.isSelected) {
+                for (let i = 0; i < this.annotation.points.length; i++) {
+                    const point = this.annotation.points[i];
+                    const hitId = this.controlPointIds[i];
+
+                    this.drawControlPoint(ctx,point.x * this.scale.x, point.y * this.scale.y,5,`rgb(${hitId})`)
+                }
+            }
+        }
     }
 
     override drawBounds(data: ILabelerDrawData<OffscreenCanvasRenderingContext2D>): void {
@@ -267,6 +282,7 @@ class BoxDrawable extends Drawable {
         const fillColor = `rgb(${this.drawableHitId})`;
 
         this.drawPolygon(ctx,points,(a) => ({x: a.x * this.scale.x, y: a.y * this.scale.y}),fillColor,true,true,1);
+        
     }
 
     override drawControlPointBounds(
@@ -385,6 +401,21 @@ class SegmentationDrawable extends Drawable {
         if (this.isSelected) {
             for (const point of this.annotation.points) {
                 this.drawControlPoint(ctx,point.x * this.scale.x, point.y * this.scale.y,4,"white",1,"black")
+            }
+        }
+
+        if(window.debugHitTest){
+            const fillColor = `rgba(${this.drawableHitId},0.3)`;
+
+            this.drawPolygon(ctx,this.annotation.points,(a) => ({x: a.x * this.scale.x, y: a.y * this.scale.y}),fillColor,true,true,1);
+
+            if (this.isSelected) {
+                for (let i = 0; i < this.annotation.points.length; i++) {
+                    const point = this.annotation.points[i];
+                    const hitId = this.controlPointIds[i];
+
+                    this.drawControlPoint(ctx,point.x * this.scale.x, point.y * this.scale.y,5,`rgb(${hitId})`)
+                }
             }
         }
     }
@@ -522,7 +553,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
             this.reduxState = store.getState();
 
             const currentSample =
-                this.reduxState.app.samples[this.reduxState.app.sampleIds[this.reduxState.app.sampleIndex]];
+                this.reduxState.app.loadedSamples[this.reduxState.app.sampleIds[this.reduxState.app.sampleIndex]];
 
             const annotations = currentSample?.annotations ?? [];
 
@@ -626,7 +657,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
         // const delta = data.step - this.lastDrawTime;
 
-        const currentSample = this.reduxState.app.samples[this.reduxState.app.sampleIds[this.reduxState.app.sampleIndex]];
+        const currentSample = this.reduxState.app.loadedSamples[this.reduxState.app.sampleIds[this.reduxState.app.sampleIndex]];
 
         if (currentSample === undefined) {
             return;

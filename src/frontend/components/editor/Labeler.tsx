@@ -22,7 +22,7 @@ export default function Labeler(props: LabelerProps) {
   );
 
   const currentSample = useAppSelector(
-    (s) => s.app.samples[currentSampleId]
+    (s) => s.app.loadedSamples[currentSampleId]
   );
 
   const isLoadingSample = useAppSelector(
