@@ -1,10 +1,5 @@
 import createLogger from '@root/logger';
 createLogger('main');
-import * as cv from "@nodeml/opencv"
-
-console.log(cv.CHAIN_APPROX_NONE)
-import torch from '@nodeml/torch'
-torch.tensor([1,2,3])
 import './db'
 import { app, BrowserWindow, protocol } from "electron";
 import * as fs from "fs";

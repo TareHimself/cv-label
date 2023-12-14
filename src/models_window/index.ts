@@ -1,18 +1,6 @@
 import createLogger from '@root/logger';
-import { getProjectsPath, overrideLoad } from "@root/utils";
+import { getProjectsPath } from "@root/utils";
 createLogger('models');
-overrideLoad((req) => {
-    if(req.includes("nodeml_torch")){
-        if(req.startsWith("\\\\?\\")){
-            console.log("Handling",req)
-        }
-    
-        console.log("Other",req)
-    }
-    
-
-    return req
-})
 
 import ComputerVisionModel from "@root/models_window/models";
 import { Yolov8Detection, Yolov8Segmentation } from "@root/models_window/models/yolo";
