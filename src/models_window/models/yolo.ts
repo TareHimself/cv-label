@@ -54,6 +54,7 @@ type Yolov8TorchscriptModelResult<
   ? torch.Tensor<"float">
   : [torch.Tensor<"float">, torch.Tensor<"float">];
 
+
 export class Yolov8Detection extends Yolov8<EYoloModelType.Yolov8Detect> {
   constructor(
     model: torch.jit.Module<

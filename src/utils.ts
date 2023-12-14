@@ -1,5 +1,6 @@
 import path from "path";
 import { app } from "electron";
+import Module from 'module';
 
 export function union(box1: number[], box2: number[]) {
   const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
@@ -122,5 +123,14 @@ export function isDev(){
 
 export function clone<T>(item: T){
   return JSON.parse(JSON.stringify(item)) as T
+}
+
+export function overrideLoad(overrider: (request: string) => string){
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const originalLoader = (Module as any)._load;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (Module as any)._load = (request: string, parent: NodeJS.Module) => {
+    return originalLoader(overrider(request), parent);
+  };
 }
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

@@ -26,7 +26,7 @@
  * ```
  */
 import createLogger from '@root/logger';
-createLogger('display');
+createLogger('renderer');
 window.debugHitTest = false
 import './index.css';
 import './index'

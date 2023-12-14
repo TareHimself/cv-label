@@ -43,9 +43,7 @@ export function buildExternalsObject(externals: string[]) {
     externals.forEach(c => findDependencies(c, searched, deps));
 
     deps.forEach(c => result[c] = `commonjs ${c}`);
-
-    // console.log(result)
-    // fs.writeFileSync("data.json", JSON.stringify(result, null, 4))
+    
     return result;
 }
 
