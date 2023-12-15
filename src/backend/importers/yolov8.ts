@@ -3,9 +3,6 @@ import { ComputerVisionImporter } from ".";
 import { dialog } from "electron";
 import { withNodeWorker } from "@root/backend/worker";
 
-
-
-
 export class YoloV8Importer extends ComputerVisionImporter {
   constructor() {
     super("Yolov8");
@@ -24,14 +21,14 @@ export class YoloV8Importer extends ComputerVisionImporter {
 
     return await withNodeWorker(
       async (datasetPath, boxLabelType) => {
-        const [fs, path, sharp, uuid] = eval(
-          `[require('fs'),require('path'),require('sharp'),require('uuid')]`
-        ) as [
-            typeof import("fs"),
-            typeof import("path"),
-            typeof import("sharp"),
-            typeof import("uuid"),
-          ];
+        const fs = __non_webpack_require__("fs");
+        const path = __non_webpack_require__("path")
+        const sharp = __non_webpack_require__("sharp")
+        const uuid = __non_webpack_require__("uuid");
+
+        const log = console.log.bind("[Yolov8 Importer]")
+        
+        log("Processing Yolov8 Dataset At Path",datasetPath)
 
         const immediateFolders = await fs.promises.readdir(datasetPath);
 
@@ -50,6 +47,8 @@ export class YoloV8Importer extends ComputerVisionImporter {
           const labelsPath = path.join(datasetPath, folder, "labels");
 
           const images = await fs.promises.readdir(imagesPath);
+
+          log("Proceccing images at path",imagesPath)
 
           const imageDims = await Promise.allSettled(
             images.map((a) =>
@@ -135,9 +134,12 @@ export class YoloV8Importer extends ComputerVisionImporter {
           );
 
           allSamples.push(...samples);
+
+          log("Processed",samples.length,"From Path",path.join(datasetPath,folder))
+          log("Processed",allSamples.length,"Total Samples")
         }
 
-        console.log("DONE");
+        log("Processing Completed With",allSamples.length,"Samples");
 
         return allSamples;
       },

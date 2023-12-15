@@ -169,5 +169,17 @@ export type Vector2D = {
   y: number;
 }
 
+interface ITypedRequires{
+  fs: typeof import('fs')
+  sharp: typeof import('sharp')
+  uuid: typeof import('uuid')
+  path: typeof import('node:path')
+}
+
+declare global {
+  const __non_webpack_require__: <K extends keyof ITypedRequires>(id: K) => ITypedRequires[K]
+}
+
+
 
 export {}

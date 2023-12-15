@@ -55,11 +55,9 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
 
     return await withNodeWorker(
       async (datasetPath, segmentLabelType) => {
-        const [fs, path,uuid] = eval(`[require('fs'),require('path'),require('uuid')]`) as [
-          typeof import("fs"),
-          typeof import("path"),
-          typeof import('uuid')
-        ];
+        const fs = __non_webpack_require__("fs");
+        const path = __non_webpack_require__("path");
+        const uuid = __non_webpack_require__("uuid");
 
         const immediateFolders = await fs.promises.readdir(datasetPath);
         const allSamples: INewSample[] = [];

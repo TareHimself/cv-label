@@ -37,12 +37,15 @@ export class ComputerVisionImporter {
 
     await createOrOpenProject(projectPath)
 
-    return await Promise.all(imported.map(async (data) => {
-      const newName = xxh64(await fs.promises.readFile(data.path)).toString();
+    let total = imported.length;
 
-      await fs.promises.copyFile(data.path,path.join(projectPath,"images",newName));
+    let importedNum = 0;
 
+    return await Promise.allSettled(imported.map(async (data) => {
       try {
+        const newName = xxh64(await fs.promises.readFile(data.path)).toString();
+
+        await fs.promises.copyFile(data.path,path.join(projectPath,"images",newName));
 
         const annotationIds = await Promise.all(data.annotations.map(async (ann) => {
           const annotationId = uuidv4();
@@ -74,12 +77,18 @@ export class ComputerVisionImporter {
           annotations: annotationIds,
         })
 
+        importedNum++;
+
+        console.log("Imported",importedNum,"/",total)
         return newName;
       } catch (error) {
         console.error(error);
-        return ""
+        total--;
+        
+        console.log("Imported",importedNum,"/",total)
+        throw error
       }
-    })).then(c => c.filter(a => a.length > 0))
+    })).then(c => c.filter(a => a.status === 'fulfilled' && a.value.length > 0).map(a => a.status === 'fulfilled' ? a.status : ""))
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected async import(): Promise<INewSample[]> {

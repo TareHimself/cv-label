@@ -7,11 +7,11 @@ import path from "path";
 import 'sqlite3'
 import '@node-rs/xxhash'
 import { mainToModels, mainToRenderer } from "../ipc-impl";
-import { YoloV8Importer } from "./computer-vision/importers/yolov8";
-import { CocoSegmentationImporter } from "./computer-vision/importers/coco";
-import { FilesImporter } from "./computer-vision/importers/files";
-import { ComputerVisionExporter } from "./computer-vision/exporters";
-import { ComputerVisionImporter } from "./computer-vision/importers";
+import { YoloV8Importer } from "./importers/yolov8";
+import { CocoSegmentationImporter } from "./importers/coco";
+import { FilesImporter } from "./importers/files";
+import { ComputerVisionExporter } from "./exporters";
+import { ComputerVisionImporter } from "./importers";
 import { getProjectsPath, isDev } from '@root/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -82,7 +82,7 @@ const createWindow = async () => {
   });
 
   modelsWindow = new BrowserWindow({
-    show: isDev(),
+    show: false ?? isDev(),
     webPreferences: {
       preload: MODELS_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegrationInWorker: true,
@@ -124,9 +124,9 @@ const createWindow = async () => {
   })
 
   if(isDev()){
-    modelsWindow.webContents.openDevTools({
-      mode: 'detach'
-    });
+    // modelsWindow.webContents.openDevTools({
+    //   mode: 'detach'
+    // });
 
       // Open the DevTools.
     mainWindow.webContents.openDevTools({
