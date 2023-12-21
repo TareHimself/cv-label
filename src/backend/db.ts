@@ -2,10 +2,11 @@
 import { Sequelize, Model, DataTypes } from "sequelize";
 import path from 'path';
 import { v4 as uuidv4 } from "uuid";
-import { ELabelType, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample } from "@types";
+import { ELabelType, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample, IDatabaseSampleOrder } from "@types";
 import { mainToRenderer } from "@root/ipc-impl";
 import * as fs from 'fs';
 import { getProjectsPath } from "@root/utils";
+
 
 
 export class DatabasePoint extends Model<IDatabasePoint, IDatabasePoint> {
@@ -13,8 +14,6 @@ export class DatabasePoint extends Model<IDatabasePoint, IDatabasePoint> {
     declare x: number;
     declare y: number;
 }
-
-
 
 export class DatabaseAnnotation extends Model<IDatabaseAnnotation<string[]>, IDatabaseAnnotation<string[]>> {
     declare id: string;
@@ -29,6 +28,11 @@ export class DatabaseSample extends Model<IDatabaseSample<string[]>, Pick<IDatab
     declare createdAt: string;
 }
 
+export class DatabaseSampleOrder extends Model<IDatabaseSampleOrder> {
+    declare id: string;
+    declare index: bigint;
+}
+
 
 export interface IActiveProject {
     info: Sequelize;
@@ -37,7 +41,10 @@ export interface IActiveProject {
 
 let activeProject: IActiveProject | undefined = undefined;
 
+let latestInsertedIndex = 0n;
+
 export async function createOrOpenProject(projectPath: string) {
+
 
     if (activeProject) {
         if (activeProject.path === projectPath) {
@@ -64,7 +71,7 @@ export async function createOrOpenProject(projectPath: string) {
             type: DataTypes.DATE
         }
     }, {
-        sequelize: info, tableName: "samples", updatedAt: false, hooks: {
+        sequelize: info, tableName: "samples", hooks: {
             beforeValidate(attributes, options) {
                 if (attributes.annotations !== undefined) {
                     attributes.annotations = (attributes.annotations.join(',') as unknown as string[])
@@ -147,20 +154,48 @@ export async function createOrOpenProject(projectPath: string) {
         }
     }, { sequelize: info, tableName: "points" })
 
+    DatabaseSampleOrder.init({
+      id: {
+        type: DataTypes.STRING,
+        primaryKey: true
+      },
+      index: {
+        type: DataTypes.BIGINT,
+      }
+    },{
+        sequelize: info, tableName: 'sample_order'
+    })
+
     DatabaseSample.hasMany(DatabaseAnnotation)
     DatabaseAnnotation.belongsTo(DatabaseSample)
 
     DatabaseAnnotation.hasMany(DatabasePoint)
     DatabasePoint.belongsTo(DatabaseAnnotation)
 
+    DatabaseSampleOrder.hasOne(DatabaseSample)
+    DatabaseSample.belongsTo(DatabaseSampleOrder)
+
     activeProject = {
         info,
         path: projectPath
     }
 
-    await Promise.all([DatabaseSample.sync(), DatabaseAnnotation.sync(), DatabasePoint.sync()])
+    await Promise.all([DatabaseSampleOrder.sync(),DatabaseSample.sync(), DatabaseAnnotation.sync(), DatabasePoint.sync()])
 
+    console.log("Created project")
     return;
+}
+
+export function createSampleInsertionIndex(){
+    return latestInsertedIndex++;
+}
+
+export function getActiveProject(){
+    return activeProject
+}
+
+export async function insertSample(sample: IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]>){
+    
 }
 
 export async function findSampleByPk(sampleId: string): Promise<IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]> | undefined> {
@@ -322,9 +357,9 @@ mainToRenderer.handle("getSample", async (sampleId) => {
 
 mainToRenderer.handle("getSampleIds", async () => {
     try {
-        return await DatabaseSample.findAll({
+        return await DatabaseSampleOrder.findAll({
             attributes: ['id'],
-            order: [['createdAt', 'DESC']]
+            order: [['index', 'ASC']]
         }).then(c => c.map(d => d.id))
     } catch (error) {
         console.error(error);

@@ -1,7 +1,10 @@
 import { ELabelType, INewSample } from "@types";
 import { ComputerVisionImporter } from ".";
 import { dialog } from "electron";
-import { withNodeWorker } from "@root/backend/worker";
+import path from 'path';
+import sharp from 'sharp';
+import * as fs from 'fs';
+import { v4 as uuidv4} from 'uuid';
 
 export class YoloV8Importer extends ComputerVisionImporter {
   constructor() {
@@ -19,14 +22,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
 
     const datasetPath = dialogResult.filePaths[0];
 
-    return await withNodeWorker(
-      async (datasetPath, boxLabelType) => {
-        const fs = __non_webpack_require__("fs");
-        const path = __non_webpack_require__("path")
-        const sharp = __non_webpack_require__("sharp")
-        const uuid = __non_webpack_require__("uuid");
-
-        const log = console.log.bind("[Yolov8 Importer]")
+    const log = console.log.bind("[Yolov8 Importer]")
         
         log("Processing Yolov8 Dataset At Path",datasetPath)
 
@@ -48,7 +44,7 @@ export class YoloV8Importer extends ComputerVisionImporter {
 
           const images = await fs.promises.readdir(imagesPath);
 
-          log("Proceccing images at path",imagesPath)
+          log("Processing images at path",imagesPath)
 
           const imageDims = await Promise.allSettled(
             images.map((a) =>
@@ -102,21 +98,21 @@ export class YoloV8Importer extends ComputerVisionImporter {
                       const x2 = x1 + w * width;
                       const y2 = y1 + h * height;
                       return {
-                        id: uuid.v4(),
+                        id: uuidv4(),
                         points: [{
-                          id: uuid.v4(),
+                          id: uuidv4(),
                           x: x1,
                           y: y1,
 
                         },
                         {
-                          id: uuid.v4(),
+                          id: uuidv4(),
                           x: x2,
                           y: y2,
                         }
                         ],
                         class: Math.floor(cls),
-                        type: boxLabelType as ELabelType.BOX,
+                        type: ELabelType.BOX,
                       };
                     }),
                   } as INewSample;
@@ -142,9 +138,5 @@ export class YoloV8Importer extends ComputerVisionImporter {
         log("Processing Completed With",allSamples.length,"Samples");
 
         return allSamples;
-      },
-      datasetPath,
-      ELabelType.BOX
-    );
   }
 }

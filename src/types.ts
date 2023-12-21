@@ -2,7 +2,7 @@ import { PropsWithChildren } from "react";
 
 export type ValueOf<E> = E[keyof E];
 
-
+export type Without<T,K> = T[Exclude<keyof T,K>]
 
 export const enum ELabelType {
   BOX,
@@ -39,6 +39,11 @@ export interface IDatabaseSample<T = string[]> {
   id: string;
   annotations: T;
   createdAt: string;
+}
+
+export interface IDatabaseSampleOrder {
+  id: string;
+  index: bigint;
 }
 
 export type ActiveDatabaseSample = IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]>

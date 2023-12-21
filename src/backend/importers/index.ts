@@ -1,7 +1,7 @@
 import { INewSample } from "@types";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
-import { DatabaseAnnotation, DatabasePoint, DatabaseSample, createOrOpenProject } from "@root/backend/db";
+import { DatabaseAnnotation, DatabasePoint, DatabaseSample, DatabaseSampleOrder, createOrOpenProject, createSampleInsertionIndex, getActiveProject } from "@root/backend/db";
 import * as fs from 'fs'
 import { xxh64 } from '@node-rs/xxhash'
 import { getProjectsPath } from "@root/utils";
@@ -45,41 +45,54 @@ export class ComputerVisionImporter {
       try {
         const newName = xxh64(await fs.promises.readFile(data.path)).toString();
 
-        await fs.promises.copyFile(data.path,path.join(projectPath,"images",newName));
+        const activeProject = getActiveProject();
 
-        const annotationIds = await Promise.all(data.annotations.map(async (ann) => {
-          const annotationId = uuidv4();
+        if(!activeProject) throw new Error("There is no active project");
 
-          const pointIds = await Promise.all(ann.points.map(async (pt) => {
-            const pointId = uuidv4();
+        await activeProject.info.transaction(async ()=>{
 
-            await DatabasePoint.create({
-              id: pointId,
-              x: pt.x,
-              y: pt.y
+          const annotationIds = await Promise.all(data.annotations.map(async (ann) => {
+            const annotationId = uuidv4();
+  
+            const pointIds = await Promise.all(ann.points.map(async (pt) => {
+              const pointId = uuidv4();
+  
+              await DatabasePoint.create({
+                id: pointId,
+                x: pt.x,
+                y: pt.y
+              })
+  
+              return pointId
+            }))
+  
+            await DatabaseAnnotation.create({
+              id: annotationId,
+              points: pointIds,
+              type: ann.type,
+              class: ann.class
             })
-
-            return pointId
+  
+            return annotationId;
           }))
-
-          await DatabaseAnnotation.create({
-            id: annotationId,
-            points: pointIds,
-            type: ann.type,
-            class: ann.class
+  
+          await DatabaseSample.create({
+            id: newName,
+            annotations: annotationIds,
           })
 
-          return annotationId;
-        }))
+          await DatabaseSampleOrder.create({
+            id: newName,
+            index: createSampleInsertionIndex()
+          })
 
-        await DatabaseSample.create({
-          id: newName,
-          annotations: annotationIds,
+          await fs.promises.copyFile(data.path,path.join(projectPath,"images",newName));
+
+          importedNum++;
+
+          console.log("Imported",importedNum,"/",total)
         })
-
-        importedNum++;
-
-        console.log("Imported",importedNum,"/",total)
+        
         return newName;
       } catch (error) {
         console.error(error);
