@@ -65,6 +65,14 @@ const config: ForgeConfig = {
               js: "./src/models_window/preload.ts",
             },
           },
+          {
+            html: "./src/io_window/index.html",
+            js: "./src/io_window/index.ts",
+            name: "io_window",
+            preload: {
+              js: "./src/io_window/preload.ts",
+            },
+          },
         ],
       },
       packageSourceMaps: true,

@@ -2,11 +2,13 @@ import { PropsWithChildren } from "react";
 
 export type ValueOf<E> = E[keyof E];
 
-export type Without<T,K> = T[Exclude<keyof T,K>]
+export type Without<T,K extends keyof T> = T[Exclude<keyof T,K>]
+
+export type IdFieldUpdate<T extends { id: unknown }> = Partial<T> & { id: T['id']}
 
 export const enum ELabelType {
-  BOX,
-  SEGMENT,
+  BOX = 0,
+  SEGMENT = 1,
 }
 
 export const enum EEditorMode {
@@ -38,12 +40,17 @@ export interface IDatabaseAnnotation<T = string[]> {
 export interface IDatabaseSample<T = string[]> {
   id: string;
   annotations: T;
-  createdAt: string;
+  //createdAt: string;
 }
 
-export interface IDatabaseSampleOrder {
+// export interface IDatabaseSampleOrder {
+//   id: string;
+//   index: bigint;
+// }
+
+export interface IDatabaseSampleList {
   id: string;
-  index: bigint;
+  samples: string[]
 }
 
 export type ActiveDatabaseSample = IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]>
@@ -55,6 +62,8 @@ export type IRendererToMainEvents = {
   windowClose: () => void;
   getPlatform: () => NodeJS.Platform;
   isDev: () => boolean;
+
+
   importSamples: (projectId: string, importerId: string) => Promise<string[]>;
   getImporters: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
@@ -67,6 +76,8 @@ export type IRendererToMainEvents = {
   createPoints: (annotationId: string, points: string[]) => Promise<boolean>
   updatePoints: (points: IDatabasePoint[]) => Promise<boolean>
   removePoints: (sampleId:string,annotationId: string, points: string[]) => Promise<boolean>
+
+
   saveImage: (imageString: string) => Promise<boolean>
 
 
@@ -92,6 +103,21 @@ export type IMainToModelsEvents = {
     imagePath: string
   ) => Promise<CvAnnotation[] | undefined>;
   getSupportedModels: () => Promise<IPluginInfo[]>;
+};
+
+export type IMainToIoEvents = {
+  importSamples: (projectId: string, importerId: string) => Promise<string[]>;
+  getImporters: () => Promise<IPluginInfo[]>;
+  getExporters: () => Promise<IPluginInfo[]>;
+  createProject: (name: string) => Promise<string | undefined>;
+  getSample: (sampleId: string) => Promise<ActiveDatabaseSample | undefined>
+  getSampleIds: () => Promise<string[]>
+  activateProject: (projectId: string) => Promise<boolean>
+  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation<IDatabasePoint[]>[]) => Promise<boolean>
+  removeAnnotations: (sampleId: string, annotations: string[]) => Promise<boolean>
+  createPoints: (annotationId: string, points: string[]) => Promise<boolean>
+  updatePoints: (points: IDatabasePoint[]) => Promise<boolean>
+  removePoints: (sampleId:string,annotationId: string, points: string[]) => Promise<boolean>
 };
 
 export type IMainToRendererEvents = {
@@ -183,6 +209,9 @@ interface ITypedRequires{
 
 declare global {
   const __non_webpack_require__: <K extends keyof ITypedRequires>(id: K) => ITypedRequires[K]
+  interface ObjectConstructor {
+    keys<T>(obj: T): Array<keyof T>;
+  }
 }
 
 

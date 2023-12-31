@@ -3,6 +3,8 @@ import type { Configuration } from "webpack";
 import path from "path";
 import { rules } from "./webpack.rules";
 import { plugins } from "./webpack.plugins";
+import { buildExternalsObject } from "./webpack.utils";
+import { externals } from "./webpack.constants";
 
 rules.push({
   test: /\.css$/,
@@ -28,6 +30,7 @@ export const rendererConfig: Configuration = {
       "@types": path.resolve(__dirname, path.join("src", "types.ts")),
     },
   },
+  externals: buildExternalsObject(externals)
   // optimization: {
   //   minimize: false
   // }

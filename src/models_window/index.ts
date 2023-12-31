@@ -29,7 +29,7 @@ const DETECTORS: IDetectorInfo[] = [{
     }
 ]
 
-window.backendModels.handle("doInference", async (imagePath) => {
+window.modelsBridge.handle("doInference", async (imagePath) => {
     if (!detector) {
         console.error("Inference was attempted with no model");
         return undefined;
@@ -46,7 +46,7 @@ window.backendModels.handle("doInference", async (imagePath) => {
     }
 });
 
-window.backendModels.handle("loadModel", async (modelId) => {
+window.modelsBridge.handle("loadModel", async (modelId) => {
     try {
         if (detector !== undefined) {
             detector?.cleanup();
@@ -62,7 +62,7 @@ window.backendModels.handle("loadModel", async (modelId) => {
     }
 });
 
-window.backendModels.handle("unloadModel", async () => {
+window.modelsBridge.handle("unloadModel", async () => {
     try {
         if (detector) {
             const oldDetector = detector;
@@ -77,7 +77,7 @@ window.backendModels.handle("unloadModel", async () => {
     return false;
 });
 
-window.backendModels.handle("getSupportedModels", async () => {
+window.modelsBridge.handle("getSupportedModels", async () => {
     
     return DETECTORS.map((a) => ({
         id: a.id,

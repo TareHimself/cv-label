@@ -1,10 +1,10 @@
 import { ELabelType, INewSample } from "@types";
 import { ComputerVisionImporter } from ".";
-import { dialog } from "electron";
 import path from 'path';
-import sharp from 'sharp';
 import * as fs from 'fs';
 import { v4 as uuidv4} from 'uuid';
+import { dialog ,require as remoteRequire } from "@electron/remote";
+import sharp from "sharp"
 
 export class YoloV8Importer extends ComputerVisionImporter {
   constructor() {

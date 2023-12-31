@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useEffect, useId } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 
 
 export type CleanupFn = () => void;
@@ -98,6 +98,7 @@ export default function Canvas<ContextType extends RenderingContext>(props: Canv
   }, [canvasId, controller]);
 
   return (
+    <>
     <canvas
       id={canvasId}
       style={{...(props.style ?? {}),
@@ -105,6 +106,7 @@ export default function Canvas<ContextType extends RenderingContext>(props: Canv
         height: props.height,
       }}
       onClick={props.onClick}
-    ></canvas>
+    />
+    </>
   )
 }

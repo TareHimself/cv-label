@@ -1,1 +1,1 @@
-export const externals = ["sharp","@nodeml/torch","@nodeml/opencv","sequelize","sqlite3","pg-connection-string","@node-rs/xxhash"]
+export const externals = ["sharp","@nodeml/torch","@nodeml/opencv","@node-rs/xxhash","realm"]

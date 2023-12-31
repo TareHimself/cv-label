@@ -154,7 +154,7 @@ export function hsvToRgb(h: number, s: number, v: number): [number,number,number
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-const maxUniqueColors = 360 * 5
+const maxUniqueColors = 70
 let sv = 70
 let generated = 0;
 /**

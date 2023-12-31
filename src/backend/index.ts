@@ -1,32 +1,19 @@
 import createLogger from '@root/logger';
 createLogger('main');
-import './db'
 import { app, BrowserWindow, protocol } from "electron";
 import * as fs from "fs";
 import path from "path";
-import 'sqlite3'
 import '@node-rs/xxhash'
-import { mainToModels, mainToRenderer } from "../ipc-impl";
-import { YoloV8Importer } from "./importers/yolov8";
-import { CocoSegmentationImporter } from "./importers/coco";
-import { FilesImporter } from "./importers/files";
-import { ComputerVisionExporter } from "./exporters";
-import { ComputerVisionImporter } from "./importers";
+import { mainToIo, mainToModels, mainToRenderer } from "../ipc-impl";
 import { getProjectsPath, isDev } from '@root/utils';
+import { IEventBase, IpcMainTyped } from '@root/ipc';
+
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require('@electron/remote/main').initialize()
 
 let modelsWindow: BrowserWindow | undefined = undefined;
-
-const IMPORTERS: ComputerVisionImporter[] = [
-  new YoloV8Importer(),
-  new CocoSegmentationImporter(),
-  new FilesImporter(),
-];
-
-const EXPORTERS: ComputerVisionExporter[] = [];
-
+let ioWindow: BrowserWindow | undefined = undefined;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -51,6 +38,11 @@ declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 declare const MODELS_WINDOW_WEBPACK_ENTRY: string;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 declare const MODELS_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+declare const IO_WINDOW_WEBPACK_ENTRY: string;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+declare const IO_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 // ipcMain.handle("getPreloadPath", () => MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY);
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -95,7 +87,22 @@ const createWindow = async () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   require("@electron/remote/main").enable(modelsWindow.webContents)
 
-  await modelsWindow.loadURL(MODELS_WINDOW_WEBPACK_ENTRY)
+
+  ioWindow = new BrowserWindow({
+    show: false ?? isDev(),
+    webPreferences: {
+      preload: IO_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      nodeIntegrationInWorker: true,
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+    autoHideMenuBar: true,
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require("@electron/remote/main").enable(ioWindow.webContents)
+
+  await Promise.all([modelsWindow.loadURL(MODELS_WINDOW_WEBPACK_ENTRY),ioWindow.loadURL(IO_WINDOW_WEBPACK_ENTRY)])
 
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -124,9 +131,14 @@ const createWindow = async () => {
   })
 
   if(isDev()){
-    // modelsWindow.webContents.openDevTools({
-    //   mode: 'detach'
-    // });
+
+    ioWindow.webContents.openDevTools({
+      mode: 'detach'
+    });
+
+    modelsWindow.webContents.openDevTools({
+      mode: 'detach'
+    });
 
       // Open the DevTools.
     mainWindow.webContents.openDevTools({
@@ -158,32 +170,44 @@ app.on("activate", async () => {
   }
 }); //https://github.com/TareHimself/manga-translator/raw/master/assets/examples/solo_leveling.png
 
+// Io Window
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("importSamples", (...args) => mainToIo.sendAsync(ioWindow!,"importSamples",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("getImporters", (...args) => mainToIo.sendAsync(ioWindow!,"getImporters",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("getExporters", (...args) => mainToIo.sendAsync(ioWindow!,"getExporters",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("getSample", (...args) => mainToIo.sendAsync(ioWindow!,"getSample",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("getSampleIds", (...args) => mainToIo.sendAsync(ioWindow!,"getSampleIds",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("createProject", (...args) => mainToIo.sendAsync(ioWindow!,"createProject",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("activateProject", (...args) => mainToIo.sendAsync(ioWindow!,"activateProject",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("createAnnotations", (...args) => mainToIo.sendAsync(ioWindow!,"createAnnotations",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("removeAnnotations", (...args) => mainToIo.sendAsync(ioWindow!,"removeAnnotations",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("createPoints", (...args) => mainToIo.sendAsync(ioWindow!,"createPoints",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("updatePoints", (...args) => mainToIo.sendAsync(ioWindow!,"updatePoints",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("removePoints", (...args) => mainToIo.sendAsync(ioWindow!,"removePoints",...args));
 
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-mainToRenderer.handle("importSamples", async (projectId, importerId) => {
-  return (
-    (await IMPORTERS.find((a) => a.id === importerId)?.importIntoProject(
-      projectId
-    )) ?? []
-  );
-});
-
-
-
-mainToRenderer.handle("getImporters", async () => {
-  return IMPORTERS.map((a) => ({
-    id: a.id,
-    displayName: a.name,
-  }));
-});
-
-mainToRenderer.handle("getExporters", async () => {
-  return EXPORTERS.map((a) => ({
-    id: a.id,
-    displayName: a.name,
-  }));
-});
 
 mainToRenderer.handle("saveImage", async (data) => {
   try {
@@ -193,6 +217,8 @@ mainToRenderer.handle("saveImage", async (data) => {
     return false;
   }
 })
+
+// Models Window
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("doInference", (...args) => mainToModels.sendAsync(modelsWindow!, "doInference", ...args))

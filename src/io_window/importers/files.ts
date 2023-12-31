@@ -1,6 +1,6 @@
 import { INewSample } from "@types";
 import { ComputerVisionImporter } from ".";
-import { dialog } from "electron";
+import { dialog } from "@electron/remote";
 
 export class FilesImporter extends ComputerVisionImporter {
   constructor() {

@@ -73,17 +73,23 @@ const activateProject = createAsyncThunk(
 );
 
 const fetchPlugins = createAsyncThunk("app/plugins/load", async () => {
-  const [importers, exporters, models] = await Promise.all([
-    window.bridge.getImporters(),
-    window.bridge.getExporters(),
-    window.bridge.getSupportedModels(),
-  ]);
-
-  return {
-    importers,
-    exporters,
-    models,
-  };
+  return toast.promise(createPromise(async () => {
+    const [importers, exporters, models] = await Promise.all([
+      window.bridge.getImporters(),
+      window.bridge.getExporters(),
+      window.bridge.getSupportedModels(),
+    ]);
+  
+    return {
+      importers,
+      exporters,
+      models,
+    };
+  }),{
+    success: "Loaded Plugins",
+    loading: "Loading Plugins",
+    error: "Failed to load plugins"
+  })
 });
 
 const fetchSample = createAsyncThunk("app/samples/fetch", async ({ id }: { id: string }) => {

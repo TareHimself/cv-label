@@ -1,11 +1,11 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
-import { modelsToMain } from "../ipc-impl";
+import { ioToMain } from "../ipc-impl";
 
-const exposedApi = modelsToMain.exposeApi("modelsBridge", {});
+const exposedApi = ioToMain.exposeApi("ioBridge", {});
 
 declare global {
   interface Window {
-    modelsBridge: typeof exposedApi;
+    ioBridge: typeof exposedApi;
   }
 }

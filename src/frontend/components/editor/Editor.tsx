@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import EditorActionPanel from "./EditorActionPanel";
 import { AiOutlineZoomIn, AiOutlineZoomOut } from "react-icons/ai";
 import { BsBoundingBoxCircles, BsFiles } from "react-icons/bs";
@@ -69,6 +69,8 @@ export default function Editor() {
 
   const samplesPendingAutoLabel = useAppSelector((s) => s.app.samplesPendingAutoLabel)
 
+  const [lastAutoId,setLastAutoId] = useState('');
+
   useElementRect(
     useCallback(() => editorRef.current, []),
     useCallback(
@@ -115,16 +117,19 @@ export default function Editor() {
     if (
       labeler !== undefined &&
       currentSample !== undefined &&
-      currentSample.annotations.length === 0 && !samplesPendingAutoLabel.includes(currentSample.id)
+      currentSample.id !== lastAutoId &&
+      currentSample.annotations.length === 0 && !samplesPendingAutoLabel.includes(currentSample.id) 
     ) {
       console.log("Labeling", currentSample.id);
+      setLastAutoId(currentSample.id)
       dispatch(
         autoLabel({
           sampleId: currentSample.id,
         })
       );
+      
     }
-  }, [currentSample, currentSampleIndex, dispatch, labeler, samplesPendingAutoLabel]);
+  }, [currentSample, currentSampleIndex, dispatch, labeler, lastAutoId, samplesPendingAutoLabel]);
 
   return (
     <div id={"editor"} ref={(r) => (editorRef.current = r)}>

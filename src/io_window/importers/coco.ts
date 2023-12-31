@@ -1,4 +1,4 @@
-import { dialog } from "electron";
+import { dialog } from "@electron/remote";
 import { ComputerVisionImporter } from ".";
 import { CvAnnotation, CvSegmentAnnotation, ELabelType, INewSample } from "@types";
 import { withNodeWorker } from "@root/backend/worker";

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-types */
 import { IpcRendererTyped, IpcMainTyped } from "./ipc";
-import { IMainToRendererEvents, IMainToModelsEvents, IRendererToMainEvents } from "./types";
+import { IMainToRendererEvents, IMainToModelsEvents, IRendererToMainEvents, IMainToIoEvents } from "./types";
 
 export const rendererToMain = new IpcRendererTyped<
   IRendererToMainEvents,
@@ -20,4 +20,14 @@ export const modelsToMain = new IpcRendererTyped<
 export const mainToModels = new IpcMainTyped<
   {},
   IMainToModelsEvents
+>();
+
+export const ioToMain = new IpcRendererTyped<
+  {},
+  IMainToIoEvents
+>();
+
+export const mainToIo = new IpcMainTyped<
+  {},
+  IMainToIoEvents
 >();

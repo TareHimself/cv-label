@@ -468,11 +468,13 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         listener: (event: MouseEvent) => void;
         callbacks: Map<string, HitTestCallback>;
     }> = new Map();
+    createdAt: DOMHighResTimeStamp
 
 
     constructor(config: ILabelerControllerConfig) {
         super();
         this.config = config;
+        this.createdAt = performance.now();
     }
 
     bindHitEvent(hitId: string,event: BindableMouseEvents, eventCallback: HitTestCallback): HitUnbind {
@@ -482,10 +484,14 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         if (!this.mouseEventCallbacks.has(event)) this.mouseEventCallbacks.set(event, {
             listener: ((eventName: BindableMouseEvents, event: MouseEvent) => {
                 if (this.hitTestCanvasCtx !== null) {
-                    const [r, g, b, a] = this.hitTestCanvasCtx.getImageData(event.offsetX, event.offsetY, 1, 1).data
+                    const rect = (event.currentTarget as HTMLCanvasElement).getBoundingClientRect();
+
+                    const [mouseX,mouseY] = [Math.round(event.clientX - rect.left),Math.round(event.clientY - rect.top)];
+
+                    const [r, g, b, a] = this.hitTestCanvasCtx.getImageData(mouseX, mouseY, 1, 1).data
 
                     if (a === 0) return;
-
+                    
                     const hitIdDetected = `${r},${g},${b}`
 
                     const callback = this.mouseEventCallbacks.get(eventName)?.callbacks.get(hitIdDetected)
@@ -596,6 +602,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     override onEnd(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
         this.cavasCtx = null;
         this.endCallbacks.forEach(c => c())
+        this.createDrawers([])
     }
 
     override getContext(
@@ -687,5 +694,14 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         if(boundsDrawData !== undefined && this.selectedControlPoint !== -1 && this.selectedControlPoint < this.drawers.length){
             this.drawers[this.selectedControlPoint].drawControlPointBounds(boundsDrawData);
         }
+
+        // const offscreenCanvasCtx = boundsDrawData?.ctx;
+        // const canvasCtx = data.ctx;
+
+        // if(offscreenCanvasCtx && canvasCtx && offscreenCanvasCtx.canvas.width > 0 && offscreenCanvasCtx.canvas.height > 0){
+        //     //const data = offscreenCanvasCtx.getImageData(0,0,offscreenCanvasCtx.canvas.width,offscreenCanvasCtx.canvas.height)
+        //     canvasCtx.drawImage(offscreenCanvasCtx.canvas,0,0);
+        // }
+        
     }
 }
