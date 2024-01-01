@@ -30,16 +30,16 @@ export interface IDatabasePoint {
   y: number;
 }
 
-export interface IDatabaseAnnotation<T = string[]> {
+export interface IDatabaseAnnotation {
   id: string;
   type: ELabelType;
   class: number;
-  points: T;
+  points: IDatabasePoint;
 }
 
-export interface IDatabaseSample<T = string[]> {
+export interface IDatabaseSample {
   id: string;
-  annotations: T;
+  annotations: IDatabaseAnnotation[];
   //createdAt: string;
 }
 
@@ -52,8 +52,6 @@ export interface IDatabaseSampleList {
   id: string;
   samples: string[]
 }
-
-export type ActiveDatabaseSample = IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]>
 
 export type IRendererToMainEvents = {
   getPreloadPath: () => string;
@@ -68,10 +66,10 @@ export type IRendererToMainEvents = {
   getImporters: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
   createProject: (name: string) => Promise<string | undefined>;
-  getSample: (sampleId: string) => Promise<ActiveDatabaseSample | undefined>
+  getSample: (sampleId: string) => Promise<IDatabaseSample | undefined>
   getSampleIds: () => Promise<string[]>
   activateProject: (projectId: string) => Promise<boolean>
-  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation<IDatabasePoint[]>[]) => Promise<boolean>
+  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation[]) => Promise<boolean>
   removeAnnotations: (sampleId: string, annotations: string[]) => Promise<boolean>
   createPoints: (annotationId: string, points: string[]) => Promise<boolean>
   updatePoints: (points: IDatabasePoint[]) => Promise<boolean>
@@ -110,10 +108,10 @@ export type IMainToIoEvents = {
   getImporters: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
   createProject: (name: string) => Promise<string | undefined>;
-  getSample: (sampleId: string) => Promise<ActiveDatabaseSample | undefined>
+  getSample: (sampleId: string) => Promise<IDatabaseSample | undefined>
   getSampleIds: () => Promise<string[]>
   activateProject: (projectId: string) => Promise<boolean>
-  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation<IDatabasePoint[]>[]) => Promise<boolean>
+  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation[]) => Promise<boolean>
   removeAnnotations: (sampleId: string, annotations: string[]) => Promise<boolean>
   createPoints: (annotationId: string, points: string[]) => Promise<boolean>
   updatePoints: (points: IDatabasePoint[]) => Promise<boolean>
@@ -125,7 +123,7 @@ export type IMainToRendererEvents = {
 };
 
 export type LabelOverlayProps = PropsWithChildren<{
-  labels: ActiveDatabaseSample['annotations'];
+  labels: IDatabaseSample['annotations'];
   onLabelUpdated: (idx: number, label: CvAnnotation) => void;
 }>;
 
@@ -136,11 +134,11 @@ export interface IPluginInfo {
   displayName: string;
 }
 
-export interface CvBoxAnnotation extends IDatabaseAnnotation<IDatabasePoint[]> {
+export interface CvBoxAnnotation extends IDatabaseAnnotation {
   type: ELabelType.BOX;
 }
 
-export interface CvSegmentAnnotation extends IDatabaseAnnotation<IDatabasePoint[]> {
+export interface CvSegmentAnnotation extends IDatabaseAnnotation {
   type: ELabelType.SEGMENT;
 }
 
@@ -153,7 +151,7 @@ export interface INewSample {
 
 export type AppSliceState = {
   projectId: string | undefined;
-  loadedSamples: { [key: string]: ActiveDatabaseSample | undefined };
+  loadedSamples: { [key: string]: IDatabaseSample | undefined };
   sampleIds: string[];
   samplesPendingAutoLabel: string[];
   sampleIndex: number;

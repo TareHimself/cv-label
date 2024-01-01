@@ -24,7 +24,7 @@ export class DatabasePoint extends Realm.Object<IDatabasePoint>{
 
 
 
-export class DatabaseAnnotation extends Realm.Object<IDatabaseAnnotation<IDatabasePoint[]>> {
+export class DatabaseAnnotation extends Realm.Object<IDatabaseAnnotation> {
     declare id: string;
     declare type: ELabelType;
     declare class: number;
@@ -35,29 +35,21 @@ export class DatabaseAnnotation extends Realm.Object<IDatabaseAnnotation<IDataba
             id: "string",
             type: "int",
             class: "int",
-            points: {
-                type: "list",
-                objectType: "DatabasePoint", // this could also be a Realm object:
-                optional: false, //null values are not allowed
-            },
+            points: "DatabasePoint[]",
         },
         primaryKey: "id",
     };
 }
 
-export class DatabaseSample extends Realm.Object<IDatabaseSample<IDatabaseAnnotation[]>> {
+export class DatabaseSample extends Realm.Object<IDatabaseSample> {
     declare id: string;
-    declare annotations: IDatabaseAnnotation<IDatabasePoint[]>[];
+    declare annotations: IDatabaseAnnotation[];
     //declare createdAt: string;
     static schema: ObjectSchema = {
         name: "DatabaseSample",
         properties: {
             id: "string",
-            annotations: {
-                type: "list",
-                objectType: "DatabaseAnnotation", // this could also be a Realm object:
-                optional: false, //null values are not allowed
-            },
+            annotations: "DatabaseAnnotation[]",
         },
         primaryKey: "id",
     };
@@ -111,17 +103,15 @@ export async function createOrOpenProject(projectPath: string) {
     return;
 }
 
-type FindSampleByPkResult = IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]>;
-
-export async function findSampleByPk(sampleId: string): Promise<FindSampleByPkResult | undefined> {
+export async function findSampleByPk(sampleId: string): Promise<IDatabaseSample | undefined> {
     if (!activeProject || !sampleId) {
         return undefined;
     }
     const data = activeProject.info.objectForPrimaryKey(DatabaseSample, sampleId);
-    return (data?.toJSON() as unknown as FindSampleByPkResult | null) ?? undefined;
+    return (data?.toJSON() as unknown as IDatabaseSample | null) ?? undefined;
 }
 
-export function createSample(data: IDatabaseSample<IDatabaseAnnotation<IDatabasePoint[]>[]>): boolean {
+export function createSample(data: IDatabaseSample): boolean {
     if (!activeProject) {
         return false;
     }
@@ -146,7 +136,7 @@ export function createSample(data: IDatabaseSample<IDatabaseAnnotation<IDatabase
     }
 }
 
-export async function createSampleAnnotationsByPk(sampleId: string, annotations: IDatabaseAnnotation<IDatabasePoint[]>[]) {
+export async function createSampleAnnotationsByPk(sampleId: string, annotations: IDatabaseAnnotation[]) {
     if (!activeProject) {
         return false;
     }
@@ -167,7 +157,7 @@ export async function createSampleAnnotationsByPk(sampleId: string, annotations:
 
 }
 
-export async function updateSampleAnnotationsByPk(sampleId: string, annotations: IdFieldUpdate<IDatabaseAnnotation<IDatabasePoint[]>>[]) {
+export async function updateSampleAnnotationsByPk(sampleId: string, annotations: IdFieldUpdate<IDatabaseAnnotation>[]) {
     if (!activeProject) {
         return false;
     }
@@ -224,11 +214,32 @@ export async function updatePointsByPk(points: IdFieldUpdate<IDatabasePoint>[]):
 }
 
 export async function removeSampleAnnotationsByPk(sampleId: string, annotations: string[]) {
-    // await DatabaseAnnotation.destroy({
-    //     where: {
-    //         id: annotations
-    //     }
-    // })
+    if (!activeProject) {
+        return false;
+    }
+
+    try {
+        const realm = activeProject.info;
+        realm.write(() => {
+            // annotations.forEach(())
+            // points.forEach((pt) => {
+            //     const ptFromDb = realm.objectForPrimaryKey(DatabasePoint, pt.id)
+            //     if (ptFromDb != null) {
+            //         const ptKeys = Object.keys(pt);
+            //         for (const ptKey of ptKeys) {
+            //             if (ptKey !== 'id' && ptFromDb[ptKey] !== undefined) {
+            //                 (ptFromDb[ptKey] as unknown) = pt[ptKey] as unknown;
+            //             }
+            //         }
+            //     }
+
+            // })
+        })
+        return false;
+    } catch (error) {
+        console.error(error)
+        return false;
+    }
 }
 
 
