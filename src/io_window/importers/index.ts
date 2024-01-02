@@ -3,9 +3,10 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { createOrOpenProject, createSample, getActiveProject } from "@root/io_window/db";
 import * as fs from 'fs'
-import { require as remoteRequire } from "@electron/remote";
+//import { require as remoteRequire } from "@electron/remote";
 import { getProjectsPath } from "@root/utils";
-const { xxh64 } = remoteRequire('@node-rs/xxhash') as typeof import('@node-rs/xxhash')
+import { xxh64 } from "@node-rs/xxhash";
+//const { xxh64 } = remoteRequire('@node-rs/xxhash') as typeof import('@node-rs/xxhash')
 export class ComputerVisionImporter {
   name: string;
   id: string;

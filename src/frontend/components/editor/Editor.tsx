@@ -9,7 +9,7 @@ import {
   MdOutlineNavigateBefore,
   MdLabel,
 } from "react-icons/md";
-import { FaUndoAlt, FaRedoAlt, FaFileImport } from "react-icons/fa";
+import { FaUndoAlt, FaRedoAlt, FaFileImport, FaFileExport } from "react-icons/fa";
 import Labeler from "./Labeler";
 import Icon from "../Icon";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
@@ -157,7 +157,7 @@ export default function Editor() {
           <Labeler />
         </div>
       </div>
-      {editorMode === EEditorMode.SELECT && (
+      {editorMode !== EEditorMode.SELECT && (
         <div className="editor-layer">
           <Crosshair />
         </div>
@@ -169,24 +169,28 @@ export default function Editor() {
             onClicked={() => {
               dispatch(setSampleScale(sampleScale + 0.1));
             }}
+            tooltip="Zoom In"
           />
           <Icon
             icon={MdOutlineNavigateBefore}
             onClicked={() => {
               dispatch(setCurrentSample(currentSampleIndex - 1));
             }}
+            tooltip="Previous Sample"
           />
           <Icon
             icon={MdOutlineNavigateNext}
             onClicked={() => {
               dispatch(setCurrentSample(currentSampleIndex + 1));
             }}
+            tooltip="Next Sample"
           />
           <Icon
             icon={AiOutlineZoomOut}
             onClicked={() => {
               dispatch(setSampleScale(sampleScale - 0.1));
             }}
+            tooltip="Zoom Out"
           />
         </EditorActionPanel>
         <EditorActionPanel position="right">
@@ -196,6 +200,7 @@ export default function Editor() {
             onClicked={() => {
               dispatch(setEditorMode(EEditorMode.SELECT));
             }}
+            tooltip="Select"
           />
           <Icon
             icon={BsBoundingBoxCircles}
@@ -203,6 +208,7 @@ export default function Editor() {
             onClicked={() => {
               dispatch(setEditorMode(EEditorMode.CREATE_BOX));
             }}
+            tooltip="Create Boxes"
           />
           <Icon
             icon={PiPolygonLight}
@@ -210,10 +216,12 @@ export default function Editor() {
             onClicked={() => {
               dispatch(setEditorMode(EEditorMode.CREATE_SEGMENT));
             }}
+            tooltip="Create Segments"
           />
           <Icon
             icon={MdAutoAwesome}
             isActive={labeler !== undefined || isLoadingLabeler}
+            tooltip="Auto Label"
             onClicked={useCallback(() => {
               if (labeler === undefined) {
                 createDialog((p) => (
@@ -242,8 +250,8 @@ export default function Editor() {
           />
         </EditorActionPanel>
         <EditorActionPanel position="left">
-          <Icon icon={BsFiles} />
-          <Icon icon={MdLabel} />
+          <Icon icon={BsFiles} tooltip="Samples"/>
+          <Icon icon={MdLabel} tooltip="Annotations"/>
           <Icon
             icon={FaFileImport}
             onClicked={() => {
@@ -267,9 +275,9 @@ export default function Editor() {
                 </DialogBox>
               ));
             }}
+            tooltip="Import Samples"
           />
-          <Icon icon={FaUndoAlt} />
-          <Icon icon={FaRedoAlt} />
+           <Icon icon={FaFileExport} tooltip="Export Project"/>
         </EditorActionPanel>
         {/* <SidePanel name={"Samples"} isOpen={false}>
           <div style={{ width: "18vw", height: "100%", minWidth: 250 }}></div>

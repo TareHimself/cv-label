@@ -6,7 +6,6 @@ import path from "path";
 import '@node-rs/xxhash'
 import { mainToIo, mainToModels, mainToRenderer } from "../ipc-impl";
 import { getProjectsPath, isDev } from '@root/utils';
-import { IEventBase, IpcMainTyped } from '@root/ipc';
 
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -194,6 +193,9 @@ mainToRenderer.handle("activateProject", (...args) => mainToIo.sendAsync(ioWindo
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("createAnnotations", (...args) => mainToIo.sendAsync(ioWindow!,"createAnnotations",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("updateAnnotations", (...args) => mainToIo.sendAsync(ioWindow!,"updateAnnotations",...args));
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("removeAnnotations", (...args) => mainToIo.sendAsync(ioWindow!,"removeAnnotations",...args));

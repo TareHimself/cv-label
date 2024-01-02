@@ -4,7 +4,7 @@ import { createDialog as reduxCreateDialog, useAppSelector , closeDialog as redu
 import { DialogManagerProps, IActiveDialog } from "./types";
 import { Provider } from "react-redux";
 import dialogStoreContext from "./redux/context";
-
+import "./styles.css"
 export function createDialog(dialog: IActiveDialog["render"]) {
   const dialogId = uuidv4();
 
@@ -49,6 +49,7 @@ function DialogManagerChild(props: DialogManagerProps) {
 
         return (
           <dialog
+            className="_dialog-container"
             ref={(r) => {
               if(!r?.open){
                 r?.showModal()

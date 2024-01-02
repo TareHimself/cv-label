@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 import { store } from "@redux/store";
 import { Toaster } from "react-hot-toast";
 import DialogManager from "./dialog";
+import { ContextMenuManager } from "./context-menu";
 
 const root = document.getElementById("root");
 
@@ -20,6 +21,7 @@ if (root) {
           background: "transparent"
         }}
       />
+      <ContextMenuManager/>
         <App />
       {/* </DialogManager> */}
       <Toaster position="bottom-right" reverseOrder={false} />

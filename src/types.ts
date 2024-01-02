@@ -4,7 +4,9 @@ export type ValueOf<E> = E[keyof E];
 
 export type Without<T,K extends keyof T> = T[Exclude<keyof T,K>]
 
-export type IdFieldUpdate<T extends { id: unknown }> = Partial<T> & { id: T['id']}
+export type TPartialExcept<T,Fields extends keyof T> = {[K in keyof T]: K extends Fields ?  T[K] : (T[K] | undefined)}
+
+export type TUpdateWithId<T extends { id: unknown }> = TPartialExcept<T,'id'>
 
 export const enum ELabelType {
   BOX = 0,
@@ -34,7 +36,7 @@ export interface IDatabaseAnnotation {
   id: string;
   type: ELabelType;
   class: number;
-  points: IDatabasePoint;
+  points: IDatabasePoint[];
 }
 
 export interface IDatabaseSample {
@@ -53,15 +55,7 @@ export interface IDatabaseSampleList {
   samples: string[]
 }
 
-export type IRendererToMainEvents = {
-  getPreloadPath: () => string;
-  windowMinimize: () => void;
-  windowMaximize: () => void;
-  windowClose: () => void;
-  getPlatform: () => NodeJS.Platform;
-  isDev: () => boolean;
-
-
+export type IMainToIoEvents = {
   importSamples: (projectId: string, importerId: string) => Promise<string[]>;
   getImporters: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
@@ -69,25 +63,12 @@ export type IRendererToMainEvents = {
   getSample: (sampleId: string) => Promise<IDatabaseSample | undefined>
   getSampleIds: () => Promise<string[]>
   activateProject: (projectId: string) => Promise<boolean>
-  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation[]) => Promise<boolean>
-  removeAnnotations: (sampleId: string, annotations: string[]) => Promise<boolean>
-  createPoints: (annotationId: string, points: string[]) => Promise<boolean>
-  updatePoints: (points: IDatabasePoint[]) => Promise<boolean>
-  removePoints: (sampleId:string,annotationId: string, points: string[]) => Promise<boolean>
-
-
-  saveImage: (imageString: string) => Promise<boolean>
-
-
-  selectModel: () => Promise<string | undefined>;
-  loadModel: (
-    modelId: string
-  ) => Promise<boolean>;
-  unloadModel: () => Promise<boolean>;
-  doInference: (
-    imagePath: string
-  ) => Promise<CvAnnotation[] | undefined>;
-  getSupportedModels: () => Promise<IPluginInfo[]>;
+  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation[]) => Promise<IDatabaseSample | null>
+  updateAnnotations: (sampleId: string, annotations: TUpdateWithId<IDatabaseAnnotation>[]) => Promise<IDatabaseSample | null>
+  removeAnnotations: (sampleId: string, annotations: string[]) => Promise<IDatabaseSample | null>
+  createPoints: (sampleId: string,annotationId: string, points: IDatabasePoint[]) => Promise<IDatabaseAnnotation | null>
+  updatePoints: (sampleId: string,annotationId: string,points: TUpdateWithId<IDatabasePoint>[]) => Promise<IDatabaseAnnotation | null>
+  removePoints: (sampleId: string,annotationId: string, points: string[]) => Promise<IDatabaseAnnotation | null>
 };
 
 export type IMainToModelsEvents = {
@@ -103,20 +84,16 @@ export type IMainToModelsEvents = {
   getSupportedModels: () => Promise<IPluginInfo[]>;
 };
 
-export type IMainToIoEvents = {
-  importSamples: (projectId: string, importerId: string) => Promise<string[]>;
-  getImporters: () => Promise<IPluginInfo[]>;
-  getExporters: () => Promise<IPluginInfo[]>;
-  createProject: (name: string) => Promise<string | undefined>;
-  getSample: (sampleId: string) => Promise<IDatabaseSample | undefined>
-  getSampleIds: () => Promise<string[]>
-  activateProject: (projectId: string) => Promise<boolean>
-  createAnnotations: (sampleId: string, annotations: IDatabaseAnnotation[]) => Promise<boolean>
-  removeAnnotations: (sampleId: string, annotations: string[]) => Promise<boolean>
-  createPoints: (annotationId: string, points: string[]) => Promise<boolean>
-  updatePoints: (points: IDatabasePoint[]) => Promise<boolean>
-  removePoints: (sampleId:string,annotationId: string, points: string[]) => Promise<boolean>
-};
+export type IRendererToMainEvents = {
+  getPreloadPath: () => string;
+  windowMinimize: () => void;
+  windowMaximize: () => void;
+  windowClose: () => void;
+  getPlatform: () => NodeJS.Platform;
+  isDev: () => boolean;
+
+  saveImage: (imageString: string) => Promise<boolean>
+} & IMainToIoEvents & IMainToModelsEvents;
 
 export type IMainToRendererEvents = {
   executeJs: () => Promise<unknown>;
@@ -193,7 +170,7 @@ export type AsyncReturnType<T extends (...args: any) => Promise<any>> =
   T extends (...args: any) => Promise<infer R> ? R : any;
 
 
-export type Vector2D = {
+export type Vector2 = {
   x: number;
   y: number;
 }

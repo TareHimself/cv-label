@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
 import { domRectToBasicRect } from "@hooks/useElementRect";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { createPromise, wrap } from "@root/utils";
+import { createPromise, updateObjectWithId, wrap } from "@root/utils";
 // import { toast } from "react-toastify"
 import {
   AppReduxState,
@@ -10,6 +10,8 @@ import {
   AppSliceState,
   EEditorMode,
   IDatabasePoint,
+  IDatabaseAnnotation,
+  TUpdateWithId,
 } from "@types";
 import { toast } from "react-hot-toast";
 
@@ -79,13 +81,13 @@ const fetchPlugins = createAsyncThunk("app/plugins/load", async () => {
       window.bridge.getExporters(),
       window.bridge.getSupportedModels(),
     ]);
-  
+
     return {
       importers,
       exporters,
       models,
     };
-  }),{
+  }), {
     success: "Loaded Plugins",
     loading: "Loading Plugins",
     error: "Failed to load plugins"
@@ -105,7 +107,7 @@ const importSamples = createAsyncThunk<
 >("app/samples/import", async ({ id }, thunk) => {
   const state = thunk.getState().app;
   if (state.projectId) {
-    return toast.promise(window.bridge.importSamples(state.projectId, id),{
+    return toast.promise(window.bridge.importSamples(state.projectId, id), {
       success: (d) => `Imported ${(d as string[]).length} Samples`,
       loading: "Importing Samples",
       error: "Failed To Import Samples"
@@ -180,36 +182,60 @@ const autoLabel = createAsyncThunk<
 });
 
 const loadAllSamples = createAsyncThunk("app/samples/load", async () => {
-  return toast.promise(window.bridge.getSampleIds(),{
+  return toast.promise(window.bridge.getSampleIds(), {
     success: (d) => `${(d as string[]).length} Samples Fetched`,
     loading: "Fetching Sample ID's",
     error: "Failed To Fetch Samples"
   }) ?? [];
-
 });
 
 
-const updatePoints = createAsyncThunk("app/samples/annotations/points", async ({ sampleId, annotationIndex, points }: { sampleId: string; annotationIndex: number; points: IDatabasePoint[] }) => {
-  try {
-    if (await toast.promise(window.bridge.updatePoints(points),{
-      success: `Points Updated`,
-      loading: "Updating Points",
-      error: "Failed To Update Points. Reverting"
-    })) {
-      return {
-        sampleId,
-        annotationIndex,
-        points: points
-      };
-    }
-  } catch (error) {
-    console.error(error)
-  }
-  return {
-    sampleId,
-    annotationIndex,
-    points: []
-  };
+const createPoints = createAsyncThunk("app/samples/annotations/points/create", async ({ sampleId, annotationId, points }: { sampleId: string; annotationId: string; points: IDatabasePoint[] }) => {
+  return toast.promise(window.bridge.createPoints(sampleId, annotationId, points), {
+    success: `Done`,
+    loading: "Creating Points",
+    error: "Failed To Create Points"
+  })
+});
+
+const updatePoints = createAsyncThunk("app/samples/annotations/points/update", async ({ sampleId, annotationId, points }: { sampleId: string; annotationId: string; points: TUpdateWithId<IDatabasePoint>[] }) => {
+  return toast.promise(window.bridge.updatePoints(sampleId, annotationId, points), {
+    success: `Points Updated`,
+    loading: "Updating Points",
+    error: "Failed To Update Points"
+  })
+});
+
+const removePoints = createAsyncThunk("app/samples/annotations/points/remove", async ({ sampleId, annotationId, pointIds }: { sampleId: string; annotationId: string; pointIds: string[]; }) => {
+  return toast.promise(window.bridge.removePoints(sampleId, annotationId, pointIds), {
+    success: `Done`,
+    loading: "Removing Points",
+    error: "Failed To Create Annotations"
+  })
+});
+
+const createAnnotations = createAsyncThunk("app/samples/annotations/create", async ({ sampleId, annotations }: { sampleId: string; annotations: IDatabaseAnnotation[]; }) => {
+  return toast.promise(window.bridge.createAnnotations(sampleId, annotations), {
+    success: `Done`,
+    loading: "Creating Annotations",
+    error: "Failed To Create Annotations"
+  });
+});
+
+const updateAnnotations = createAsyncThunk("app/samples/annotations/update", async ({ sampleId, annotations }: { sampleId: string; annotations: TUpdateWithId<IDatabaseAnnotation>[]; }) => {
+  return toast.promise(window.bridge.updateAnnotations(sampleId, annotations), {
+    success: `Done`,
+    loading: "Updating Annotations",
+    error: "Failed To Update Annotations"
+  });
+});
+
+const removeAnnotations = createAsyncThunk("app/samples/annotations/remove", async ({ sampleId, annotationIds }: { sampleId: string; annotationIds: string[]; }) => {
+  return toast.promise(window.bridge.removeAnnotations(sampleId, annotationIds), {
+    success: `Done`,
+    loading: "Removing Annotations",
+    error: "Failed To Remove Annotations"
+  });
 });
 
 
@@ -358,7 +384,7 @@ export const AppSlice = createSlice({
     });
 
     builder.addCase(autoLabel.fulfilled, (state, action) => {
-      state.samplesPendingAutoLabel.splice(state.samplesPendingAutoLabel.indexOf(action.meta.arg.sampleId),1)
+      state.samplesPendingAutoLabel.splice(state.samplesPendingAutoLabel.indexOf(action.meta.arg.sampleId), 1)
       if (action.payload.result !== undefined) {
         const sample = state.loadedSamples[action.payload.samplePath]
         if (sample) {
@@ -381,23 +407,119 @@ export const AppSlice = createSlice({
     builder.addCase(loadAllSamples.fulfilled, (state, action) => {
       state.sampleIds.push(...action.payload)
     });
-    builder.addCase(updatePoints.fulfilled, (state, action) => {
-      const annotation = state.loadedSamples[action.payload.sampleId]?.annotations[action.payload.annotationIndex];
-      if (annotation !== undefined) {
-        action.payload.points.forEach((c) => {
-          const point = annotation.points.find(d => d.id === c.id)
-          if (point !== undefined) {
-            point.x = c.x;
-            point.y = c.y;
-          }
-        })
-      }
-    });
     builder.addCase(createProject.fulfilled, (state, action) => {
       state.projectId = action.payload;
     });
     builder.addCase(activateProject.fulfilled, (state, action) => {
       state.projectId = action.payload;
+    });
+    builder.addCase(createAnnotations.pending, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        sample.annotations.push(...action.meta.arg.annotations)
+      }
+    });
+
+    builder.addCase(createPoints.fulfilled, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        const idx = sample.annotations.findIndex(c => c.id === action.meta.arg.annotationId)
+        if(idx !== -1){
+          if(!action.payload){
+            sample.annotations.splice(idx,1)
+            return
+          }
+          sample.annotations[idx] = action.payload;
+        }
+      }
+    });
+
+    builder.addCase(updatePoints.pending, (state, action) => {
+      const annotation = state.loadedSamples[action.meta.arg.annotationId]?.annotations?.find(c => c.id === action.meta.arg.annotationId)
+      if (annotation) {
+        action.meta.arg.points.forEach((p)=>{
+          const pointInAnnotation = annotation.points.find(c => c.id === p.id)
+          if(pointInAnnotation){
+            updateObjectWithId(pointInAnnotation,p)
+          }
+        })
+      }
+    });
+
+    builder.addCase(updatePoints.fulfilled, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        const idx = sample.annotations.findIndex(c => c.id === action.meta.arg.annotationId)
+        if(idx !== -1){
+          if(!action.payload){
+            sample.annotations.splice(idx,1)
+            return
+          }
+          sample.annotations[idx] = action.payload;
+        }
+      }
+    });
+
+    builder.addCase(removePoints.fulfilled, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        const idx = sample.annotations.findIndex(c => c.id === action.meta.arg.annotationId)
+        if(idx !== -1){
+          if(!action.payload){
+            sample.annotations.splice(idx,1)
+            return
+          }
+          sample.annotations[idx] = action.payload;
+        }
+      }
+    });
+
+    builder.addCase(createAnnotations.fulfilled, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        if(!action.payload){
+          state.sampleIds.splice(state.sampleIds.indexOf(sample.id),1)
+          delete state.loadedSamples[sample.id]
+          return
+        }
+        state.loadedSamples[action.meta.arg.sampleId] = action.payload
+      }
+    });
+
+    builder.addCase(updateAnnotations.pending, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        action.meta.arg.annotations.forEach((p)=>{
+          const annInSample = sample.annotations.find(c => c.id === p.id)
+          if(annInSample){
+            updateObjectWithId(annInSample,p)
+          }
+        })
+      }
+    });
+
+    builder.addCase(updateAnnotations.fulfilled, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        if(!action.payload){
+          state.sampleIds.splice(state.sampleIds.indexOf(sample.id),1)
+          delete state.loadedSamples[sample.id]
+          return
+        }
+        state.loadedSamples[action.meta.arg.sampleId] = action.payload
+      }
+    });
+
+    builder.addCase(removeAnnotations.fulfilled, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        if(!action.payload){
+          state.sampleIds.splice(state.sampleIds.indexOf(sample.id),1)
+          delete state.loadedSamples[sample.id]
+          return
+        }
+        state.loadedSamples[action.meta.arg.sampleId] = action.payload
+      }
     });
   },
 });
@@ -416,6 +538,22 @@ export const {
   setLabelerContainerRect,
   onImageLoaded,
 } = AppSlice.actions;
-export { importSamples, loadModel, unloadModel, autoLabel, fetchPlugins, fetchSample, loadAllSamples, updatePoints, createProject, activateProject };
+export {
+  importSamples,
+  loadModel,
+  unloadModel,
+  autoLabel,
+  fetchPlugins,
+  fetchSample,
+  loadAllSamples,
+  createPoints,
+  updatePoints,
+  removePoints,
+  createProject,
+  activateProject,
+  createAnnotations,
+  updateAnnotations,
+  removeAnnotations
+};
 
 export default AppSlice.reducer;

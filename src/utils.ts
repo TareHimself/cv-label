@@ -1,6 +1,7 @@
 import path from "path";
 import { app } from "electron";
 import Module from 'module';
+import { TPartialExcept } from "@types";
 
 export function union(box1: number[], box2: number[]) {
   const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
@@ -132,5 +133,14 @@ export function overrideLoad(overrider: (request: string) => string){
   (Module as any)._load = (request: string, parent: NodeJS.Module) => {
     return originalLoader(overrider(request), parent);
   };
+}
+
+export function updateObjectWithId<IdType,A extends {id: IdType}>(object: A,update: TPartialExcept<A,'id'>){
+  const updateKeys = Object.keys(update);
+  for(const updateKey of updateKeys){
+    if(updateKey === 'id') continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    object[updateKey] = update[updateKey] as any // IDK why this does not work right now
+  }
 }
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

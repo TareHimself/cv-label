@@ -1,0 +1,2 @@
+export const CONTEXT_MENU_WIDTH = 150;
+export const CONTEXT_MENU_SCREEN_PADDING = 50;

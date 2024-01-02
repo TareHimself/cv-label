@@ -54,7 +54,7 @@ const config: ForgeConfig = {
             js: "./src/frontend/renderer.ts",
             name: "main_window",
             preload: {
-              js: "./src/backend/preload.ts",
+              js: "./src/frontend/preload.ts",
             },
           },
           {

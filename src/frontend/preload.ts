@@ -22,6 +22,7 @@ const exposedApi = rendererToMain.exposeApi("bridge", {
   getSampleIds: (...args) => rendererToMain.sendAsync('getSampleIds', ...args),
   activateProject: (...args) => rendererToMain.sendAsync('activateProject', ...args),
   createAnnotations: (...args) => rendererToMain.sendAsync("createAnnotations", ...args),
+  updateAnnotations: (...args) => rendererToMain.sendAsync("updateAnnotations", ...args),
   removeAnnotations: (...args) => rendererToMain.sendAsync("removeAnnotations", ...args),
   createPoints: (...args) => rendererToMain.sendAsync("createPoints", ...args),
   updatePoints: (...args) => rendererToMain.sendAsync("updatePoints", ...args),

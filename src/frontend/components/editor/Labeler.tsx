@@ -1,19 +1,26 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import { onImageLoaded, setLabelerRect, setScrollDelta } from "@redux/exports";
 import useMouseUp from "@hooks/useMouseUp";
 import useElementRect from "@hooks/useElementRect";
-import { CvAnnotation } from "@types";
+import { EEditorMode, IDatabasePoint } from "@types";
 import Canvas from "@frontend/canvas";
-import LabelerController from "./LabelerController";
+import LabelerController from "./controllers/LabelerController";
+import AnnotationDrawerController from "./controllers/AnnotationDrawerController";
+import { Menu, Item, Separator, Submenu, useContextMenu } from 'react-contexify';
+import 'react-contexify/ReactContexify.css';
 
-export type LabelerProps = {
-  tempLabels?: CvAnnotation[];
-  onTempLabelUpdated?: (update: CvAnnotation, idx: number) => void;
-};
+interface IAnnotationContextMenuParams {
+  id: string
+}
 
-export default function Labeler(props: LabelerProps) {
+interface IContextMenuProps {
+  event: MouseEvent
+  annotationId: string
+}
+export default function Labeler() {
   const dispatch = useAppDispatch();
+
 
   const [isDraggingImage, setIsDraggingImage] = useState(false);
 
@@ -34,6 +41,10 @@ export default function Labeler(props: LabelerProps) {
   const imageId = useId();
 
   const labelerRect = useAppSelector((s) => s.app.labelerRect);
+
+  const editorMode = useAppSelector((s) => s.app.mode);
+
+  const pointsBeingDrawn = useRef<IDatabasePoint[]>([])
 
   useEffect(() => {
     if (isDraggingImage) {
@@ -84,6 +95,31 @@ export default function Labeler(props: LabelerProps) {
     [labelerRect.height, labelerRect.width]
   );
 
+  const annotationDrawerController = useMemo(
+    () =>
+      {
+
+        
+        if(editorMode === EEditorMode.CREATE_BOX || editorMode === EEditorMode.CREATE_SEGMENT){
+          
+          return new AnnotationDrawerController({
+            drawMode : editorMode,
+            renderHeight: labelerRect.height,
+            renderWidth: labelerRect.width,
+            initialPoints: pointsBeingDrawn.current
+          })          
+        }
+
+        return undefined;
+      },
+    [editorMode, labelerRect.height, labelerRect.width]
+  );
+
+  // Reset points when we change modes
+  useEffect(()=>{
+    pointsBeingDrawn.current = []
+  },[editorMode])
+
   if (!currentSampleIsValid) {
     return <></>;
   }
@@ -92,13 +128,14 @@ export default function Labeler(props: LabelerProps) {
     <div
       id={"label-box"}
       onMouseDown={() => {
-        setIsDraggingImage(true);
+        if(editorMode === EEditorMode.SELECT){
+          setIsDraggingImage(true);
+        }
       }}
       // onMouseUp={() => {
       //   setIsDraggi ave={() => {
       //   setIsDraggingImage(false);
       // }}
-      style={{}}
     >
       <img
         src={`app://projects/${projectId}/images/${currentSampleId}`}
@@ -119,6 +156,15 @@ export default function Labeler(props: LabelerProps) {
           position: "absolute",
         }}
       />
+
+      {annotationDrawerController && <Canvas<CanvasRenderingContext2D>
+        width={labelerRect.width}
+        height={labelerRect.height}
+        controller={annotationDrawerController}
+        style={{
+          position: "absolute",
+        }}
+      />}
 
       {/* {!isLoadingSample && props.tempLabels?.length && (
         <LabelOverlay

@@ -194,6 +194,11 @@ h3 {
   gap: 10px;
 }
 
+.plugin-list-item {
+  height: 40px;
+  margin: 5px 0px;
+}
+
 .dialog-box {
   display: flex;
   flex-direction: column;
@@ -202,13 +207,4 @@ h3 {
   padding: 10px;
   background-color: var(--color-primary);
   border-radius: 20px;
-}
-
-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.plugin-list-item {
-  height: 40px;
-  margin: 5px 0px;
 }
