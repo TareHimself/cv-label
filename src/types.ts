@@ -4,7 +4,7 @@ export type ValueOf<E> = E[keyof E];
 
 export type Without<T,K extends keyof T> = T[Exclude<keyof T,K>]
 
-export type TPartialExcept<T,Fields extends keyof T> = {[K in keyof T]: K extends Fields ?  T[K] : (T[K] | undefined)}
+export type TPartialExcept<T,Fields extends keyof T> = Partial<T> & { [K in Fields]: T[K]};
 
 export type TUpdateWithId<T extends { id: unknown }> = TPartialExcept<T,'id'>
 
@@ -67,8 +67,10 @@ export type IMainToIoEvents = {
   updateAnnotations: (sampleId: string, annotations: TUpdateWithId<IDatabaseAnnotation>[]) => Promise<IDatabaseSample | null>
   removeAnnotations: (sampleId: string, annotations: string[]) => Promise<IDatabaseSample | null>
   createPoints: (sampleId: string,annotationId: string, points: IDatabasePoint[]) => Promise<IDatabaseAnnotation | null>
+  replacePoints: (sampleId: string,annotationId: string, points: IDatabasePoint[]) => Promise<IDatabaseAnnotation | null>
   updatePoints: (sampleId: string,annotationId: string,points: TUpdateWithId<IDatabasePoint>[]) => Promise<IDatabaseAnnotation | null>
   removePoints: (sampleId: string,annotationId: string, points: string[]) => Promise<IDatabaseAnnotation | null>
+  
 };
 
 export type IMainToModelsEvents = {

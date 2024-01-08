@@ -1,4 +1,4 @@
-import { ELabelType, INewSample } from "@types";
+import { ELabelType, IDatabasePoint, INewSample } from "@types";
 import { ComputerVisionImporter } from ".";
 import path from 'path';
 import * as fs from 'fs';
@@ -92,28 +92,53 @@ export class YoloV8Importer extends ComputerVisionImporter {
                   return {
 
                     path: imageFile,
-                    annotations: labels.map(([cls, x, y, w, h]) => {
-                      const x1 = x * width - (w * width) / 2;
-                      const y1 = y * height - (h * height) / 2;
-                      const x2 = x1 + w * width;
-                      const y2 = y1 + h * height;
-                      return {
-                        id: uuidv4(),
-                        points: [{
+                    annotations: labels.map((label) => {
+                      if(label.length === 5){
+                        const [cls, x, y, w, h] = label;
+                        const x1 = x * width - (w * width) / 2;
+                        
+                        const y1 = y * height - (h * height) / 2;
+                        const x2 = x1 + w * width;
+                        const y2 = y1 + h * height;
+                        return {
                           id: uuidv4(),
-                          x: x1,
-                          y: y1,
+                          points: [{
+                            id: uuidv4(),
+                            x: x1,
+                            y: y1,
 
-                        },
-                        {
-                          id: uuidv4(),
-                          x: x2,
-                          y: y2,
+                          },
+                          {
+                            id: uuidv4(),
+                            x: x2,
+                            y: y2,
+                          }
+                          ],
+                          class: Math.floor(cls),
+                          type: ELabelType.BOX,
+                        };
+                      }
+                      else
+                      {
+                        const cls = Math.floor(label[0])
+                        const points: IDatabasePoint[] = [];
+
+                        for(let i = 1; i < label.length - 1; i += 2){
+                          points.push({
+                            id: uuidv4(),
+                            x: label[i] * width,
+                            y: label[i + 1] * height
+                          })
                         }
-                        ],
-                        class: Math.floor(cls),
-                        type: ELabelType.BOX,
-                      };
+
+                        return {
+                          id: uuidv4(),
+                          points: points,
+                          class: cls,
+                          type: ELabelType.SEGMENT,
+                        };
+                      }
+                      
                     }),
                   } as INewSample;
                 } catch (error) {

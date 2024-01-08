@@ -198,6 +198,14 @@ const createPoints = createAsyncThunk("app/samples/annotations/points/create", a
   })
 });
 
+const replacePoints = createAsyncThunk("app/samples/annotations/points/replace", async ({ sampleId, annotationId, points }: { sampleId: string; annotationId: string; points: IDatabasePoint[] }) => {
+  return toast.promise(window.bridge.replacePoints(sampleId, annotationId, points), {
+    success: `Done`,
+    loading: "Updating Points",
+    error: "Failed To Update Points"
+  })
+});
+
 const updatePoints = createAsyncThunk("app/samples/annotations/points/update", async ({ sampleId, annotationId, points }: { sampleId: string; annotationId: string; points: TUpdateWithId<IDatabasePoint>[] }) => {
   return toast.promise(window.bridge.updatePoints(sampleId, annotationId, points), {
     success: `Points Updated`,
@@ -434,6 +442,30 @@ export const AppSlice = createSlice({
       }
     });
 
+    builder.addCase(replacePoints.pending, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        const idx = sample.annotations.findIndex(c => c.id === action.meta.arg.annotationId)
+        if(idx !== -1){
+          sample.annotations[idx].points = action.meta.arg.points;
+        }
+      }
+    });
+
+    builder.addCase(replacePoints.fulfilled, (state, action) => {
+      const sample = state.loadedSamples[action.meta.arg.sampleId]
+      if (sample) {
+        const idx = sample.annotations.findIndex(c => c.id === action.meta.arg.annotationId)
+        if(idx !== -1){
+          if(!action.payload){
+            sample.annotations.splice(idx,1)
+            return
+          }
+          sample.annotations[idx] = action.payload;
+        }
+      }
+    });
+
     builder.addCase(updatePoints.pending, (state, action) => {
       const annotation = state.loadedSamples[action.meta.arg.annotationId]?.annotations?.find(c => c.id === action.meta.arg.annotationId)
       if (annotation) {
@@ -547,6 +579,7 @@ export {
   fetchSample,
   loadAllSamples,
   createPoints,
+  replacePoints,
   updatePoints,
   removePoints,
   createProject,

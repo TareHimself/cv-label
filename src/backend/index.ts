@@ -170,6 +170,7 @@ app.on("activate", async () => {
 }); //https://github.com/TareHimself/manga-translator/raw/master/assets/examples/solo_leveling.png
 
 // Io Window
+
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("importSamples", (...args) => mainToIo.sendAsync(ioWindow!,"importSamples",...args));
 
@@ -202,6 +203,9 @@ mainToRenderer.handle("removeAnnotations", (...args) => mainToIo.sendAsync(ioWin
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("createPoints", (...args) => mainToIo.sendAsync(ioWindow!,"createPoints",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("replacePoints", (...args) => mainToIo.sendAsync(ioWindow!,"replacePoints",...args));
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("updatePoints", (...args) => mainToIo.sendAsync(ioWindow!,"updatePoints",...args));

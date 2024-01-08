@@ -2,9 +2,10 @@
 import { ICanvasDrawData, CanvasController, ICanvasPrepData, RenderingContextType } from "@frontend/canvas";
 import { createContextMenu } from "@frontend/context-menu";
 import { generateHitId, watchMouseMovement } from "@frontend/utils";
-import { removeAnnotations, removePoints, setCurrentAnnotationIndex, updatePoints } from "@redux/exports";
+import { removeAnnotations, removePoints, replacePoints, setCurrentAnnotationIndex, updateAnnotations, updatePoints } from "@redux/exports";
 import { store } from "@redux/store";
 import { clone } from "@root/utils";
+import { v4 as uuidv4 } from 'uuid';
 import { IDatabaseAnnotation, IDatabasePoint, ELabelType, Vector2, EEditorMode } from "@types";
 
 function blobToBase64(blob: Blob) {
@@ -99,26 +100,32 @@ class Drawable {
         ctx.fill();
     }
 
-    drawPolygon<T>(ctx: LabelerContextTypes, data: T[], transform: (a: T) => Vector2, color: string, fill: boolean, closed: boolean, lineWidth = 1) {
+    drawPolygon<T>(ctx: LabelerContextTypes, data: T[], transform: (a: T) => Vector2, color: string, fill: boolean, lineWidth = 1) {
         ctx.beginPath();
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
-        if (closed) ctx.fillStyle = color;
-
-        ctx.strokeStyle = color;
+        if (fill) ctx.fillStyle = color;
 
         ctx.lineWidth = lineWidth;
 
+        const transformedPoints = data.map(c => transform(c));
 
-        for (const d of data) {
-            const { x, y } = transform(d);
+        ctx.strokeStyle = color;
 
-            ctx.lineTo(x, y);
+        const startPoint = transformedPoints[0];
+
+        ctx.moveTo(startPoint.x,startPoint.y);
+
+        for(let i = 0; i < transformedPoints.length; i++){
+
+            const nextPoint = transformedPoints[(i + 1) % transformedPoints.length];
+
+            ctx.lineTo(nextPoint.x,nextPoint.y);
         }
 
-        if (closed) ctx.closePath();
-
+        //if (closed) ctx.closePath();
+    
         if (fill) {
             ctx.fill();
         }
@@ -270,7 +277,7 @@ class BoxDrawable extends Drawable {
         }];
 
 
-        this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), "red", false, true, 1);
+        this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), "red", false, 1);
 
         if (this.isSelected) {
             for (const point of originalPoints) {
@@ -278,20 +285,20 @@ class BoxDrawable extends Drawable {
             }
         }
 
-        if (window.debugHitTest) {
-            const fillColor = `rgba(${this.drawableHitId},0.3)`;
+        // if (window.debugHitTest) {
+        //     const fillColor = `rgba(${this.drawableHitId},0.3)`;
 
-            this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, true, 1);
+        //     this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, 1);
 
-            if (this.isSelected) {
-                for (let i = 0; i < this.annotation.points.length; i++) {
-                    const point = this.annotation.points[i];
-                    const hitId = this.controlPointIds[i];
+        //     if (this.isSelected) {
+        //         for (let i = 0; i < this.annotation.points.length; i++) {
+        //             const point = this.annotation.points[i];
+        //             const hitId = this.controlPointIds[i];
 
-                    this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 5, `rgb(${hitId})`)
-                }
-            }
-        }
+        //             this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 5, `rgb(${hitId})`)
+        //         }
+        //     }
+        // }
     }
 
     override drawBounds(data: ILabelerDrawData<OffscreenCanvasRenderingContext2D>): void {
@@ -315,8 +322,7 @@ class BoxDrawable extends Drawable {
 
         const fillColor = `rgb(${this.drawableHitId})`;
 
-        this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, true, 1);
-
+        this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, 1);
     }
 
     override drawControlPointBounds(
@@ -337,7 +343,7 @@ class BoxDrawable extends Drawable {
 }
 
 class SegmentationDrawable extends Drawable {
-
+    lineHitIds: string[] = []
     override onCreate(): void {
 
         // Selection And Dragging
@@ -470,32 +476,46 @@ class SegmentationDrawable extends Drawable {
 
             return id;
         })
+
+        this.lineHitIds = this.annotation.points.map((c, pointIdx) => {
+            const id = generateHitId();
+
+            this.bindHitEvent(id,'click',(e)=>{
+                const rect = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
+    
+                const [mouseClickX,mouseClickY] = [Math.round(e.clientX - rect.left),Math.round(e.clientY - rect.top)];
+    
+                const [scaleX, scaleY] = this.owner.imageToCanvasScale
+
+                console.log("Line Clicked",id)
+                const newPoint: IDatabasePoint = {
+                    id: uuidv4(),
+                    x: mouseClickX / scaleX,
+                    y: mouseClickY / scaleY
+                }
+
+                const newPoints = [...this.annotation.points.slice(0,pointIdx + 1),newPoint,...this.annotation.points.slice(pointIdx + 1)];
+
+                store.dispatch(replacePoints({
+                    sampleId: this.owner.sampleId,
+                    annotationId: this.annotation.id,
+                    points: newPoints
+                }))
+            });
+
+            return id;
+        });
     }
 
 
     override draw(data: ILabelerDrawData<CanvasRenderingContext2D>): void {
         const { ctx } = data;
 
-        this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), "red", false, true, 1);
+        this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), "red", false, 1);
 
         if (this.isSelected) {
             for (const point of this.annotation.points) {
                 this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 4, "white", 1, "black")
-            }
-        }
-
-        if (window.debugHitTest) {
-            const fillColor = `rgba(${this.drawableHitId},0.3)`;
-
-            this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, true, 1);
-
-            if (this.isSelected) {
-                for (let i = 0; i < this.annotation.points.length; i++) {
-                    const point = this.annotation.points[i];
-                    const hitId = this.controlPointIds[i];
-
-                    this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 5, `rgb(${hitId})`)
-                }
             }
         }
     }
@@ -505,9 +525,27 @@ class SegmentationDrawable extends Drawable {
 
         const fillColor = `rgb(${this.drawableHitId})`;
 
-        this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, true, 1);
+        const transformedPoints = this.annotation.points.map((a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }));
+
+        this.drawPolygon(ctx, transformedPoints, (a) => a, fillColor, true, 1);
 
         if (this.isSelected) {
+            // this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, 1);
+            
+            for(let i = 0; i < transformedPoints.length; i++){
+                const start = transformedPoints[i];
+                const end = transformedPoints[(i + 1) % transformedPoints.length];
+                ctx.beginPath();
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+                ctx.lineWidth = 7;
+                ctx.strokeStyle = `rgb(${this.lineHitIds[i]})`;
+                ctx.moveTo(start.x,start.y);
+                ctx.lineTo(end.x,end.y);
+                ctx.stroke();
+                ctx.closePath();
+            }
+
             for (let i = 0; i < this.annotation.points.length; i++) {
                 const point = this.annotation.points[i];
                 const hitId = this.controlPointIds[i];
@@ -523,6 +561,7 @@ class SegmentationDrawable extends Drawable {
 
         const { ctx } = data;
 
+        //this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), this.lineHitIds, false, 1);
         for (let i = 0; i < this.annotation.points.length; i++) {
             const point = this.annotation.points[i];
             const hitId = this.controlPointIds[i];
@@ -558,6 +597,13 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         return this.store.app.sampleIds[this.store.app.sampleIndex]
     }
 
+    get imageToCanvasScale(){
+        return [
+            this.store.app.labelerRect.width / this.store.app.sampleImageInfo.width,
+            this.store.app.labelerRect.height / this.store.app.sampleImageInfo.height,
+        ];
+    }
+
     constructor(config: ILabelerControllerConfig) {
         super();
         this.config = config;
@@ -578,7 +624,9 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
                     const [r, g, b, a] = this.hitTestCanvasCtx.getImageData(mouseX, mouseY, 1, 1).data
 
                     if (a === 0) {
-                        this.selectedControlPoint = -1;
+                        if(this.selectedControlPoint !== -1){
+                            this.setAnnotationIndex(-1);
+                        }
                         return;
                     }
 
@@ -588,9 +636,6 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
                     if (callback !== undefined) {
                         callback(event);
-                    }
-                    else {
-                        console.log("click color id", hitIdDetected);
                     }
                 }
 
@@ -623,6 +668,8 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     }
 
     setAnnotationIndex(idx: number) {
+        console.log("Updating annotation Index To",idx)
+        this.selectedControlPoint = idx;
         store.dispatch(setCurrentAnnotationIndex(idx));
     }
 
@@ -665,8 +712,6 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         this.endCallbacks.push(store.subscribe(reduxStoreSubCallback))
 
         this.lastDrawTime = performance.now()
-
-
 
         const animationFrameCallback = (() => {
 
@@ -786,13 +831,19 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
             this.drawers[this.selectedControlPoint].drawControlPointBounds(boundsDrawData);
         }
 
-        // const offscreenCanvasCtx = boundsDrawData?.ctx;
-        // const canvasCtx = data.ctx;
-
-        // if(offscreenCanvasCtx && canvasCtx && offscreenCanvasCtx.canvas.width > 0 && offscreenCanvasCtx.canvas.height > 0){
-        //     //const data = offscreenCanvasCtx.getImageData(0,0,offscreenCanvasCtx.canvas.width,offscreenCanvasCtx.canvas.height)
-        //     canvasCtx.drawImage(offscreenCanvasCtx.canvas,0,0);
-        // }
+        if(window.debugHitTest){
+            const offscreenCanvasCtx = boundsDrawData?.ctx;
+            const canvasCtx = data.ctx;
+    
+            if(offscreenCanvasCtx && canvasCtx && offscreenCanvasCtx.canvas.width > 0 && offscreenCanvasCtx.canvas.height > 0){
+                //const data = offscreenCanvasCtx.getImageData(0,0,offscreenCanvasCtx.canvas.width,offscreenCanvasCtx.canvas.height)
+                const oldGlobalAlpha = canvasCtx.globalAlpha;
+                canvasCtx.globalAlpha = 0.3
+                canvasCtx.drawImage(offscreenCanvasCtx.canvas,0,0);
+                canvasCtx.globalAlpha = oldGlobalAlpha;
+            }
+        }
+        
 
     }
 }

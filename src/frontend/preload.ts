@@ -25,6 +25,7 @@ const exposedApi = rendererToMain.exposeApi("bridge", {
   updateAnnotations: (...args) => rendererToMain.sendAsync("updateAnnotations", ...args),
   removeAnnotations: (...args) => rendererToMain.sendAsync("removeAnnotations", ...args),
   createPoints: (...args) => rendererToMain.sendAsync("createPoints", ...args),
+  replacePoints: (...args) => rendererToMain.sendAsync("replacePoints", ...args),
   updatePoints: (...args) => rendererToMain.sendAsync("updatePoints", ...args),
   removePoints: (...args) => rendererToMain.sendAsync("removePoints", ...args),
   saveImage: (...args) => rendererToMain.sendAsync('saveImage',...args)

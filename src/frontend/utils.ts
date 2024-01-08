@@ -172,8 +172,23 @@ export function uniqueRgbColor() {
   return hsvToRgb(i * generated, sv, sv)
 }
 
+const MAX_RGB_INDEX = 255 * 255 * 255
+
+function indexToRGB(i: number) {
+  if (i < 0 || i > MAX_RGB_INDEX) {
+    throw new Error(`Index should be within the range of 0 to ${MAX_RGB_INDEX}`);
+  }
+
+  const r = (i >> 16) & 255;
+  const g = (i >> 8) & 255;
+  const b = i & 255;
+
+  return [r, g, b];
+}
+
+let generationIdx = 0;
 export function generateHitId(){
-  return uniqueRgbColor().join(',')
+  return indexToRGB(generationIdx++).join(',')
 }
 
 export function subscribeToElementEvent<Target extends HTMLElement,E extends keyof HTMLElementEventMap>(element: Target, event: E,  listener: (this: HTMLElement, ev: HTMLElementEventMap[E]) => void){

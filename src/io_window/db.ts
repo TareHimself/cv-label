@@ -250,6 +250,32 @@ export async function createPoints(sampleId: string,annotationId: string,points:
     return realmObjectToJson(realm.objectForPrimaryKey(DatabaseAnnotation,annotationId));
 }
 
+export async function replacePoints(sampleId: string,annotationId: string,points: IDatabasePoint[]): Promise<IDatabaseAnnotation | null> {
+    if (!activeProject) {
+        return null;
+    }
+    const realm = activeProject.info;
+
+    try {
+        const annotation = realm.objectForPrimaryKey(DatabaseAnnotation,annotationId);
+        if(!annotation) return annotation;
+
+        realm.write(() => {
+            annotation.points.forEach((pt) => {
+                realm.delete(pt);
+            });
+            annotation.points = [];
+            annotation.points.push(...points);
+        })
+
+        return realmObjectToJson(annotation);
+    } catch (error) {
+        console.error(error)
+    }
+
+    return realmObjectToJson(realm.objectForPrimaryKey(DatabaseAnnotation,annotationId));
+}
+
 export async function updatePoints(sampleId: string,annotationId: string,points: TUpdateWithId<IDatabasePoint>[]): Promise<IDatabaseAnnotation | null> {
     if (!activeProject) {
         return null;
@@ -402,6 +428,16 @@ window.ioBridge.handle("createPoints", async (sampleId,annotationId, points) => 
     try {
 
         return createPoints(sampleId,annotationId,points)
+    } catch (error) {
+        console.error(error);
+    }
+
+    return null;
+})
+
+window.ioBridge.handle("replacePoints", async (sampleId,annotationId, points) => {
+    try {
+        return replacePoints(sampleId,annotationId,points)
     } catch (error) {
         console.error(error);
     }
