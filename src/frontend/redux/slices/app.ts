@@ -12,11 +12,13 @@ import {
   IDatabasePoint,
   IDatabaseAnnotation,
   TUpdateWithId,
+  SidePanelIds,
 } from "@types";
 import { toast } from "react-hot-toast";
 
 const initialState: AppSliceState = {
   projectId: undefined,
+  currentSidePanel: '',
   loadedSamples: {},
   sampleIds: [],
   samplesPendingAutoLabel: [],
@@ -340,6 +342,9 @@ export const AppSlice = createSlice({
       state.xScroll += deltaX;
       state.yScroll += deltaY;
     },
+    setSidePanel: (state, action: PayloadAction<SidePanelIds>) => {
+      state.currentSidePanel = action.payload;
+    },
     onImageLoaded: (state, action: PayloadAction<HTMLImageElement>) => {
       state.sampleImageInfo = {
         width: action.payload.naturalWidth,
@@ -568,6 +573,7 @@ export const {
   setCurrentAnnotationIndex,
   setScrollDelta,
   setLabelerContainerRect,
+  setSidePanel,
   onImageLoaded,
 } = AppSlice.actions;
 export {

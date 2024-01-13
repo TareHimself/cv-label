@@ -128,6 +128,7 @@ export interface INewSample {
   annotations: CvAnnotation[];
 }
 
+export type SidePanelIds = '' | 'samples' | 'annotations';
 export type AppSliceState = {
   projectId: string | undefined;
   loadedSamples: { [key: string]: IDatabaseSample | undefined };
@@ -152,6 +153,7 @@ export type AppSliceState = {
   availableModels: IPluginInfo[];
   availableExporters: IPluginInfo[];
   availableImporters: IPluginInfo[];
+  currentSidePanel: SidePanelIds
 };
 
 

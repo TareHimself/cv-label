@@ -24,6 +24,7 @@ import {
   setEditorRect,
   setLabelerContainerRect,
   setSampleScale,
+  setSidePanel,
   unloadModel,
 } from "@redux/exports";
 import { EEditorMode } from "@types";
@@ -33,6 +34,7 @@ import Crosshair from "./Crosshair";
 import { closeDialog, createDialog } from "@frontend/dialog";
 import DialogBox from "@components/DialogBox";
 import PluginSelectionList from "./PluginSelectionList";
+import SidePanel from "./SidePanel";
 
 export default function Editor() {
   const labeler = useAppSelector((s) => s.app.activeLabeler);
@@ -250,7 +252,9 @@ export default function Editor() {
           />
         </EditorActionPanel>
         <EditorActionPanel position="left">
-          <Icon icon={BsFiles} tooltip="Samples"/>
+          <Icon icon={BsFiles} tooltip="Samples" onClicked={() => {
+            dispatch(setSidePanel('samples'));            
+          }}/>
           <Icon icon={MdLabel} tooltip="Annotations"/>
           <Icon
             icon={FaFileImport}
@@ -279,9 +283,9 @@ export default function Editor() {
           />
            <Icon icon={FaFileExport} tooltip="Export Project"/>
         </EditorActionPanel>
-        {/* <SidePanel name={"Samples"} isOpen={false}>
+        <SidePanel name={"Samples"} id="samples">
           <div style={{ width: "18vw", height: "100%", minWidth: 250 }}></div>
-        </SidePanel> */}
+        </SidePanel>
       </div>
     </div>
   );

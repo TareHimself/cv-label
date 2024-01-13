@@ -153,14 +153,23 @@ polygon {
   height: 100%;
   position: absolute;
   width: fit-content;
-  left: 0;
+  left: -100%;
   top: 0%;
+  padding: 0px 20px;
   background-color: var(--color-primary);
+  transition: all ease-in-out 200ms;
+}
+
+.side-panel[data-is-open="true"] {
+  left: 0%;
 }
 
 .side-panel-header {
-  height: 50px;
-  width: fit-content;
+  height: 70px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .side-panel-content {
