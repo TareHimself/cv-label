@@ -3,12 +3,12 @@ import { ComputerVisionImporter } from ".";
 import path from 'path';
 import * as fs from 'fs';
 import { v4 as uuidv4} from 'uuid';
-import { dialog ,require as remoteRequire } from "@electron/remote";
+import { dialog } from "@electron/remote";
 import sharp from "sharp"
 
 export class YoloV8Importer extends ComputerVisionImporter {
   constructor() {
-    super("Yolov8");
+    super("YoloV8");
   }
 
   override async import(): Promise<INewSample[]> {

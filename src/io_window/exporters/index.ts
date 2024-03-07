@@ -11,7 +11,7 @@ export class ComputerVisionExporter {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async export(samples: INewSample[]): Promise<boolean> {
+  async export(projectId: string,projectPath: string): Promise<number> {
     throw new Error("Exporter not implemented");
   }
 }

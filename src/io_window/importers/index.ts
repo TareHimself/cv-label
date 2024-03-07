@@ -1,7 +1,7 @@
 import { INewSample } from "@types";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
-import { createOrOpenProject, createSample, getActiveProject } from "@root/io_window/db";
+import { createOrOpenProject, getActiveProject } from "@root/io_window/db";
 import * as fs from 'fs'
 //import { require as remoteRequire } from "@electron/remote";
 import { getProjectsPath } from "@root/utils";
@@ -51,7 +51,7 @@ export class ComputerVisionImporter {
 
         if (!activeProject) throw new Error("There is no active project");
 
-        if (!createSample({
+        if (!activeProject.createSample({
           id: newName,
           annotations: data.annotations.map((ann) => {
             return {

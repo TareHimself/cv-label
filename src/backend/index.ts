@@ -175,6 +175,9 @@ app.on("activate", async () => {
 mainToRenderer.handle("importSamples", (...args) => mainToIo.sendAsync(ioWindow!,"importSamples",...args));
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("exportSamples", (...args) => mainToIo.sendAsync(ioWindow!,"exportSamples",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("getImporters", (...args) => mainToIo.sendAsync(ioWindow!,"getImporters",...args));
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

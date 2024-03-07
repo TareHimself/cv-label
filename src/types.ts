@@ -57,6 +57,7 @@ export interface IDatabaseSampleList {
 
 export type IMainToIoEvents = {
   importSamples: (projectId: string, importerId: string) => Promise<string[]>;
+  exportSamples: (projectId: string, importerId: string) => Promise<number>;
   getImporters: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
   createProject: (name: string) => Promise<string | undefined>;

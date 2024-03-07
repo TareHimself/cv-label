@@ -5,6 +5,9 @@ import { CocoSegmentationImporter } from "./importers/coco";
 import { FilesImporter } from "./importers/files";
 import { ComputerVisionExporter } from "./exporters";
 import { ComputerVisionImporter } from "./importers";
+import path from "path";
+import { getProjectsPath } from '@root/utils';
+import { Yolov8Exporter } from './exporters/yolov8';
 
 
 const IMPORTERS: ComputerVisionImporter[] = [
@@ -13,7 +16,9 @@ const IMPORTERS: ComputerVisionImporter[] = [
     new FilesImporter(),
 ];
 
-const EXPORTERS: ComputerVisionExporter[] = [];
+const EXPORTERS: ComputerVisionExporter[] = [
+    new Yolov8Exporter(),
+];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 window.ioBridge.handle("importSamples", async (projectId, importerId) => {
@@ -21,6 +26,16 @@ window.ioBridge.handle("importSamples", async (projectId, importerId) => {
         (await IMPORTERS.find((a) => a.id === importerId)?.importIntoProject(
         projectId
         )) ?? []
+    );
+});
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+window.ioBridge.handle("exportSamples", async (projectId, importerId) => {
+    return (
+        (await EXPORTERS.find((a) => a.id === importerId)?.export(
+        projectId,
+        path.join(getProjectsPath(), projectId)
+        )) ?? 0
     );
 });
 

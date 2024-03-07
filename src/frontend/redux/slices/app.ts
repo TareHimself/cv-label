@@ -118,6 +118,23 @@ const importSamples = createAsyncThunk<
   return [];
 });
 
+const exportSamples = createAsyncThunk<
+  number,
+  { id: string },
+  AppReduxState
+>("app/samples/export", async ({ id }, thunk) => {
+  const state = thunk.getState().app;
+  if (state.projectId) {
+    return toast.promise(window.bridge.exportSamples(state.projectId, id), {
+      success: (d) => `Exported ${d} Samples`,
+      loading: "Exporting Samples",
+      error: "Failed To Export Samples"
+    });
+  }
+  return 0;
+});
+
+
 const loadModel = createAsyncThunk(
   "app/labeler/load",
   async ({
@@ -377,7 +394,10 @@ export const AppSlice = createSlice({
   extraReducers: (builder) => {
     builder.addCase(importSamples.fulfilled, (state, action) => {
       state.sampleIds.push(...action.payload)
-      console.log("Imported ", action.payload)
+      console.log("Imported", action.payload)
+    });
+    builder.addCase(exportSamples.fulfilled, (state, action) => {
+      console.log("Exported", action.payload,"samples")
     });
     builder.addCase(loadModel.fulfilled, (state, action) => {
       state.activeLabeler = action.payload;
@@ -578,6 +598,7 @@ export const {
 } = AppSlice.actions;
 export {
   importSamples,
+  exportSamples,
   loadModel,
   unloadModel,
   autoLabel,

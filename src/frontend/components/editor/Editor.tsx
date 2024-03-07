@@ -9,12 +9,18 @@ import {
   MdOutlineNavigateBefore,
   MdLabel,
 } from "react-icons/md";
-import { FaUndoAlt, FaRedoAlt, FaFileImport, FaFileExport } from "react-icons/fa";
+import {
+  FaUndoAlt,
+  FaRedoAlt,
+  FaFileImport,
+  FaFileExport,
+} from "react-icons/fa";
 import Labeler from "./Labeler";
 import Icon from "../Icon";
 import { useAppDispatch, useAppSelector } from "@redux/hooks";
 import {
   autoLabel,
+  exportSamples,
   fetchSample,
   importSamples,
   loadAllSamples,
@@ -59,7 +65,9 @@ export default function Editor() {
     (s) => s.app.sampleIds[s.app.sampleIndex]
   );
 
-  const currentSample = useAppSelector((s) => s.app.loadedSamples[currentSampleId]);
+  const currentSample = useAppSelector(
+    (s) => s.app.loadedSamples[currentSampleId]
+  );
 
   const isLoadingLabeler = useAppSelector((s) => s.app.isLoadingLabeler);
 
@@ -67,11 +75,15 @@ export default function Editor() {
 
   const importers = useAppSelector((s) => s.app.availableImporters);
 
+  const exporters = useAppSelector((s) => s.app.availableExporters)
+
   const models = useAppSelector((s) => s.app.availableModels);
 
-  const samplesPendingAutoLabel = useAppSelector((s) => s.app.samplesPendingAutoLabel)
+  const samplesPendingAutoLabel = useAppSelector(
+    (s) => s.app.samplesPendingAutoLabel
+  );
 
-  const [lastAutoId,setLastAutoId] = useState('');
+  const [lastAutoId, setLastAutoId] = useState("");
 
   useElementRect(
     useCallback(() => editorRef.current, []),
@@ -120,18 +132,25 @@ export default function Editor() {
       labeler !== undefined &&
       currentSample !== undefined &&
       currentSample.id !== lastAutoId &&
-      currentSample.annotations.length === 0 && !samplesPendingAutoLabel.includes(currentSample.id) 
+      currentSample.annotations.length === 0 &&
+      !samplesPendingAutoLabel.includes(currentSample.id)
     ) {
       console.log("Labeling", currentSample.id);
-      setLastAutoId(currentSample.id)
+      setLastAutoId(currentSample.id);
       dispatch(
         autoLabel({
           sampleId: currentSample.id,
         })
       );
-      
     }
-  }, [currentSample, currentSampleIndex, dispatch, labeler, lastAutoId, samplesPendingAutoLabel]);
+  }, [
+    currentSample,
+    currentSampleIndex,
+    dispatch,
+    labeler,
+    lastAutoId,
+    samplesPendingAutoLabel,
+  ]);
 
   return (
     <div id={"editor"} ref={(r) => (editorRef.current = r)}>
@@ -252,10 +271,14 @@ export default function Editor() {
           />
         </EditorActionPanel>
         <EditorActionPanel position="left">
-          <Icon icon={BsFiles} tooltip="Samples" onClicked={() => {
-            dispatch(setSidePanel('samples'));            
-          }}/>
-          <Icon icon={MdLabel} tooltip="Annotations"/>
+          <Icon
+            icon={BsFiles}
+            tooltip="Samples"
+            onClicked={() => {
+              dispatch(setSidePanel("samples"));
+            }}
+          />
+          <Icon icon={MdLabel} tooltip="Annotations" />
           <Icon
             icon={FaFileImport}
             onClicked={() => {
@@ -281,7 +304,31 @@ export default function Editor() {
             }}
             tooltip="Import Samples"
           />
-           <Icon icon={FaFileExport} tooltip="Export Project"/>
+          <Icon
+            icon={FaFileExport}
+            tooltip="Export Project"
+            onClicked={() => {
+              createDialog((p) => (
+                <DialogBox
+                  onCloseRequest={() => {
+                    closeDialog(p.id);
+                  }}
+                >
+                  <PluginSelectionList
+                    plugins={exporters}
+                    onPluginSelected={(plugin) => {
+                      dispatch(
+                        exportSamples({
+                          id: plugin.id,
+                        })
+                      );
+                      closeDialog(p.id);
+                    }}
+                  />
+                </DialogBox>
+              ));
+            }}
+          />
         </EditorActionPanel>
         <SidePanel name={"Samples"} id="samples">
           <div style={{ width: "18vw", height: "100%", minWidth: 250 }}></div>
