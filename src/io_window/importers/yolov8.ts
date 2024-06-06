@@ -1,26 +1,32 @@
-import { ELabelType, IDatabasePoint, INewSample } from "@types";
+import { ELabelType, IDatabasePoint, INewSample, PluginOption, PluginOptionResult, PluginOptionResultMap } from "@types";
 import { ComputerVisionImporter } from ".";
 import path from 'path';
 import * as fs from 'fs';
 import { v4 as uuidv4} from 'uuid';
-import { dialog } from "@electron/remote";
 import sharp from "sharp"
 
 export class YoloV8Importer extends ComputerVisionImporter {
+
+  getOptions(): PluginOption[] {
+    return [{
+      id: "folder",
+      displayName: "Yolov8 Dataset Path",
+      type: 'folderSelect',
+      multiple: false
+    }]
+  }
   constructor() {
     super("YoloV8");
   }
 
-  override async import(): Promise<INewSample[]> {
-    const dialogResult = await dialog.showOpenDialog({
-      properties: ["openDirectory"],
-    });
+  override async import(options: PluginOptionResultMap): Promise<INewSample[]> {
+    const datasetPathOption = options["folder"] as (PluginOptionResult<'folderSelect'> | undefined)
 
-    if (dialogResult.filePaths.length === 0) {
+    if(!datasetPathOption || datasetPathOption.type !== 'folderSelect' ||  !fs.existsSync(datasetPathOption.value[0])){
       return [];
     }
 
-    const datasetPath = dialogResult.filePaths[0];
+    const datasetPath = datasetPathOption.value[0];
 
     const log = console.log.bind("[Yolov8 Importer]")
         

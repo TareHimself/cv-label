@@ -1,7 +1,7 @@
-import { INewSample } from "@types";
+import { INewSample, PluginOption,  PluginOptionResultMap } from "@types";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
-import { createOrOpenProject, getActiveProject } from "@root/io_window/db";
+import { createOrOpenProjectDatabase, getActiveProject } from "@root/io_window/db";
 import * as fs from 'fs'
 //import { require as remoteRequire } from "@electron/remote";
 import { getProjectsPath } from "@root/utils";
@@ -16,8 +16,12 @@ export class ComputerVisionImporter {
     this.id = uuidv4();
   }
 
-  async importIntoProject(projectId: string): Promise<string[]> {
-    const imported = await this.import();
+  getOptions(): PluginOption[]{
+    return [];
+  }
+
+  async importIntoProject(projectId: string,options: PluginOptionResultMap): Promise<string[]> {
+    const imported = await this.import(options);
 
     const projectPath = path.join(getProjectsPath(), projectId);
 
@@ -37,7 +41,7 @@ export class ComputerVisionImporter {
       /** */
     }
 
-    await createOrOpenProject(projectPath)
+    await createOrOpenProjectDatabase(projectPath)
 
     let total = imported.length;
 
@@ -88,7 +92,7 @@ export class ComputerVisionImporter {
     })).then(c => c.filter(a => a.status === 'fulfilled' && a.value.length > 0).map(a => a.status === 'fulfilled' ? a.value : ""))
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected async import(): Promise<INewSample[]> {
+  protected async import(options: PluginOptionResultMap): Promise<INewSample[]> {
     throw new Error("Importer not implemented");
   }
 }

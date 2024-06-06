@@ -13,6 +13,8 @@ import {
   IDatabaseAnnotation,
   TUpdateWithId,
   SidePanelIds,
+  PluginOptionResult,
+  PluginOptionResultMap,
 } from "@types";
 import { toast } from "react-hot-toast";
 
@@ -104,12 +106,12 @@ const fetchSample = createAsyncThunk("app/samples/fetch", async ({ id }: { id: s
 
 const importSamples = createAsyncThunk<
   string[],
-  { id: string },
+  { id: string, options: PluginOptionResultMap },
   AppReduxState
->("app/samples/import", async ({ id }, thunk) => {
+>("app/samples/import", async ({ id, options }, thunk) => {
   const state = thunk.getState().app;
   if (state.projectId) {
-    return toast.promise(window.bridge.importSamples(state.projectId, id), {
+    return toast.promise(window.bridge.importSamples(state.projectId, id,options), {
       success: (d) => `Imported ${(d as string[]).length} Samples`,
       loading: "Importing Samples",
       error: "Failed To Import Samples"
@@ -120,11 +122,12 @@ const importSamples = createAsyncThunk<
 
 const exportSamples = createAsyncThunk<
   number,
-  { id: string },
+  { id: string, options: PluginOptionResultMap },
   AppReduxState
 >("app/samples/export", async ({ id }, thunk) => {
   const state = thunk.getState().app;
   if (state.projectId) {
+    console.log("In export function")
     return toast.promise(window.bridge.exportSamples(state.projectId, id), {
       success: (d) => `Exported ${d} Samples`,
       loading: "Exporting Samples",
@@ -441,7 +444,7 @@ export const AppSlice = createSlice({
       state.sampleIds.push(...action.payload)
     });
     builder.addCase(createProject.fulfilled, (state, action) => {
-      state.projectId = action.payload;
+      state.projectId = action.payload?.id;
     });
     builder.addCase(activateProject.fulfilled, (state, action) => {
       state.projectId = action.payload;

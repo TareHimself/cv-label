@@ -1,6 +1,9 @@
 import { dialog } from "@electron/remote";
 import { ComputerVisionImporter } from ".";
-import { CvAnnotation, CvSegmentAnnotation, ELabelType, INewSample } from "@types";
+import { CvAnnotation, CvSegmentAnnotation, ELabelType, INewSample, IPluginInfo, PluginOption, PluginOptionResult, PluginOptionResultMap } from "@types";
+import * as fs from "fs";
+import path from "path";
+import { v4 as uuidv4 } from 'uuid';
 import { withNodeWorker } from "@root/backend/worker";
 interface ICocoDataset {
   info: {
@@ -42,22 +45,24 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
   constructor() {
     super("Coco");
   }
-  override async import(): Promise<INewSample[]> {
-    const dialogResult = await dialog.showOpenDialog({
-      properties: ["openDirectory"],
-    });
 
-    if (dialogResult.filePaths.length === 0) {
+  getOptions(): PluginOption[] {
+    return [{
+      id: "folder",
+      displayName: "COCO Dataset Path",
+      type: 'folderSelect',
+      multiple: false
+    }]
+  }
+
+  override async import(options: PluginOptionResultMap): Promise<INewSample[]> {
+    const datasetPathOption = options["folder"] as (PluginOptionResult<'folderSelect'> | undefined)
+
+    if(!datasetPathOption || datasetPathOption.type !== 'folderSelect' ||  !fs.existsSync(datasetPathOption.value[0])){
       return [];
     }
 
-    const datasetPath = dialogResult.filePaths[0];
-
-    return await withNodeWorker(
-      async (datasetPath, segmentLabelType) => {
-        const fs = __non_webpack_require__("fs");
-        const path = __non_webpack_require__("path");
-        const uuid = __non_webpack_require__("uuid");
+    const datasetPath = datasetPathOption.value[0];
 
         const immediateFolders = await fs.promises.readdir(datasetPath);
         const allSamples: INewSample[] = [];
@@ -89,17 +94,17 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
                         for (let i = 0; i < d.length; i += 2) {
                           const point = d.slice(i, i + 2) as [number, number]
                           points.push({
-                            id: uuid.v4(),
+                            id: uuidv4(),
                             x: point[0],
                             y: point[1]
                           });
                         }
 
                         const label: CvSegmentAnnotation = {
-                          id: uuid.v4(),
+                          id: uuidv4(),
                           points: points,
                           class: c.category_id,
-                          type: segmentLabelType as ELabelType.SEGMENT,
+                          type: ELabelType.SEGMENT,
                         };
 
                         return label;
@@ -118,9 +123,5 @@ export class CocoSegmentationImporter extends ComputerVisionImporter {
         }
 
         return allSamples;
-      },
-      datasetPath,
-      ELabelType.SEGMENT
-    );
   }
 }

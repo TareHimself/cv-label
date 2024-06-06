@@ -21,18 +21,19 @@ const EXPORTERS: ComputerVisionExporter[] = [
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-window.ioBridge.handle("importSamples", async (projectId, importerId) => {
+window.ioBridge.handle("importSamples", async (projectId, importerId,options) => {
     return (
         (await IMPORTERS.find((a) => a.id === importerId)?.importIntoProject(
-        projectId
+        projectId,options
         )) ?? []
     );
 });
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-window.ioBridge.handle("exportSamples", async (projectId, importerId) => {
+window.ioBridge.handle("exportSamples", async (projectId, exporterId) => {
+    console.log("Exporting")
     return (
-        (await EXPORTERS.find((a) => a.id === importerId)?.export(
+        (await EXPORTERS.find((a) => a.id === exporterId)?.export(
         projectId,
         path.join(getProjectsPath(), projectId)
         )) ?? 0
@@ -44,6 +45,7 @@ window.ioBridge.handle("getImporters", async () => {
     return IMPORTERS.map((a) => ({
         id: a.id,
         displayName: a.name,
+        options: a.getOptions()
     }));
 });
 
@@ -51,5 +53,6 @@ window.ioBridge.handle("getExporters", async () => {
     return EXPORTERS.map((a) => ({
         id: a.id,
         displayName: a.name,
+        options: a.getOptions()
     }));
 });

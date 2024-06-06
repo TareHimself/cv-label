@@ -193,6 +193,9 @@ mainToRenderer.handle("getSampleIds", (...args) => mainToIo.sendAsync(ioWindow!,
 mainToRenderer.handle("createProject", (...args) => mainToIo.sendAsync(ioWindow!,"createProject",...args));
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+mainToRenderer.handle("getProjects", (...args) => mainToIo.sendAsync(ioWindow!,"getProjects",...args));
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 mainToRenderer.handle("activateProject", (...args) => mainToIo.sendAsync(ioWindow!,"activateProject",...args));
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

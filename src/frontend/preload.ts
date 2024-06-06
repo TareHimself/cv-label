@@ -15,6 +15,7 @@ const exposedApi = rendererToMain.exposeApi("bridge", {
   unloadModel: (...args) => rendererToMain.sendAsync("unloadModel", ...args),
   getSupportedModels: (...args) => rendererToMain.sendAsync("getSupportedModels", ...args),
   importSamples: (...args) => rendererToMain.sendAsync("importSamples", ...args),
+  exportSamples: (...args) => rendererToMain.sendAsync("exportSamples",...args),
   getExporters: (...args) => rendererToMain.sendAsync("getExporters", ...args),
   getImporters: (...args) => rendererToMain.sendAsync("getImporters", ...args),
   createProject: (...args) => rendererToMain.sendAsync("createProject", ...args),
@@ -28,7 +29,9 @@ const exposedApi = rendererToMain.exposeApi("bridge", {
   replacePoints: (...args) => rendererToMain.sendAsync("replacePoints", ...args),
   updatePoints: (...args) => rendererToMain.sendAsync("updatePoints", ...args),
   removePoints: (...args) => rendererToMain.sendAsync("removePoints", ...args),
-  saveImage: (...args) => rendererToMain.sendAsync('saveImage',...args)
+  saveImage: (...args) => rendererToMain.sendAsync('saveImage',...args),
+  getProjects: (...args) => rendererToMain.sendAsync("getProjects",...args),
+
 });
 
 declare global {

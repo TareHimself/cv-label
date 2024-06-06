@@ -55,12 +55,18 @@ export interface IDatabaseSampleList {
   samples: string[]
 }
 
+export interface IProject {
+  id: string;
+  name: string;
+}
+
 export type IMainToIoEvents = {
-  importSamples: (projectId: string, importerId: string) => Promise<string[]>;
+  importSamples: (projectId: string, importerId: string,options: PluginOptionResultMap) => Promise<string[]>;
   exportSamples: (projectId: string, importerId: string) => Promise<number>;
   getImporters: () => Promise<IPluginInfo[]>;
   getExporters: () => Promise<IPluginInfo[]>;
-  createProject: (name: string) => Promise<string | undefined>;
+  createProject: (name: string) => Promise<IProject| undefined>;
+  getProjects: () => Promise<IProject[]>
   getSample: (sampleId: string) => Promise<IDatabaseSample | undefined>
   getSampleIds: () => Promise<string[]>
   activateProject: (projectId: string) => Promise<boolean>
@@ -71,7 +77,6 @@ export type IMainToIoEvents = {
   replacePoints: (sampleId: string,annotationId: string, points: IDatabasePoint[]) => Promise<IDatabaseAnnotation | null>
   updatePoints: (sampleId: string,annotationId: string,points: TUpdateWithId<IDatabasePoint>[]) => Promise<IDatabaseAnnotation | null>
   removePoints: (sampleId: string,annotationId: string, points: string[]) => Promise<IDatabaseAnnotation | null>
-  
 };
 
 export type IMainToModelsEvents = {
@@ -109,9 +114,42 @@ export type LabelOverlayProps = PropsWithChildren<{
 
 export type CvLabelSegmentPoint = [number, number];
 
+
+
+interface IPluginOptionResults {
+  'string' : string;
+  'number' : number;
+  'fileSelect': string[];
+  'folderSelect': string[];
+}
+
+interface IPluginOptionBase<T extends keyof IPluginOptionResults = keyof IPluginOptionResults>{
+  id: string;
+  displayName: string;
+  type: T
+}
+
+export type PluginStringOption = IPluginOptionBase<'string'>;
+
+export type PluginNumberOption = IPluginOptionBase<'number'>
+
+export type PluginFolderOrFileOption = IPluginOptionBase<'fileSelect' | 'folderSelect'> & {
+  multiple: boolean;
+}
+
+export type PluginOption = PluginStringOption | PluginNumberOption | PluginFolderOrFileOption;
+
+export type PluginOptionResult<T extends keyof IPluginOptionResults = keyof IPluginOptionResults> = {
+  id: string;
+  type: T;
+  value: IPluginOptionResults[T];
+}
+
+export type PluginOptionResultMap = { [id: string]: PluginOptionResult }
 export interface IPluginInfo {
   id: string;
   displayName: string;
+  options: PluginOption[];
 }
 
 export interface CvBoxAnnotation extends IDatabaseAnnotation {

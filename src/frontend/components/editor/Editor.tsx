@@ -41,6 +41,7 @@ import { closeDialog, createDialog } from "@frontend/dialog";
 import DialogBox from "@components/DialogBox";
 import PluginSelectionList from "./PluginSelectionList";
 import SidePanel from "./SidePanel";
+import PluginOptionsSelector from "./PluginOptionsSelector";
 
 export default function Editor() {
   const labeler = useAppSelector((s) => s.app.activeLabeler);
@@ -75,7 +76,7 @@ export default function Editor() {
 
   const importers = useAppSelector((s) => s.app.availableImporters);
 
-  const exporters = useAppSelector((s) => s.app.availableExporters)
+  const exporters = useAppSelector((s) => s.app.availableExporters);
 
   const models = useAppSelector((s) => s.app.availableModels);
 
@@ -269,8 +270,6 @@ export default function Editor() {
               }
             }, [dispatch, labeler, models])}
           />
-        </EditorActionPanel>
-        <EditorActionPanel position="left">
           <Icon
             icon={BsFiles}
             tooltip="Samples"
@@ -290,10 +289,12 @@ export default function Editor() {
                 >
                   <PluginSelectionList
                     plugins={importers}
-                    onPluginSelected={(plugin) => {
+                    onPluginSelected={(plugin,opts) => {
+                      console.log("Exporting using", plugin);
                       dispatch(
                         importSamples({
                           id: plugin.id,
+                          options: opts
                         })
                       );
                       closeDialog(p.id);
@@ -316,10 +317,12 @@ export default function Editor() {
                 >
                   <PluginSelectionList
                     plugins={exporters}
-                    onPluginSelected={(plugin) => {
+                    onPluginSelected={(plugin,opts) => {
+                      console.log("Exporting using", plugin);
                       dispatch(
                         exportSamples({
                           id: plugin.id,
+                          options: opts,
                         })
                       );
                       closeDialog(p.id);

@@ -1,6 +1,6 @@
 import path from 'path';
 import { v4 as uuidv4 } from "uuid";
-import { ELabelType, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample, IDatabaseSampleList, TUpdateWithId } from "@types";
+import { ELabelType, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample, IDatabaseSampleList, IProject, TUpdateWithId } from "@types";
 import * as fs from 'fs';
 import { getProjectsPath } from "@root/utils";
 import Realm, { ObjectSchema } from "realm";
@@ -332,7 +332,7 @@ export function getActiveProject() {
     return activeDatabase;
 }
 
-export async function createOrOpenProject(projectPath: string,bReplaceActive = true) {
+export async function createOrOpenProjectDatabase(projectPath: string,bReplaceActive = true) {
     const dbPath = path.join(projectPath, "realm", "db");
     if(!bReplaceActive){
         const d = new DatabaseInstance();
@@ -392,7 +392,7 @@ window.ioBridge.handle("getSampleIds", async () => {
 })
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-window.ioBridge.handle("createProject", async (_name) => {
+window.ioBridge.handle("createProject", async (name) => {
     try {
         const projectId = uuidv4().replace(/-/g, "");
         const projectPath = path.join(getProjectsPath(), projectId)
@@ -400,9 +400,16 @@ window.ioBridge.handle("createProject", async (_name) => {
             recursive: true,
         });
 
-        await createOrOpenProject(projectPath)
+        await createOrOpenProjectDatabase(projectPath)
 
-        return projectId;
+        const projectInfo: IProject = {
+            id: projectId,
+            name: name
+        }
+
+        await fs.promises.writeFile(projectPath + ".json",JSON.stringify(projectInfo));
+
+        return projectInfo;
     } catch (error) {
         console.error(error);
     }
@@ -410,12 +417,27 @@ window.ioBridge.handle("createProject", async (_name) => {
     return undefined;
 });
 
+window.ioBridge.handle("getProjects", async () => {
+    try {
+        
+        const files = await Promise.all(await fs.promises.readdir(getProjectsPath(),{
+            recursive: false
+        }).then(c => c.filter(a => a.endsWith('.json')).map(d => fs.promises.readFile(path.join(getProjectsPath(),d),'ascii').then(f => JSON.parse(f) as IProject))));
+
+        return files;
+    } catch (error) {
+        console.error(error);
+    }
+
+    return [];
+})
+
 
 
 window.ioBridge.handle("activateProject", async (projectId) => {
     try {
         const projectPath = path.join(getProjectsPath(), projectId)
-        await createOrOpenProject(projectPath)
+        await createOrOpenProjectDatabase(projectPath)
         return true;
     } catch (error) {
         console.error(error);

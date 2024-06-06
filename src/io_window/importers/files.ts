@@ -1,6 +1,5 @@
-import { INewSample } from "@types";
+import { INewSample, PluginFolderOrFileOption, PluginOption, PluginOptionResult, PluginOptionResultMap } from "@types";
 import { ComputerVisionImporter } from ".";
-import { dialog } from "@electron/remote";
 
 export class FilesImporter extends ComputerVisionImporter {
   constructor() {
@@ -8,17 +7,30 @@ export class FilesImporter extends ComputerVisionImporter {
     // this.id = "files";
   }
 
-  override async import(): Promise<INewSample[]> {
-    const dialogResult = await dialog.showOpenDialog({
-      title: "Select Files To Add To Project",
-      properties: ["multiSelections", "openFile"],
-    });
+  getOptions(): PluginOption[] {
+    return [{
+      id: "files",
+      displayName: "Files",
+      type: 'fileSelect',
+      multiple: true
+    }]
+  }
 
-    if (dialogResult.filePaths.length === 0) {
+  override async import(options: PluginOptionResultMap): Promise<INewSample[]> {
+
+    const filesOption = options['files'] as (PluginOptionResult<'fileSelect'> | undefined)
+
+    if(!filesOption || filesOption.type !== 'fileSelect'){
       return [];
     }
 
-    return dialogResult.filePaths.map((a) => {
+    // const dialogResult = await dialog.showOpenDialog({
+    //   title: "Select Files To Add To Project",
+    //   properties: ["multiSelections", "openFile"],
+    // });
+
+    
+    return filesOption.value.map((a) => {
       return {
         path: a,
         annotations: [],
