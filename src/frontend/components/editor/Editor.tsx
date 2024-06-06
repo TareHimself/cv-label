@@ -186,37 +186,7 @@ export default function Editor() {
       )}
       <div className="editor-layer">
         <EditorActionPanel position="bottom">
-          <Icon
-            icon={AiOutlineZoomIn}
-            onClicked={() => {
-              dispatch(setSampleScale(sampleScale + 0.1));
-            }}
-            tooltip="Zoom In"
-          />
-          <Icon
-            icon={MdOutlineNavigateBefore}
-            onClicked={() => {
-              dispatch(setCurrentSample(currentSampleIndex - 1));
-            }}
-            tooltip="Previous Sample"
-          />
-          <Icon
-            icon={MdOutlineNavigateNext}
-            onClicked={() => {
-              dispatch(setCurrentSample(currentSampleIndex + 1));
-            }}
-            tooltip="Next Sample"
-          />
-          <Icon
-            icon={AiOutlineZoomOut}
-            onClicked={() => {
-              dispatch(setSampleScale(sampleScale - 0.1));
-            }}
-            tooltip="Zoom Out"
-          />
-        </EditorActionPanel>
-        <EditorActionPanel position="right">
-          <Icon
+        <Icon
             icon={PiHandPalmBold}
             isActive={editorMode === EEditorMode.SELECT}
             onClicked={() => {
@@ -331,6 +301,34 @@ export default function Editor() {
                 </DialogBox>
               ));
             }}
+          />
+          <Icon
+            icon={AiOutlineZoomIn}
+            onClicked={() => {
+              dispatch(setSampleScale(sampleScale + 0.1));
+            }}
+            tooltip="Zoom In"
+          />
+          <Icon
+            icon={MdOutlineNavigateBefore}
+            onClicked={() => {
+              dispatch(setCurrentSample(currentSampleIndex - 1));
+            }}
+            tooltip="Previous Sample"
+          />
+          <Icon
+            icon={MdOutlineNavigateNext}
+            onClicked={() => {
+              dispatch(setCurrentSample(currentSampleIndex + 1));
+            }}
+            tooltip="Next Sample"
+          />
+          <Icon
+            icon={AiOutlineZoomOut}
+            onClicked={() => {
+              dispatch(setSampleScale(sampleScale - 0.1));
+            }}
+            tooltip="Zoom Out"
           />
         </EditorActionPanel>
         <SidePanel name={"Samples"} id="samples">
