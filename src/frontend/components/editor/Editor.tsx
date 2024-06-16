@@ -310,6 +310,13 @@ export default function Editor() {
             tooltip="Zoom In"
           />
           <Icon
+            icon={AiOutlineZoomOut}
+            onClicked={() => {
+              dispatch(setSampleScale(sampleScale - 0.1));
+            }}
+            tooltip="Zoom Out"
+          />
+          <Icon
             icon={MdOutlineNavigateBefore}
             onClicked={() => {
               dispatch(setCurrentSample(currentSampleIndex - 1));
@@ -322,13 +329,6 @@ export default function Editor() {
               dispatch(setCurrentSample(currentSampleIndex + 1));
             }}
             tooltip="Next Sample"
-          />
-          <Icon
-            icon={AiOutlineZoomOut}
-            onClicked={() => {
-              dispatch(setSampleScale(sampleScale - 0.1));
-            }}
-            tooltip="Zoom Out"
           />
         </EditorActionPanel>
         <SidePanel name={"Samples"} id="samples">

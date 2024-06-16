@@ -45,11 +45,15 @@ export class DatabaseAnnotation extends Realm.Object<IDatabaseAnnotation> {
 export class DatabaseSample extends Realm.Object<IDatabaseSample> {
     declare id: string;
     declare annotations: IDatabaseAnnotation[];
+    declare width: number;
+    declare height: number;
     //declare createdAt: string;
     static schema: ObjectSchema = {
         name: "DatabaseSample",
         properties: {
             id: "string",
+            width: "int",
+            height: "int",
             annotations: "DatabaseAnnotation[]",
         },
         primaryKey: "id",
@@ -79,6 +83,10 @@ function realmObjectToJson<T>(obj: Realm.Object<T> | null) {
     return obj.toJSON() as unknown as T
 }
 
+function realmObjectToJsonChecked<T>(obj: Realm.Object<T>) {
+    return obj.toJSON() as unknown as T
+}
+
 class DatabaseInstance {
     realm?: Realm
     path = "";
@@ -102,6 +110,15 @@ class DatabaseInstance {
         }
         const data = this.realm.objectForPrimaryKey(DatabaseSample, sampleId);
         return realmObjectToJson(data) ?? undefined
+    }
+
+    async getSamples(): Promise<IDatabaseSample[] | undefined> {
+        if (!this.realm) {
+            return undefined;
+        }
+        const data = this.realm.objects(DatabaseSample);
+        
+        return data.map(realmObjectToJsonChecked);
     }
 
     createSample(data: IDatabaseSample): boolean {
@@ -334,19 +351,18 @@ export function getActiveProject() {
 
 export async function createOrOpenProjectDatabase(projectPath: string,bReplaceActive = true) {
     const dbPath = path.join(projectPath, "realm", "db");
+
+    if(activeDatabase?.path == dbPath){
+        return activeDatabase;
+    }
+
     if(!bReplaceActive){
         const d = new DatabaseInstance();
         await d.open(dbPath);
         return d;
     }
 
-    if (activeDatabase) {
-        if (activeDatabase.path === dbPath) {
-            return activeDatabase;
-        }
-
-        activeDatabase.close();
-    }
+    activeDatabase?.close();
 
     const db = new DatabaseInstance();
 
@@ -355,15 +371,6 @@ export async function createOrOpenProjectDatabase(projectPath: string,bReplaceAc
     activeDatabase = db;
 
     return db;
-    // const realm = await Realm.open({
-    //     schema: [DatabasePoint, DatabaseAnnotation, DatabaseSample, DatabaseSampleList],
-    //     path: path.join(projectPath, "realm", "db")
-    // });
-    // this.realm = {
-    //     info: realm,
-    //     path: projectPath
-    // }
-    return;
 }
 
 

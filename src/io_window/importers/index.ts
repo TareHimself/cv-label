@@ -6,6 +6,7 @@ import * as fs from 'fs'
 //import { require as remoteRequire } from "@electron/remote";
 import { getProjectsPath } from "@root/utils";
 import { xxh64 } from "@node-rs/xxhash";
+import sharp from "sharp";
 //const { xxh64 } = remoteRequire('@node-rs/xxhash') as typeof import('@node-rs/xxhash')
 export class ComputerVisionImporter {
   name: string;
@@ -55,8 +56,12 @@ export class ComputerVisionImporter {
 
         if (!activeProject) throw new Error("There is no active project");
 
+        const sampleMeta = await sharp(data.path).metadata();
+
         if (!activeProject.createSample({
           id: newName,
+          width: sampleMeta.width ?? 0,
+          height: sampleMeta.height ?? 0,
           annotations: data.annotations.map((ann) => {
             return {
               id: uuidv4(),

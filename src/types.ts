@@ -42,6 +42,8 @@ export interface IDatabaseAnnotation {
 export interface IDatabaseSample {
   id: string;
   annotations: IDatabaseAnnotation[];
+  width: number;
+  height: number;
   //createdAt: string;
 }
 
