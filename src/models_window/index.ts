@@ -82,5 +82,6 @@ window.modelsBridge.handle("getSupportedModels", async () => {
     return DETECTORS.map((a) => ({
         id: a.id,
         displayName: a.name,
+        options: []
     }));
 });

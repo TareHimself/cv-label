@@ -21,6 +21,7 @@ export default function PluginSelectionList(props: PluginSelectionListProps) {
     {props.plugins.map((plugin) => {
 
         return <button key={plugin.id} className='plugin-list-item' onClick={() => {
+          console.log("OPTION",plugin)
             if(plugin.options.length > 0){
               createDialog((p) => {
                 return <DialogBox
