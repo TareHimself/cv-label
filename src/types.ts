@@ -39,18 +39,41 @@ export interface IDatabaseAnnotation {
   points: IDatabasePoint[];
 }
 
-export interface IDatabaseSample {
+export interface IDatabaseImage {
   id: string;
-  annotations: IDatabaseAnnotation[];
+  name: string;
   width: number;
   height: number;
-  //createdAt: string;
+  extension: string;
+}
+
+export interface IDatabaseSample {
+  id: string;
+  imageId: string
+  annotations: IDatabaseAnnotation[];
 }
 
 // export interface IDatabaseSampleOrder {
 //   id: string;
 //   index: bigint;
 // }
+
+export interface IDatabaseInstance {
+    close: () => void;
+    getSample: (sampleId: string) => Promise<IDatabaseSample | undefined>
+    getImage: (imageId: string) => Promise<IDatabaseImage | undefined>
+    getSamples: () => Promise<IDatabaseSample[] | undefined>
+    getImages: () => Promise<IDatabaseImage[] | undefined>
+    createImage: (image: IDatabaseImage) => Promise<boolean>
+    createSample: (sample: IDatabaseSample) => Promise<boolean>
+    createAnnotations: (sampleId: string,annotations: IDatabaseAnnotation[]) => Promise<IDatabaseSample | undefined>
+    updateAnnotations: (sampleId: string,annotations: TUpdateWithId<IDatabaseAnnotation>[]) => Promise<IDatabaseSample | undefined>
+    removeAnnotations: (sampleId: string, annotations: string[]) => Promise<IDatabaseSample | undefined>
+    createPoints: (sampleId: string, annotationId: string, points: IDatabasePoint[]) => Promise<IDatabaseSample | undefined>
+    replacePoints: (sampleId: string, annotationId: string, points: IDatabasePoint[]) => Promise<IDatabaseSample | undefined>
+    updatePoints: (sampleId: string, annotationId: string, points: TUpdateWithId<IDatabasePoint>[]) => Promise<IDatabaseSample | undefined>
+    removePoints: (sampleId: string, annotationId: string, points: string[]) => Promise<IDatabaseSample | undefined>
+}
 
 export interface IDatabaseSampleList {
   id: string;
@@ -139,19 +162,32 @@ export type PluginFolderOrFileOption = IPluginOptionBase<'fileSelect' | 'folderS
   multiple: boolean;
 }
 
-export type PluginOption = PluginStringOption | PluginNumberOption | PluginFolderOrFileOption;
-
-export type PluginOptionResult<T extends keyof IPluginOptionResults = keyof IPluginOptionResults> = {
-  id: string;
-  type: T;
-  value: IPluginOptionResults[T];
+export type PluginOptionProps<T = unknown> = { 
+  id: string
+  title: string
+  onSelected: (data: T) => void
+}
+// export type PluginOption = PluginStringOption | PluginNumberOption | PluginFolderOrFileOption;
+export type PluginOption = {
+  id: string
+  title: string
+  component: React.FC<PluginOptionProps>
+  defaultValue: unknown
 }
 
-export type PluginOptionResultMap = { [id: string]: PluginOptionResult }
+// export type PluginOptionResult<T extends keyof IPluginOptionResults = keyof IPluginOptionResults> = {
+//   id: string;
+//   type: T;
+//   value: IPluginOptionResults[T];
+// }
+
+export type PluginOptionResultMap = { [id: string]: unknown }
+
+
 export interface IPluginInfo {
-  id: string;
-  displayName: string;
-  options: PluginOption[];
+  getId: () => string
+  getName: () => string
+  getOptions: () => PluginOption[];
 }
 
 export interface CvBoxAnnotation extends IDatabaseAnnotation {

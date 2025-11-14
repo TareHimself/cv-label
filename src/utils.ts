@@ -2,7 +2,8 @@ import path from "path";
 import { app } from "electron";
 import Module from 'module';
 import { TPartialExcept } from "@types";
-
+import fs from 'fs/promises'
+import { withNodeProcess } from "./main/worker";
 export function union(box1: number[], box2: number[]) {
   const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
   const [box2_x1, box2_y1, box2_x2, box2_y2] = box2;
@@ -109,7 +110,7 @@ export function sleep(time: number) {
 }
 
 export function getProjectsPath() {
-  return path.join("./", "projects");
+  return path.join(process.cwd(), "projects");
 }
 
 export function createPromise<R = unknown,Args extends unknown[] = unknown[]>(func: (...args: Args) => Promise<R>,...args: Args){
@@ -122,7 +123,7 @@ export function isDev(){
   return !app.isPackaged;
 }
 
-export function clone<T>(item: T){
+export function deepCloneObject<T>(item: T){
   return JSON.parse(JSON.stringify(item)) as T
 }
 
@@ -142,5 +143,30 @@ export function updateObjectWithId<IdType,A extends {id: IdType}>(object: A,upda
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     object[updateKey] = update[updateKey] as any // IDK why this does not work right now
   }
+}
+
+export async function fileExists(filePath: string) {
+  try {
+    await fs.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function sha512(filePath: string){
+  return await withNodeProcess(async (inFilePath)=> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = eval('require')('fs') as typeof import('fs')
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const crypto = eval('require')('node:crypto') as typeof import('crypto')
+
+
+    const fileBuffer = fs.readFileSync(inFilePath, { encoding: 'binary' });
+    const hash = crypto.createHash('sha256')
+    hash.update(fileBuffer)
+    const digest = hash.digest();
+    return digest.toString('hex');
+  },filePath)
 }
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

@@ -19,13 +19,12 @@ export const rendererConfig: Configuration = {
   resolve: {
     extensions: [".js", ".ts", ".jsx", ".tsx", ".css"],
     alias: {
-      "@redux": path.resolve(__dirname, path.join("src", "frontend", "redux")),
-      "@hooks": path.resolve(__dirname, path.join("src", "frontend", "hooks")),
+      "@hooks": path.resolve(__dirname, path.join("src", "window", "hooks")),
       "@components": path.resolve(
         __dirname,
-        path.join("src", "frontend", "components")
+        path.join("src", "window", "components")
       ),
-      "@frontend": path.resolve(__dirname, path.join("src", "frontend")),
+      "@window": path.resolve(__dirname, path.join("src", "window")),
       "@root": path.resolve(__dirname, path.join("src")),
       "@types": path.resolve(__dirname, path.join("src", "types.ts")),
     },

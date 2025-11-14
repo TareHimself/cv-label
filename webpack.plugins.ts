@@ -11,5 +11,5 @@ export const plugins = [
   new ForkTsCheckerWebpackPlugin({
     logger: 'webpack-infrastructure',
   }),
-  new ReactRefreshWebpackPlugin(),
+  new ReactRefreshWebpackPlugin({ forceEnable: true}),
 ];

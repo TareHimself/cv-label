@@ -4,7 +4,7 @@ import { CvAnnotation, CvSegmentAnnotation, ELabelType, INewSample, IPluginInfo,
 import * as fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from 'uuid';
-import { withNodeWorker } from "@root/backend/worker";
+import { withNodeWorker } from "@root/main/worker";
 interface ICocoDataset {
   info: {
     year: string;

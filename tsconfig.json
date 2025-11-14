@@ -19,17 +19,14 @@
     "jsx": "react-jsx",
     "baseUrl": "./src", // This must be specified if "paths" is.
     "paths": {
-      "@redux/*": [
-        "frontend/redux/*"
-      ],
       "@hooks/*": [
-        "frontend/hooks/*"
+        "window/hooks/*"
       ],
       "@components/*": [
-        "frontend/components/*"
+        "window/components/*"
       ],
-      "@frontend/*": [
-        "frontend/*"
+      "@window/*": [
+        "window/*"
       ],
       "@types": [
         "./types.ts"
@@ -45,7 +42,7 @@
   "include": [
     "src/**/*",
     "src/**/*.d.ts"
-  ],
+, "redux"  ],
   "exclude": [
     "node_modules"
   ]
