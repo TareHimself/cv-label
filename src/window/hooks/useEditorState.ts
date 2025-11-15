@@ -1,4 +1,4 @@
-import { BasicRect, EEditorMode, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample, PluginOptionResultMap, SidePanelIds, TUpdateWithId } from '@types';
+import { BasicRect, EEditorMode, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample, PluginOptionResultMap, SidePanelIds, TUpdateWithId, Vector2 } from '@types';
 import { create } from 'zustand'
 import { domRectToBasicRect } from './useElementRect';
 import { activateProject, IActiveProject } from '@window/native/project';
@@ -17,21 +17,19 @@ export type EditorState = {
   scale: number;
   panX: number;
   panY: number;
-  labelerContainerRect: BasicRect;
-  labelerRect: BasicRect;
-  editorRect: BasicRect;
-  sampleImageInfo: {
-    width: number;
-    height: number;
+  imageDisplayedRect: BasicRect;
+  imageSize: {
+    width: number
+    height: number
   };
+  editorRect: BasicRect;
   sidePanelId: SidePanelIds
 };
 
 export type EditorActions = {
   setPan: (x: number, y: number) => void
   onPan: (dx: number, dy: number) => void
-  setLabelerContainerRect: (rect: BasicRect) => void
-  setLabelerRect: (rect: BasicRect) => void
+  setImageDisplayedRect: (rect: BasicRect) => void
   setEditorRect: (rect: BasicRect) => void
   onImageLoaded: (image: HTMLImageElement) => void
   activateProject: (projectId: string) => Promise<boolean>
@@ -65,34 +63,21 @@ export const useEditorState = create<EditorState & EditorActions>((set,get) => (
   panX: 0,
   panY: 0,
   labelerContainerRect: { ...EmptyRect },
-  labelerRect: { ...EmptyRect },
+  imageDisplayedRect: { ...EmptyRect },
+  imageSize: { width: 0, height: 0},
   editorRect: { ...EmptyRect },
-  sampleImageInfo: { width: 0, height: 0 },
   sidePanelId: 'annotations',
   setPan: (x: number, y: number) => set(() => ({ panX: x, panY: y })),
   onPan: (dx: number, dy: number) => set((s) => ({ panX: s.panX + dx, panY: s.panY + dy })),
-  setLabelerContainerRect: (rect: BasicRect) => set(() => ({ labelerContainerRect: rect })),
-  setLabelerRect: (rect: BasicRect) => set(() => ({ labelerRect: rect })),
+  setImageDisplayedRect: (rect) => {
+    set(() => ({ imageDisplayedRect: rect }))
+  },
   setEditorRect: (rect: BasicRect) => set(() => ({ editorRect: rect })),
-  onImageLoaded: (image) => set((state) => {
-
-    const newLabelerRect = domRectToBasicRect(
-      image.getBoundingClientRect()
-    );
-
-    const actualHeight =
-      newLabelerRect.width *
-      (state.sampleImageInfo.height / state.sampleImageInfo.width);
+  onImageLoaded: (image) => set(() => {
     return {
-      sampleImageInfo: {
+      imageSize : {
         width: image.naturalWidth,
-        height: image.naturalHeight,
-      },
-      labelerRect: {
-        x: newLabelerRect.x,
-        width: newLabelerRect.width,
-        height: actualHeight,
-        y: newLabelerRect.y - (actualHeight - newLabelerRect.height) / 2,
+        height: image.naturalHeight
       },
       scale: 1,
       panX: 0,

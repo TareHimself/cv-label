@@ -38,19 +38,15 @@ class Drawable {
     callOnDestroy: (() => void)[] = []
     controlPointIds: string[] = [];
     controlPointLineIds: string[] = [];
-    scale: Vector2;
-    zoom: number;
 
     get isSelected() {
         return this.drawerIndex === this.owner.selectedControlPoint;
     }
 
-    constructor(owner: LabelerController, annotation: IDatabaseAnnotation, drawerIdx: number, scale: Vector2, zoom: number) {
+    constructor(owner: LabelerController, annotation: IDatabaseAnnotation, drawerIdx: number) {
         this.owner = owner;
         this.annotation = annotation;
         this.drawerIndex = drawerIdx;
-        this.scale = scale;
-        this.zoom = zoom;
     }
 
     onCreate() {
@@ -114,17 +110,17 @@ class Drawable {
 
         const startPoint = transformedPoints[0];
 
-        ctx.moveTo(startPoint.x,startPoint.y);
+        ctx.moveTo(startPoint.x, startPoint.y);
 
-        for(let i = 0; i < transformedPoints.length; i++){
+        for (let i = 0; i < transformedPoints.length; i++) {
 
             const nextPoint = transformedPoints[(i + 1) % transformedPoints.length];
 
-            ctx.lineTo(nextPoint.x,nextPoint.y);
+            ctx.lineTo(nextPoint.x, nextPoint.y);
         }
 
         //if (closed) ctx.closePath();
-    
+
         if (fill) {
             ctx.fill();
         }
@@ -140,37 +136,33 @@ class BoxDrawable extends Drawable {
 
         // Selection and dragging
         this.bindHitEvent(this.drawableHitId, "mousedown", (e) => {
+            console.log("Box Clicked")
             if (e.button !== 0) return;
             if (this.owner.editorMode !== EEditorMode.SELECT) return
 
-            if (this.isSelected) {
-                const startPositions: Vector2[] = this.annotation.points.map(c => ({
-                    x: c.x * this.scale.x,
-                    y: c.y * this.scale.y
-                }))
+            const rect = this.owner.getCanvasRect()
 
-                const positionDiff: Vector2 = {
-                    x: 0,
-                    y: 0
+            if (this.isSelected) {
+                const startPositions: Vector2[] = deepCloneObject(this.annotation.points)
+
+                const initial: Vector2 = {
+                    x: e.clientX - rect.x,
+                    y: e.clientY - rect.y
                 }
 
                 let movedMouse = false;
                 watchMouseMovement((mouseMoveEvent) => {
                     movedMouse = true;
-                    //const { scaleX: x, scaleY: y } = drawable.scale
-                    positionDiff.x += mouseMoveEvent.movementX;
-                    positionDiff.y += mouseMoveEvent.movementY;
-
-
-
+                    const dx = ((mouseMoveEvent.clientX - rect.x) - initial.x) * this.owner.imageSpaceScale
+                    const dy = ((mouseMoveEvent.clientY - rect.y) - initial.y) * this.owner.imageSpaceScale
                     this.annotation.points.forEach((point, idx) => {
-                        point.x = (startPositions[idx].x + positionDiff.x) / this.scale.x;
-                        point.y = (startPositions[idx].y + positionDiff.y) / this.scale.y;
+                        point.x = startPositions[idx].x + dx
+                        point.y = startPositions[idx].y + dy
                     })
                 },
                     () => {
                         if (!movedMouse) return;
-                        useEditorState.getState().updatePoints(this.owner.sampleId,this.annotation.id,this.annotation.points)
+                        useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, this.annotation.points)
 
                     })
             }
@@ -186,16 +178,16 @@ class BoxDrawable extends Drawable {
 
             if (this.owner.editorMode !== EEditorMode.SELECT) return
 
-            createContextMenu(e,[{
+            createContextMenu(e, [{
                 name: "Delete",
-                callback: ({ sampleId, annotationId })=>{
-                    useEditorState.getState().removeAnnotations(sampleId,[annotationId])
+                callback: ({ sampleId, annotationId }) => {
+                    useEditorState.getState().removeAnnotations(sampleId, [annotationId])
                 }
-            }],{
+            }], {
                 sampleId: this.owner.sampleId,
                 annotationId: this.annotation.id
             })
-            
+
             e.stopImmediatePropagation();
         })
 
@@ -206,37 +198,38 @@ class BoxDrawable extends Drawable {
 
             this.bindHitEvent(id, "mousedown", (mouseDownEvent) => {
                 if (mouseDownEvent.button !== 0) return;
-
                 const point = this.annotation.points[pointIdx];
 
                 console.log("Control point hit", this.annotation.points[pointIdx])
 
+                const rect = this.owner.getCanvasRect()
+
                 const startPosition: Vector2 = {
-                    x: point.x * this.scale.x,
-                    y: point.y * this.scale.y
+                    x: point.x,
+                    y: point.y
                 }
 
-                const positionDiff: Vector2 = {
-                    x: 0,
-                    y: 0
+                const initial: Vector2 = {
+                    x: mouseDownEvent.clientX - rect.x,
+                    y: mouseDownEvent.clientY - rect.y
                 }
 
                 let movedMouse = false;
                 watchMouseMovement((mouseMoveEvent) => {
                     movedMouse = true;
-                    //const { scaleX: x, scaleY: y } = drawable.scale
-                    positionDiff.x += mouseMoveEvent.movementX;
-                    positionDiff.y += mouseMoveEvent.movementY;
 
-                    point.x = (startPosition.x + positionDiff.x) / this.scale.x;
-                    point.y = (startPosition.y + positionDiff.y) / this.scale.y;
+                    const dx = ((mouseMoveEvent.clientX - rect.x) - initial.x) * this.owner.imageSpaceScale
+                    const dy = ((mouseMoveEvent.clientY - rect.y) - initial.y) * this.owner.imageSpaceScale
+
+                    point.x = startPosition.x + dx
+                    point.y = startPosition.y + dy
 
                     console.log("Moving Control point")
                 }, () => {
                     if (!movedMouse) return;
-                    useEditorState.getState().updatePoints(this.owner.sampleId,this.annotation.id,[
-                            point
-                        ]
+                    useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, [
+                        point
+                    ]
                     )
                 })
 
@@ -267,25 +260,25 @@ class BoxDrawable extends Drawable {
         }];
 
 
-        this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), "red", false, 1);
+        this.drawPolygon(ctx, points, (a) => ({ x: a.x / this.owner.imageSpaceScale, y: a.y / this.owner.imageSpaceScale }), "red", false, 1);
 
         if (this.isSelected) {
             for (const point of originalPoints) {
-                this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 4, "white", 1, "black")
+                this.drawControlPoint(ctx, point.x / this.owner.imageSpaceScale, point.y / this.owner.imageSpaceScale, 4, "white", 1, "black")
             }
         }
 
         // if (window.debugHitTest) {
         //     const fillColor = `rgba(${this.drawableHitId},0.3)`;
 
-        //     this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, 1);
+        //     this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.owner.imageSpaceScale, y: a.y * this.owner.imageSpaceScale }), fillColor, true, 1);
 
         //     if (this.isSelected) {
         //         for (let i = 0; i < this.annotation.points.length; i++) {
         //             const point = this.annotation.points[i];
         //             const hitId = this.controlPointIds[i];
 
-        //             this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 5, `rgb(${hitId})`)
+        //             this.drawControlPoint(ctx, point.x * this.owner.imageSpaceScale, point.y * this.owner.imageSpaceScale, 5, `rgb(${hitId})`)
         //         }
         //     }
         // }
@@ -312,7 +305,7 @@ class BoxDrawable extends Drawable {
 
         const fillColor = `rgb(${this.drawableHitId})`;
 
-        this.drawPolygon(ctx, points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, 1);
+        this.drawPolygon(ctx, points, (a) => ({ x: a.x / this.owner.imageSpaceScale, y: a.y / this.owner.imageSpaceScale }), fillColor, true, 1);
     }
 
     override drawControlPointBounds(
@@ -327,7 +320,7 @@ class BoxDrawable extends Drawable {
             const point = originalPoints[i];
             const hitId = this.controlPointIds[i];
 
-            this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 5, `rgb(${hitId})`)
+            this.drawControlPoint(ctx, point.x / this.owner.imageSpaceScale, point.y / this.owner.imageSpaceScale, 5, `rgb(${hitId})`)
         }
     }
 }
@@ -342,40 +335,37 @@ class SegmentationDrawable extends Drawable {
 
             if (this.owner.editorMode !== EEditorMode.SELECT) return
 
-            if (this.isSelected) {
-                const startPositions: Vector2[] = this.annotation.points.map(c => ({
-                    x: c.x * this.scale.x,
-                    y: c.y * this.scale.y
-                }))
+            const rect = this.owner.getCanvasRect()
 
-                const positionDiff: Vector2 = {
-                    x: 0,
-                    y: 0
+            if (this.isSelected) {
+                const startPositions: Vector2[] = deepCloneObject(this.annotation.points)
+
+                const initial: Vector2 = {
+                    x: e.clientX - rect.x,
+                    y: e.clientY - rect.y
                 }
 
                 let movedMouse = false;
                 watchMouseMovement((mouseMoveEvent) => {
                     movedMouse = true;
-                    //const { scaleX: x, scaleY: y } = drawable.scale
-                    positionDiff.x += mouseMoveEvent.movementX;
-                    positionDiff.y += mouseMoveEvent.movementY;
 
-
+                    const dx = ((mouseMoveEvent.clientX - rect.x) - initial.x) * this.owner.imageSpaceScale
+                    const dy = ((mouseMoveEvent.clientY - rect.y) - initial.y) * this.owner.imageSpaceScale
 
                     this.annotation.points.forEach((point, idx) => {
-                        point.x = (startPositions[idx].x + positionDiff.x) / this.scale.x;
-                        point.y = (startPositions[idx].y + positionDiff.y) / this.scale.y;
+                        point.x = startPositions[idx].x + dx
+                        point.y = startPositions[idx].y + dy
                     })
                 },
                     () => {
                         if (!movedMouse) return;
-                        useEditorState.getState().updatePoints(this.owner.sampleId,this.annotation.id,this.annotation.points)
+                        useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, this.annotation.points)
                     })
             }
             else {
                 this.owner.setAnnotationIndex(this.drawerIndex);
             }
-            
+
             e.stopImmediatePropagation()
         })
 
@@ -385,19 +375,19 @@ class SegmentationDrawable extends Drawable {
 
             if (this.owner.editorMode !== EEditorMode.SELECT) return
 
-            createContextMenu(e,[{
+            createContextMenu(e, [{
                 name: "Delete",
-                callback: ({ sampleId, annotationId })=>{
-                    useEditorState.getState().removeAnnotations(sampleId,[annotationId])
+                callback: ({ sampleId, annotationId }) => {
+                    useEditorState.getState().removeAnnotations(sampleId, [annotationId])
                 }
-            }],{
+            }], {
                 sampleId: this.owner.sampleId,
                 annotationId: this.annotation.id
             })
 
             e.stopImmediatePropagation();
         })
-        
+
 
         // Control points and reshaping
         this.controlPointIds = this.annotation.points.map((c, pointIdx) => {
@@ -409,32 +399,35 @@ class SegmentationDrawable extends Drawable {
                 const point = this.annotation.points[pointIdx];
 
                 console.log("Control point hit", this.annotation.points[pointIdx])
+
+                const rect = this.owner.getCanvasRect()
+
                 const startPosition: Vector2 = {
-                    x: point.x * this.scale.x,
-                    y: point.y * this.scale.y
+                    x: point.x,
+                    y: point.y
                 }
 
-                const positionDiff: Vector2 = {
-                    x: 0,
-                    y: 0
+                const initial: Vector2 = {
+                    x: mouseDownEvent.clientX - rect.x,
+                    y: mouseDownEvent.clientY - rect.y
                 }
 
                 let movedMouse = false;
                 watchMouseMovement((mouseMoveEvent) => {
                     movedMouse = true;
+
+                    const dx = ((mouseMoveEvent.clientX - rect.x) - initial.x) * this.owner.imageSpaceScale
+                    const dy = ((mouseMoveEvent.clientY - rect.y) - initial.y) * this.owner.imageSpaceScale
+
+                    point.x = startPosition.x + dx
+                    point.y = startPosition.y + dy
                     //const { scaleX: x, scaleY: y } = drawable.scale
-                    positionDiff.x += mouseMoveEvent.movementX;
-                    positionDiff.y += mouseMoveEvent.movementY;
-
-                    point.x = (startPosition.x + positionDiff.x) / this.scale.x;
-                    point.y = (startPosition.y + positionDiff.y) / this.scale.y;
-
                     console.log("Moving Control point")
                 }, () => {
                     if (!movedMouse) return;
-                    useEditorState.getState().updatePoints(this.owner.sampleId,this.annotation.id,[
-                            point
-                        ])
+                    useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, [
+                        point
+                    ])
                 })
 
                 mouseDownEvent.stopImmediatePropagation()
@@ -444,7 +437,7 @@ class SegmentationDrawable extends Drawable {
                 if (e.button !== 2) return;
 
                 if (this.annotation.points.length > 3) {
-                    useEditorState.getState().removePoints(this.owner.sampleId,this.annotation.id,[c.id])
+                    useEditorState.getState().removePoints(this.owner.sampleId, this.annotation.id, [c.id])
                 }
                 e.stopImmediatePropagation();
             })
@@ -455,23 +448,21 @@ class SegmentationDrawable extends Drawable {
         this.lineHitIds = this.annotation.points.map((c, pointIdx) => {
             const id = generateHitId();
 
-            this.bindHitEvent(id,'click',(e)=>{
-                const rect = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
-    
-                const [mouseClickX,mouseClickY] = [Math.round(e.clientX - rect.left),Math.round(e.clientY - rect.top)];
-    
-                const [scaleX, scaleY] = this.owner.imageToCanvasScale
+            this.bindHitEvent(id, 'click', (e) => {
+                const rect = this.owner.getCanvasRect()
 
-                console.log("Line Clicked",id)
+                const [mouseClickX, mouseClickY] = [Math.round(e.clientX - rect.left), Math.round(e.clientY - rect.top)];
+
+                console.log("Line Clicked", id)
                 const newPoint: IDatabasePoint = {
                     id: uuidv4(),
-                    x: mouseClickX / scaleX,
-                    y: mouseClickY / scaleY
+                    x: mouseClickX * this.owner.imageSpaceScale,
+                    y: mouseClickY * this.owner.imageSpaceScale
                 }
 
-                const newPoints = [...this.annotation.points.slice(0,pointIdx + 1),newPoint,...this.annotation.points.slice(pointIdx + 1)];
+                const newPoints = [...this.annotation.points.slice(0, pointIdx + 1), newPoint, ...this.annotation.points.slice(pointIdx + 1)];
 
-                useEditorState.getState().replacePoints(this.owner.sampleId,this.annotation.id,newPoints)
+                useEditorState.getState().replacePoints(this.owner.sampleId, this.annotation.id, newPoints)
             });
 
             return id;
@@ -482,11 +473,11 @@ class SegmentationDrawable extends Drawable {
     override draw(data: ILabelerDrawData<CanvasRenderingContext2D>): void {
         const { ctx } = data;
 
-        this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), "red", false, 1);
+        this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x / this.owner.imageSpaceScale, y: a.y / this.owner.imageSpaceScale }), "red", false, 1);
 
         if (this.isSelected) {
             for (const point of this.annotation.points) {
-                this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 4, "white", 1, "black")
+                this.drawControlPoint(ctx, point.x / this.owner.imageSpaceScale, point.y / this.owner.imageSpaceScale, 4, "white", 1, "black")
             }
         }
     }
@@ -496,14 +487,14 @@ class SegmentationDrawable extends Drawable {
 
         const fillColor = `rgb(${this.drawableHitId})`;
 
-        const transformedPoints = this.annotation.points.map((a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }));
+        const transformedPoints = this.annotation.points.map((a) => ({ x: a.x / this.owner.imageSpaceScale, y: a.y / this.owner.imageSpaceScale }));
 
         this.drawPolygon(ctx, transformedPoints, (a) => a, fillColor, true, 1);
 
         if (this.isSelected) {
-            // this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), fillColor, true, 1);
-            
-            for(let i = 0; i < transformedPoints.length; i++){
+            // this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.owner.imageSpaceScale, y: a.y * this.owner.imageSpaceScale }), fillColor, true, 1);
+
+            for (let i = 0; i < transformedPoints.length; i++) {
                 const start = transformedPoints[i];
                 const end = transformedPoints[(i + 1) % transformedPoints.length];
                 ctx.beginPath();
@@ -511,8 +502,8 @@ class SegmentationDrawable extends Drawable {
                 ctx.lineJoin = "round";
                 ctx.lineWidth = 7;
                 ctx.strokeStyle = `rgb(${this.lineHitIds[i]})`;
-                ctx.moveTo(start.x,start.y);
-                ctx.lineTo(end.x,end.y);
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
                 ctx.stroke();
                 ctx.closePath();
             }
@@ -521,7 +512,7 @@ class SegmentationDrawable extends Drawable {
                 const point = this.annotation.points[i];
                 const hitId = this.controlPointIds[i];
 
-                this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 5, `rgb(${hitId})`)
+                this.drawControlPoint(ctx, point.x / this.owner.imageSpaceScale, point.y / this.owner.imageSpaceScale, 5, `rgb(${hitId})`)
             }
         }
     }
@@ -532,19 +523,21 @@ class SegmentationDrawable extends Drawable {
 
         const { ctx } = data;
 
-        //this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.scale.x, y: a.y * this.scale.y }), this.lineHitIds, false, 1);
+        //this.drawPolygon(ctx, this.annotation.points, (a) => ({ x: a.x * this.owner.imageSpaceScale, y: a.y * this.owner.imageSpaceScale }), this.lineHitIds, false, 1);
         for (let i = 0; i < this.annotation.points.length; i++) {
             const point = this.annotation.points[i];
             const hitId = this.controlPointIds[i];
 
-            this.drawControlPoint(ctx, point.x * this.scale.x, point.y * this.scale.y, 5, `rgb(${hitId})`)
+            this.drawControlPoint(ctx, point.x / this.owner.imageSpaceScale, point.y / this.owner.imageSpaceScale, 5, `rgb(${hitId})`)
         }
     }
 }
 
-
+type MouseEventCallbackValue = {
+    listener: (event: MouseEvent) => void;
+    callbacks: Map<string, HitTestCallback>;
+}
 export default class LabelerController extends CanvasController<CanvasRenderingContext2D> {
-    config: ILabelerControllerConfig;
     drawers: Drawable[] = [];
     annotations: IDatabaseAnnotation[] = [];
     state: ReturnType<typeof useEditorState.getState> = useEditorState.getState();
@@ -552,12 +545,10 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     endCallbacks: (() => void)[] = []
     isActive = false;
     cavasCtx: CanvasRenderingContext2D | null = null;
-    hitTestCanvasCtx: OffscreenCanvasRenderingContext2D | null = null;
+    hitTestCanvases: OffscreenCanvasRenderingContext2D[] = [];
+    currentHitTestCanvas = 0
     selectedControlPoint = -1
-    mouseEventCallbacks: Map<BindableMouseEvents, {
-        listener: (event: MouseEvent) => void;
-        callbacks: Map<string, HitTestCallback>;
-    }> = new Map();
+    mouseEventCallbacks: Map<BindableMouseEvents, MouseEventCallbackValue> = new Map();
     createdAt: DOMHighResTimeStamp
 
     get editorMode() {
@@ -568,34 +559,35 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         return this.state.sampleIds[this.state.selectedSampleIndex]
     }
 
-    get imageToCanvasScale(){
-        return [
-            this.state.labelerRect.width / this.state.sampleImageInfo.width,
-            this.state.labelerRect.height / this.state.sampleImageInfo.height,
-        ];
+    get imageSpaceScale() {
+        return this.state.imageSize.width / this.state.imageDisplayedRect.width
     }
 
-    constructor(config: ILabelerControllerConfig) {
+    constructor() {
         super();
-        this.config = config;
         this.createdAt = performance.now();
+    }
+
+    getCanvasRect() {
+        return this.cavasCtx!.canvas.getBoundingClientRect()
     }
 
     bindHitEvent(hitId: string, event: BindableMouseEvents, eventCallback: HitTestCallback): HitUnbind {
 
         if (this.cavasCtx === null) throw new Error("Canvas Ctx is not valid");
 
-        if (!this.mouseEventCallbacks.has(event)) this.mouseEventCallbacks.set(event, {
-            listener: ((eventName: BindableMouseEvents, event: MouseEvent) => {
-                if (this.hitTestCanvasCtx !== null) {
-                    const rect = (event.currentTarget as HTMLCanvasElement).getBoundingClientRect();
+        // Add the event type to the map if we dont already have it
+        if (!this.mouseEventCallbacks.has(event)) {
+            const listener = ((eventName: BindableMouseEvents, event: MouseEvent) => {
+                if (this.hitTestCanvases !== null) {
+                    const rect = this.getCanvasRect()
 
                     const [mouseX, mouseY] = [Math.round(event.clientX - rect.left), Math.round(event.clientY - rect.top)];
 
-                    const [r, g, b, a] = this.hitTestCanvasCtx.getImageData(mouseX, mouseY, 1, 1).data
+                    const [r, g, b, a] = this.hitTestCanvases[this.currentHitTestCanvas].getImageData(mouseX, mouseY, 1, 1).data
 
                     if (a === 0) {
-                        if(this.selectedControlPoint !== -1){
+                        if (this.selectedControlPoint !== -1) {
                             this.setAnnotationIndex(-1);
                         }
                         return;
@@ -610,64 +602,82 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
                     }
                 }
 
-            }).bind(this, event),
-            callbacks: new Map()
-        })
+            }).bind(this, event)
+            this.mouseEventCallbacks.set(event, {
+                listener,
+                callbacks: new Map()
+            })
+        }
 
-        this.mouseEventCallbacks.get(event)?.callbacks.set(hitId, eventCallback)
+        const mouseEventCallback = this.mouseEventCallbacks.get(event) as MouseEventCallbackValue
 
-        const mouseEventCallback = this.mouseEventCallbacks.get(event)
+        mouseEventCallback.callbacks.set(hitId, eventCallback)
 
-        if (mouseEventCallback) {
+        if (this.mouseEventCallbacks.size === 1) {
             this.cavasCtx?.canvas.addEventListener(event, mouseEventCallback.listener)
         }
 
         return () => {
-            this.mouseEventCallbacks.get(event)?.callbacks.delete(hitId);
+            mouseEventCallback.callbacks.delete(hitId);
 
-            const callbacksLength = this.mouseEventCallbacks.get(event)?.callbacks.size
+            const callbacksLength = mouseEventCallback.callbacks.size
 
-            const listener = this.mouseEventCallbacks.get(event)?.listener
-
-            if (listener !== undefined && callbacksLength !== undefined && callbacksLength !== 0) {
-                this.cavasCtx?.canvas.removeEventListener(event, listener);
-
+            if (callbacksLength !== 0) {
+                this.cavasCtx?.canvas.removeEventListener(event, mouseEventCallback.listener);
                 this.mouseEventCallbacks.delete(event);
             }
-
         }
     }
 
     setAnnotationIndex(idx: number) {
-        console.log("Updating annotation Index To",idx)
+        console.log("Updating annotation Index To", idx)
+
         this.selectedControlPoint = idx;
         this.state.setSelectedAnnotationIndex(idx);
     }
 
     override onBegin(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
-        console.log("Creating labeler",this.imageToCanvasScale,this.state)
+        console.log("Creating labeler")
         this.cavasCtx = data.ctx
-        data.ctx.canvas.width = this.config.renderWidth;
-        data.ctx.canvas.height = this.config.renderHeight;
-        this.hitTestCanvasCtx = new OffscreenCanvas(data.ctx.canvas.width, data.ctx.canvas.height).getContext('2d', {
-            willReadFrequently: true
-        });
+        data.ctx.canvas.width = this.state.imageDisplayedRect.width;
+        data.ctx.canvas.height = this.state.imageDisplayedRect.height;
+        {
+            const c1 = new OffscreenCanvas(data.ctx.canvas.width, data.ctx.canvas.height).getContext('2d', {
+                willReadFrequently: true
+            });
+            const c2 = new OffscreenCanvas(data.ctx.canvas.width, data.ctx.canvas.height).getContext('2d', {
+                willReadFrequently: true
+            });
+            if (c1 !== null && c2 !== null) {
+                this.hitTestCanvases = [c1, c2]
+            }
+        }
 
         // Debug function for viewing the collision canvas
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).exportCollisionCanvas = async () => {
-            const blob = await this.hitTestCanvasCtx?.canvas.convertToBlob()
+            const blob = await this.hitTestCanvases[this.currentHitTestCanvas]?.canvas.convertToBlob()
             if (blob !== undefined) {
-                return await blobToBase64(blob);
+                // URL.createObjectURL(blob)
+                return URL.createObjectURL(blob)//await blobToBase64(blob);
             }
             return undefined;
         }
 
-        const stateCallback = (state: ReturnType<typeof useEditorState.getState>,prevState: ReturnType<typeof useEditorState.getState>) => {
-
-            const editorModeChanged = state.mode != prevState.mode;
+        const stateCallback = (state: ReturnType<typeof useEditorState.getState>, prevState: ReturnType<typeof useEditorState.getState>) => {
 
             this.state = state;
+            if (this.cavasCtx && this.hitTestCanvases) {
+                this.cavasCtx.canvas.width = this.state.imageDisplayedRect.width;
+                this.cavasCtx.canvas.height = this.state.imageDisplayedRect.height;
+                for (const ctx of this.hitTestCanvases) {
+                    ctx.canvas.width = this.state.imageDisplayedRect.width;
+                    ctx.canvas.height = this.state.imageDisplayedRect.height;
+                }
+
+            }
+
+            const editorModeChanged = state.mode != prevState.mode;
 
             const currentSample = this.state.samples.get(this.state.sampleIds[this.state.selectedSampleIndex]);
 
@@ -703,7 +713,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
 
         // Draw initial state
-        stateCallback(this.state,this.state);
+        stateCallback(this.state, this.state);
 
         requestAnimationFrame(animationFrameCallback);
     }
@@ -725,20 +735,9 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         this.drawers.map(c => c.onDestroy());
         this.drawers = [];
 
-        const [scaleX, scaleY] = [
-            this.state.labelerRect.width / this.state.sampleImageInfo.width,
-            this.state.labelerRect.height / this.state.sampleImageInfo.height,
-        ];
-
         this.drawers = annotations.map((a, idx) => {
 
-            const drawer = a.type === ELabelType.BOX ? new BoxDrawable(this, deepCloneObject(a), idx, {
-                x: scaleX,
-                y: scaleY
-            }, this.state.scale) : new SegmentationDrawable(this, deepCloneObject(a), idx, {
-                x: scaleX,
-                y: scaleY
-            }, this.state.scale)
+            const drawer = a.type === ELabelType.BOX ? new BoxDrawable(this, deepCloneObject(a), idx) : new SegmentationDrawable(this, deepCloneObject(a), idx)
             drawer.onCreate();
             return drawer;
         })
@@ -771,8 +770,9 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     }
 
     override draw(data: ILabelerDrawData<CanvasRenderingContext2D>): void {
-
+        // console.log("Scale",this.imageSpaceScale)
         // const delta = data.step - this.lastDrawTime;
+
 
         const currentSample = this.state.samples.get(this.state.sampleIds[this.state.selectedSampleIndex]);
 
@@ -782,14 +782,23 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
         const { ctx } = data;
 
+        if (ctx.canvas.width <= 0 || ctx.canvas.height <= 0) {
+            return
+        }
+
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-        this.hitTestCanvasCtx?.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+        const currentHitCanvasIndex = this.currentHitTestCanvas
+        const nextHitCanvasIndex = (this.currentHitTestCanvas + 1) % 2
+        const currentHitCtx = this.hitTestCanvases[currentHitCanvasIndex]
+        const nextHitCtx = this.hitTestCanvases[nextHitCanvasIndex]
+
+        nextHitCtx.clearRect(0, 0, nextHitCtx.canvas.width, nextHitCtx.canvas.height)
 
 
-        const boundsDrawData: ILabelerDrawData<OffscreenCanvasRenderingContext2D> | undefined = this.hitTestCanvasCtx !== null ? {
+        const boundsDrawData: ILabelerDrawData<OffscreenCanvasRenderingContext2D> | undefined = this.hitTestCanvases !== null ? {
             ...data,
-            ctx: this.hitTestCanvasCtx
+            ctx: nextHitCtx
         } : undefined
 
         for (const drawable of this.drawers) {
@@ -805,19 +814,21 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
             this.drawers[this.selectedControlPoint].drawControlPointBounds(boundsDrawData);
         }
 
-        if(window.debugHitTest){
+        this.currentHitTestCanvas = nextHitCanvasIndex
+
+        currentHitCtx.drawImage(nextHitCtx.canvas, 0, 0)
+
+        if (window.debugHitTest) {
             const offscreenCanvasCtx = boundsDrawData?.ctx;
             const canvasCtx = data.ctx;
-    
-            if(offscreenCanvasCtx && canvasCtx && offscreenCanvasCtx.canvas.width > 0 && offscreenCanvasCtx.canvas.height > 0){
+
+            if (offscreenCanvasCtx && canvasCtx && offscreenCanvasCtx.canvas.width > 0 && offscreenCanvasCtx.canvas.height > 0) {
                 //const data = offscreenCanvasCtx.getImageData(0,0,offscreenCanvasCtx.canvas.width,offscreenCanvasCtx.canvas.height)
                 const oldGlobalAlpha = canvasCtx.globalAlpha;
                 canvasCtx.globalAlpha = 0.3
-                canvasCtx.drawImage(offscreenCanvasCtx.canvas,0,0);
+                canvasCtx.drawImage(offscreenCanvasCtx.canvas, 0, 0);
                 canvasCtx.globalAlpha = oldGlobalAlpha;
             }
         }
-        
-
     }
 }

@@ -24,11 +24,11 @@ export default function Labeler() {
   const isLoadingSample = useEditorState((s) => s.isLoadingSample)
   const imageId = useId()
   const editorMode = useEditorState((s) => s.mode)
-  const labelerRect = useEditorState((s) => s.labelerRect)
+  const imageDisplayedRect = useEditorState((s) => s.imageDisplayedRect)
   const projectId = useEditorState((s) => s.project?.info.id)
   const pointsBeingDrawn = useRef<IDatabasePoint[]>([])
   const onPan = useEditorState((s) => s.onPan)
-  const setLabelerRect = useEditorState((s) => s.setLabelerRect)
+  const setImageDisplayedRect = useEditorState((s) => s.setImageDisplayedRect)
   const onImageLoaded = useEditorState((s) => s.onImageLoaded)
 
   useEffect(() => {
@@ -61,16 +61,16 @@ export default function Labeler() {
     ),
     useCallback(
       (rect) => {
-        setLabelerRect(rect);
+        setImageDisplayedRect(rect);
       },
-      [setLabelerRect]
+      [setImageDisplayedRect]
     )
   );
 
   const canvasController = useMemo(
     () =>
       new LabelerController(),
-    [labelerRect.height, labelerRect.width]
+    []
   );
 
   const annotationDrawerController = useMemo(
@@ -82,15 +82,15 @@ export default function Labeler() {
           
           return new AnnotationDrawerController({
             drawMode : editorMode,
-            renderHeight: labelerRect.height,
-            renderWidth: labelerRect.width,
+            renderHeight: imageDisplayedRect.height,
+            renderWidth: imageDisplayedRect.width,
             initialPoints: pointsBeingDrawn.current
           })          
         }
 
         return undefined;
       },
-    [editorMode, labelerRect.height, labelerRect.width]
+    [editorMode, imageDisplayedRect.height, imageDisplayedRect.width]
   );
 
   // Reset points when we change modes
@@ -128,8 +128,8 @@ export default function Labeler() {
         // }}
       />
       <Canvas<CanvasRenderingContext2D>
-        width={labelerRect.width}
-        height={labelerRect.height}
+        width={imageDisplayedRect.width}
+        height={imageDisplayedRect.height}
         controller={canvasController}
         style={{
           position: "absolute",
@@ -137,8 +137,8 @@ export default function Labeler() {
       />
 
       {annotationDrawerController && <Canvas<CanvasRenderingContext2D>
-        width={labelerRect.width}
-        height={labelerRect.height}
+        width={imageDisplayedRect.width}
+        height={imageDisplayedRect.height}
         controller={annotationDrawerController}
         style={{
           position: "absolute",

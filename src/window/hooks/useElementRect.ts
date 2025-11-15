@@ -16,19 +16,19 @@ export default function useElementRect<T extends HTMLElement | null>(
   debugId?: string
 ) {
   useEffect(() => {
-    const element = getElement();
-    if (element) {
-      let activeAimationFrame: number | undefined = undefined;
+    let activeAimationFrame: number | undefined = undefined;
 
-      let oldRect: BasicRect = {
-        height: 0,
-        width: 0,
-        x: 0,
-        y: 0,
-      };
+    let oldRect: BasicRect = {
+      height: 0,
+      width: 0,
+      x: 0,
+      y: 0,
+    };
 
-      const handleAnimationFrame = () => {
-        activeAimationFrame = undefined;
+    const handleAnimationFrame = () => {
+      activeAimationFrame = undefined;
+      const element = getElement();
+      if (element) {
         const newRect = domRectToBasicRect(element.getBoundingClientRect());
         if (debugId) {
           console.log(debugId, ">>", "Rect Size", newRect);
@@ -40,33 +40,29 @@ export default function useElementRect<T extends HTMLElement | null>(
           oldRect = newRect;
           onElementRect(newRect);
         }
-
-        // if (element === document.getElementById("label-overlay"))
-        //   console.log(newRect);
-
-        setImmediate(() => {
-          activeAimationFrame = requestAnimationFrame(handleAnimationFrame);
-        })
-      };
-
-      handleAnimationFrame();
-
-      //   const elementObserver = new ResizeObserver(() => {
-      //     const rect = element.getBoundingClientRect();
-      //     onElementRect(domRectToBasicRect(rect));
-      //   });
-
-      //   elementObserver.observe(element);
-
-      return () => {
-        if (activeAimationFrame) {
-          cancelAnimationFrame(activeAimationFrame);
+      } else {
+        if (debugId) {
+          console.log(debugId, ">>", "Element is not valid");
         }
-      };
-    } else {
-      if (debugId) {
-        console.log(debugId, ">>", "Element is not valid");
       }
-    }
+      setImmediate(() => {
+        activeAimationFrame = requestAnimationFrame(handleAnimationFrame);
+      })
+    };
+
+    handleAnimationFrame();
+
+    //   const elementObserver = new ResizeObserver(() => {
+    //     const rect = element.getBoundingClientRect();
+    //     onElementRect(domRectToBasicRect(rect));
+    //   });
+
+    //   elementObserver.observe(element);
+
+    return () => {
+      if (activeAimationFrame) {
+        cancelAnimationFrame(activeAimationFrame);
+      }
+    };
   }, [debugId, getElement, onElementRect]);
 }

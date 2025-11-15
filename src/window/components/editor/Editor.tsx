@@ -48,9 +48,6 @@ export default function Editor() {
   const [lastAutoId, setLastAutoId] = useState("");
 
   const setEditorRect = useEditorState((s) => s.setEditorRect);
-  const setLabelerContainerRect = useEditorState(
-    (s) => s.setLabelerContainerRect
-  );
   const loadSample = useEditorState((s) => s.loadSample);
   const setEditorMode = useEditorState((s) => s.setEditorMode);
   const setSidePanel = useEditorState((s) => s.setSidePanel);
@@ -63,16 +60,6 @@ export default function Editor() {
         setEditorRect(rect);
       },
       [setEditorRect]
-    )
-  );
-
-  useElementRect(
-    useCallback(() => labelerContainerRef.current, []),
-    useCallback(
-      (rect) => {
-        setLabelerContainerRect(rect);
-      },
-      [setLabelerContainerRect]
     )
   );
 
