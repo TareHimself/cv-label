@@ -1,1 +1,0 @@
-export const externals = ["sharp","@node-rs/xxhash","realm"]
