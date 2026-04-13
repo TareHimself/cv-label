@@ -6,7 +6,6 @@ import { importWorkerModule } from './worker'
 import { getAppPath } from './utils'
 import databaseWorkerPath from './database?modulePath'
 import { wrap } from './utils'
-import { inspect } from 'util'
 const database = await importWorkerModule<typeof import('./database')>(
   url.pathToFileURL(databaseWorkerPath),
   {
@@ -39,17 +38,9 @@ app.whenReady().then(() => {
       return net.fetch(url.pathToFileURL(filePath).toString())
     } catch (error) {
       console.error(error)
-      return new Response(
-        inspect(error, {
-          depth: null,
-          compact: false,
-          maxArrayLength: null,
-          maxStringLength: null
-        }),
-        {
-          status: 500
-        }
-      )
+      return new Response('Internal server error', {
+        status: 500
+      })
     }
   })
 })
