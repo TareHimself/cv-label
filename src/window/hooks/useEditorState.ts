@@ -1,8 +1,8 @@
 import { BasicRect, EEditorMode, IDatabaseAnnotation, IDatabasePoint, IDatabaseSample, PluginOptionResultMap, SidePanelIds, TUpdateWithId, Vector2 } from '@types';
 import { create } from 'zustand'
-import { domRectToBasicRect } from './useElementRect';
 import { activateProject, IActiveProject } from '@window/native/project';
 import { SampleImporter } from '@window/native/importers/SampleImporter';
+import toast from 'react-hot-toast';
 
 const EmptyRect: BasicRect = { x: 0, y: 0, width: 0, height: 0 }
 export type EditorState = {
@@ -10,7 +10,7 @@ export type EditorState = {
   isLoadingSample: boolean
   sampleIds: string[]
   selectedSampleIndex: number
-  samples: Map<string,IDatabaseSample>;
+  samples: Map<string, IDatabaseSample>;
   isLoadingCurrentSample: boolean
   selectedAnnotationIndex: number,
   mode: EEditorMode;
@@ -46,16 +46,16 @@ export type EditorActions = {
   updatePoints: (sampleId: string, annotationId: string, points: TUpdateWithId<IDatabasePoint>[]) => Promise<boolean>
   replacePoints: (sampleId: string, annotationId: string, points: IDatabasePoint[]) => Promise<boolean>
   removePoints: (sampleId: string, annotationId: string, pointIds: string[]) => Promise<boolean>
-  importSamples: (importer: SampleImporter,options: PluginOptionResultMap) => Promise<void>
+  importSamples: (importer: SampleImporter, options: PluginOptionResultMap) => Promise<void>
   reloadSamples: () => Promise<void>
 }
 
-export const useEditorState = create<EditorState & EditorActions>((set,get) => ({
+export const useEditorState = create<EditorState & EditorActions>((set, get) => ({
   project: undefined,
   isLoadingSample: false,
   sampleIds: [],
   selectedSampleIndex: 0,
-  selectedAnnotationIndex: 0,
+  selectedAnnotationIndex: -1,
   samples: new Map,
   isLoadingCurrentSample: false,
   mode: EEditorMode.SELECT,
@@ -64,7 +64,7 @@ export const useEditorState = create<EditorState & EditorActions>((set,get) => (
   panY: 0,
   labelerContainerRect: { ...EmptyRect },
   imageDisplayedRect: { ...EmptyRect },
-  imageSize: { width: 0, height: 0},
+  imageSize: { width: 0, height: 0 },
   editorRect: { ...EmptyRect },
   sidePanelId: 'annotations',
   setPan: (x: number, y: number) => set(() => ({ panX: x, panY: y })),
@@ -75,7 +75,7 @@ export const useEditorState = create<EditorState & EditorActions>((set,get) => (
   setEditorRect: (rect: BasicRect) => set(() => ({ editorRect: rect })),
   onImageLoaded: (image) => set(() => {
     return {
-      imageSize : {
+      imageSize: {
         width: image.naturalWidth,
         height: image.naturalHeight
       },
@@ -86,15 +86,19 @@ export const useEditorState = create<EditorState & EditorActions>((set,get) => (
     }
   }),
   activateProject: async (projectId) => {
-    try{
+    return await toast.promise(async () => {
       const project = await activateProject(projectId)
       set({ project: project })
       get().reloadSamples()
       return true
-    }catch(e) {
-      console.error(e)
-    }
-    return false
+    }, {
+      loading: "Loading project",
+      success: "Project loaded",
+      error: "Failed to activate project"
+    }).catch((c) => {
+      console.error(c)
+      return false
+    })
   },
   loadSample: async (sampleId) => {
     //
@@ -105,147 +109,148 @@ export const useEditorState = create<EditorState & EditorActions>((set,get) => (
   setSelectedSampleIndex: (index) => {
     const samplesCount = get().sampleIds.length
     const newIndex = ((index % samplesCount) + samplesCount) % samplesCount;
-    set(() => ({ selectedSampleIndex : newIndex }))
+    set(() => ({ selectedSampleIndex: newIndex, selectedAnnotationIndex: -1 }))
   },
-  setSelectedAnnotationIndex: (index) => set(() => ({ selectedAnnotationIndex : index })),
-  createAnnotations: async (sampleId,annotations) => {
+  setSelectedAnnotationIndex: (index) => set(() => ({ selectedAnnotationIndex: index })),
+  createAnnotations: async (sampleId, annotations) => {
     const project = get().project
-    
-    if(project === undefined) return false
-    
+
+    if (project === undefined) return false
+
     const samples = get().samples
 
-    const result = await project.db.createAnnotations(sampleId,annotations)
+    const result = await project.db.createAnnotations(sampleId, annotations)
 
-    if(result === undefined) return false
-    
-    samples.set(result.id,result)
+    if (result === undefined) return false
+
+    samples.set(result.id, result)
 
     set({ samples })
     return true
   },
   updateAnnotations: async (sampleId, annotations) => {
     const project = get().project
-    
-    if(project === undefined) return false
-    
+
+    if (project === undefined) return false
+
     const samples = get().samples
 
-    const result = await project.db.updateAnnotations(sampleId,annotations)
+    const result = await project.db.updateAnnotations(sampleId, annotations)
 
-    if(result === undefined) return false
-    
-    samples.set(result.id,result)
+    if (result === undefined) return false
+
+    samples.set(result.id, result)
 
     set({ samples })
     return true
   },
   removeAnnotations: async (sampleId, annotationIds) => {
     const project = get().project
-    
-    if(project === undefined) return false
-    
+
+    if (project === undefined) return false
+
     const samples = get().samples
 
-    const result = await project.db.removeAnnotations(sampleId,annotationIds)
+    const result = await project.db.removeAnnotations(sampleId, annotationIds)
 
-    if(result === undefined) return false
-    
-    samples.set(result.id,result)
+    if (result === undefined) return false
+
+    samples.set(result.id, result)
 
     set({ samples })
     return true
   },
   createPoints: async (sampleId, annotationId, points) => {
     const project = get().project
-    
-    if(project === undefined) return false
-    
+
+    if (project === undefined) return false
+
     const samples = get().samples
 
-    const result = await project.db.createPoints(sampleId,annotationId,points)
+    const result = await project.db.createPoints(sampleId, annotationId, points)
 
-    if(result === undefined) return false
-    
-    samples.set(result.id,result)
+    if (result === undefined) return false
+
+    samples.set(result.id, result)
 
     set({ samples })
     return true
   },
   updatePoints: async (sampleId, annotationId, points) => {
     const project = get().project
-    
-    if(project === undefined) return false
-    
+
+    if (project === undefined) return false
+
     const samples = get().samples
 
-    const result = await project.db.updatePoints(sampleId,annotationId,points)
+    const result = await project.db.updatePoints(sampleId, annotationId, points)
 
-    if(result === undefined) return false
-    
-    samples.set(result.id,result)
+    if (result === undefined) return false
+
+    samples.set(result.id, result)
 
     set({ samples })
     return true
   },
   replacePoints: async (sampleId, annotationId, points) => {
     const project = get().project
-    
-    if(project === undefined) return false
-    
+
+    if (project === undefined) return false
+
     const samples = get().samples
 
-    const result = await project.db.replacePoints(sampleId,annotationId,points)
+    const result = await project.db.replacePoints(sampleId, annotationId, points)
 
-    if(result === undefined) return false
-    
-    samples.set(result.id,result)
+    if (result === undefined) return false
+
+    samples.set(result.id, result)
 
     set({ samples })
     return true
   },
   removePoints: async (sampleId, annotationId, pointIds) => {
     const project = get().project
-    
-    if(project === undefined) return false
-    
+
+    if (project === undefined) return false
+
     const samples = get().samples
 
-    const result = await project.db.removePoints(sampleId,annotationId,pointIds)
+    const result = await project.db.removePoints(sampleId, annotationId, pointIds)
 
-    if(result === undefined) return false
-    
-    samples.set(result.id,result)
+    if (result === undefined) return false
+
+    samples.set(result.id, result)
 
     set({ samples })
     return true
   },
-  importSamples: async (plugin,options) => {
+  importSamples: async (plugin, options) => {
     const project = get().project;
-    if(project === undefined) return
+    if (project === undefined) return
 
-    await plugin.importIntoProject(project,options)
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    await plugin.importIntoProject(project, options, (_, __) => { })
 
     await get().reloadSamples()
   },
   reloadSamples: async () => {
     const project = get().project;
-    if(project === undefined) return
+    if (project === undefined) return
 
     const samples = await project.db.getSamples()
-    if(samples === undefined) return
+    if (samples === undefined) return
 
     const samplesMap = get().samples
     const ids: string[] = []
-    for(const sample of samples){
-      samplesMap.set(sample.id,sample)
+    for (const sample of samples) {
+      samplesMap.set(sample.id, sample)
       ids.push(sample.id)
     }
 
     let selectedSampleIndex = get().selectedSampleIndex
-    if(selectedSampleIndex == -1 && ids.length > 0){
+    if (selectedSampleIndex == -1 && ids.length > 0) {
       selectedSampleIndex = 0
     }
-    set({ sampleIds: ids, samples: samplesMap,selectedSampleIndex })
+    set({ sampleIds: ids, samples: samplesMap, selectedSampleIndex })
   }
 }))

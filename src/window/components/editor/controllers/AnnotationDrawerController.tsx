@@ -32,6 +32,10 @@ export default class AnnotationDrawerController extends CanvasController<CanvasR
   isActive = false;
   config: IAnnotationDrawerControllerConfig;
   mousePos: Vector2 = { x: 0, y: 0 };
+  canvas: HTMLCanvasElement | undefined = undefined;
+  get canvasCtx(): CanvasRenderingContext2D | undefined {
+    return this.canvas?.getContext("2d") ?? undefined;
+  }
   get imageSpaceScale() {
     return (
       this.editorState.imageSize.width /
@@ -78,10 +82,10 @@ export default class AnnotationDrawerController extends CanvasController<CanvasR
     this.points.splice(0, this.points.length);
   }
 
-  override onBegin(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
-    this.cavasCtx = data.ctx;
-    data.ctx.canvas.width = this.config.renderWidth;
-    data.ctx.canvas.height = this.config.renderHeight;
+  override onBegin(data: ICanvasPrepData): void {
+    this.canvas = data.canvas;
+    this.canvas.width = this.config.renderWidth;
+    this.canvas.height = this.config.renderHeight;
     const storeSubCallback = (
       newState: ReturnType<typeof useEditorState.getState>
     ) => {
@@ -110,10 +114,10 @@ export default class AnnotationDrawerController extends CanvasController<CanvasR
         e.stopImmediatePropagation();
       };
 
-      this.cavasCtx.canvas.addEventListener("click", clickListener);
+      this.canvas.addEventListener("click", clickListener);
 
       this.endCallbacks.push(() => {
-        this.cavasCtx?.canvas.removeEventListener("click", clickListener);
+        this.canvas?.removeEventListener("click", clickListener);
       });
 
       const contextMenuListener = (e: MouseEvent) => {
@@ -122,13 +126,10 @@ export default class AnnotationDrawerController extends CanvasController<CanvasR
         e.stopImmediatePropagation();
       };
 
-      this.cavasCtx.canvas.addEventListener("contextmenu", contextMenuListener);
+      this.canvas.addEventListener("contextmenu", contextMenuListener);
 
       this.endCallbacks.push(() => {
-        this.cavasCtx?.canvas.removeEventListener(
-          "contextmenu",
-          contextMenuListener
-        );
+        this.canvas?.removeEventListener("contextmenu", contextMenuListener);
       });
     } else {
       const mouseDownListener = (e: MouseEvent) => {
@@ -171,7 +172,7 @@ export default class AnnotationDrawerController extends CanvasController<CanvasR
         e.stopPropagation();
       };
 
-      this.cavasCtx.canvas.addEventListener("mousedown", mouseDownListener);
+      this.canvas.addEventListener("mousedown", mouseDownListener);
 
       this.endCallbacks.push(() => {
         this.cavasCtx?.canvas.removeEventListener(
@@ -182,10 +183,12 @@ export default class AnnotationDrawerController extends CanvasController<CanvasR
     }
 
     const animationFrameCallback = (() => {
-      this.draw({
-        ...data,
-        ctx: data.ctx,
-      });
+      if (this.canvasCtx !== undefined) {
+        this.draw({
+          ...data,
+          ctx: this.canvasCtx,
+        });
+      }
 
       if (this.isActive) {
         requestAnimationFrame(animationFrameCallback);
@@ -291,10 +294,17 @@ export default class AnnotationDrawerController extends CanvasController<CanvasR
       const rect = ctx.canvas.getBoundingClientRect();
       const mouseX = this.mousePos.x - rect.x;
       const mouseY = this.mousePos.y - rect.y;
-      console.log("POINTS",mouseX,mouseY)
+      console.log("POINTS", mouseX, mouseY);
       this.drawPolygon(
         ctx,
-        [...this.points, { id: "mouse", x: mouseX * this.imageSpaceScale, y: mouseY * this.imageSpaceScale }],
+        [
+          ...this.points,
+          {
+            id: "mouse",
+            x: mouseX * this.imageSpaceScale,
+            y: mouseY * this.imageSpaceScale,
+          },
+        ],
         (c) => ({
           x: c.x / this.imageSpaceScale,
           y: c.y / this.imageSpaceScale,

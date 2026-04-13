@@ -1,22 +1,22 @@
-import { IDatabaseImage, INewSample, PluginOption, PluginOptionResultMap } from "@types";
+import { IDatabaseImage, INewSample, IPluginOption,  PluginOptionResultMap } from "@types";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from 'fs/promises'
-import { xxh64 } from "@node-rs/xxhash";
+// import { xxh64 } from "@node-rs/xxhash";
 import sharp from "sharp";
 import { IActiveProject } from "../project";
-import { webcrypto } from 'crypto'
-import { sha512 } from "@root/utils";
+import { forEachAsync, sha512 } from "@root/utils";
 
 
 export abstract class SampleImporter {
 
+  options: IPluginOption[] = []
 
   abstract getName(): string
   abstract getId(): string
-  abstract getOptions(): PluginOption[]
+  abstract getOptions(): IPluginOption[]
 
-  async importIntoProject(project: IActiveProject, options: PluginOptionResultMap): Promise<string[]> {
+  async importIntoProject(project: IActiveProject, options: PluginOptionResultMap,progressCallack: (current: number,total: number) => void): Promise<string[]> {
     const imported = await this.import(options);
 
     let total = imported.length;
@@ -26,8 +26,12 @@ export abstract class SampleImporter {
     const database = project.db
     const importedImages: { [key: string]: IDatabaseImage | undefined } = {}
     const result: string[] = []
-    for await (const data of imported){
+    await forEachAsync(imported,async (data) => {
       try {
+        const baseName = path.basename(data.path)
+        let extension = path.extname(baseName)
+        const name = baseName.slice(0,baseName.length - extension.length)
+
         let image: IDatabaseImage
         if (importedImages[data.path] !== undefined) {
           image = importedImages[data.path] as IDatabaseImage
@@ -35,9 +39,7 @@ export abstract class SampleImporter {
         else {
           const sampleMeta = await sharp(data.path).metadata();
           const hash = await sha512(data.path)
-          const baseName = path.basename(data.path)
-          let extension = path.extname(baseName)
-          const name = baseName.slice(0,baseName.length - extension.length)
+          
 
           if(extension.startsWith('.')) extension = extension.slice(1)
 
@@ -54,8 +56,7 @@ export abstract class SampleImporter {
               id: id,
               width: sampleMeta.width ?? 0,
               height: sampleMeta.height ?? 0,
-              extension: extension,
-              name: name
+              extension: extension
             }
             if (await database.createImage(image)) {
               await fs.copyFile(data.path,path.join(project.imagesPath, image.id))
@@ -70,6 +71,7 @@ export abstract class SampleImporter {
         const sampleId = uuidv4()
         if (!database.createSample({
           id: sampleId,
+          name: name,
           imageId: image.id,
           annotations: data.annotations.map((ann) => {
             return {
@@ -91,6 +93,8 @@ export abstract class SampleImporter {
 
         importedNum++;
 
+        progressCallack(importedNum,total)
+
         console.log("Imported", importedNum, "/", total)
 
         result.push(sampleId)
@@ -98,9 +102,11 @@ export abstract class SampleImporter {
         console.error(error);
         total--;
 
+        progressCallack(importedNum,total)
+
         console.log("Imported", importedNum, "/", total)
       }
-    }
+    },10)
 
     return result
     // return await Promise.allSettled(imported.map(async (data) => {

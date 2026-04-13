@@ -36,23 +36,30 @@ class CrosshairController extends CanvasController<
 > {
   config: ICanvasControllerConfig;
   mouseEventStopper?: () => void;
+  canvas: HTMLCanvasElement | undefined = undefined;
+  get canvasCtx(): CanvasRenderingContext2D | undefined {
+    return this.canvas?.getContext("2d") ?? undefined;
+  }
   constructor(config: ICanvasControllerConfig) {
     super();
     this.config = config;
   }
 
-  override onBegin(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
-    data.ctx.canvas.width = this.config.renderWidth;
-    data.ctx.canvas.height = this.config.renderHeight;
+  override onBegin(data: ICanvasPrepData): void {
+    this.canvas = data.canvas
+    this.canvas.width = this.config.renderWidth;
+    this.canvas.height = this.config.renderHeight;
 
     const callback = ((ev: MouseEvent) => {
-      this.draw({
-        ctx: data.ctx,
+      if(this.canvasCtx !== undefined){
+        this.draw({
+        ctx: this.canvasCtx,
         mouse: {
           x: ev.clientX,
           y: ev.clientY,
         },
       });
+      }
     }).bind(this);
 
     window.addEventListener("mousemove", callback);
@@ -62,7 +69,7 @@ class CrosshairController extends CanvasController<
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  override onEnd(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
+  override onEnd(data: ICanvasPrepData): void {
     if (this.mouseEventStopper !== undefined) {
       this.mouseEventStopper();
     }
@@ -80,7 +87,7 @@ class CrosshairController extends CanvasController<
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
     ctx.beginPath();
-    ctx.strokeStyle = this.config.circleColor;
+    ctx.fillStyle = this.config.circleColor;
     ctx.ellipse(
       mouseX,
       mouseY,
@@ -135,7 +142,7 @@ class CrosshairController extends CanvasController<
 export default function Crosshair(props: CrosshairProps) {
   const lineLength = props.lineLength ?? 100;
   const lineSpacing = props.lineSpacing ?? 5;
-  const circleRadius = props.circleRadius ?? 5;
+  const circleRadius = props.circleRadius ?? 3;
   const lineColor =  props.lineColor ?? "white";
   const circleColor = props.circleColor ?? "white";
 

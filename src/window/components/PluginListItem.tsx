@@ -1,4 +1,4 @@
-import { Button, Modal } from "@mantine/core";
+import { Button, Modal, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IPluginInfo, PluginOptionResultMap } from "@types";
 import React, { useMemo, useState } from "react";
@@ -43,17 +43,19 @@ export function PluginListItem<TPlugin extends IPluginInfo>({
   return (
     <>
       <Modal opened={opened} onClose={close} title={plugin.getName()} centered>
-        {optionSelectors}
-        <Button
-          justify="center"
-          fullWidth
-          onClick={() => {
-            close();
-            onPluginConfirmed(plugin, optionData);
-          }}
-        >
-          Confirm
-        </Button>
+        <Stack gap={"md"}>
+          {optionSelectors}
+          <Button
+            justify="center"
+            fullWidth
+            onClick={() => {
+              close();
+              onPluginConfirmed(plugin, optionData);
+            }}
+          >
+            Confirm
+          </Button>
+        </Stack>
       </Modal>
       <Button justify="center" fullWidth onClick={open}>
         {plugin.getName()}

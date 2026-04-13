@@ -1,5 +1,5 @@
 import { useDisclosure } from "@mantine/hooks";
-import { Modal, Button } from "@mantine/core";
+import { Modal, Button, Stack } from "@mantine/core";
 import { useProjectsState } from "@hooks/useProjectsState";
 import { useEditorState } from "@hooks/useEditorState";
 import { useNavigate } from "react-router-dom";
@@ -11,16 +11,28 @@ export const OpenProjectButton = () => {
   const activateProject = useEditorState((s) => s.activateProject);
   return (
     <>
-      <Modal opened={opened} onClose={close} title="Open Project" display={'flex'}>
-        {projects.map((p) => (
-            <Button  justify="center" fullWidth key={p.id} onClick={async () => {
+      <Modal
+        opened={opened}
+        onClose={close}
+        title="Open Project"
+        display={"flex"}
+      >
+        <Stack gap={"md"}>
+          {projects.map((p) => (
+            <Button
+              justify="center"
+              fullWidth
+              key={p.id}
+              onClick={async () => {
                 activateProject(p.id);
                 navigate(`/projects/${p.id}`);
                 close();
-              }}>
+              }}
+            >
               {p.name}
             </Button>
           ))}
+        </Stack>
       </Modal>
 
       <Button justify="center" variant="default" onClick={open}>

@@ -30,6 +30,7 @@ export default function Labeler() {
   const onPan = useEditorState((s) => s.onPan)
   const setImageDisplayedRect = useEditorState((s) => s.setImageDisplayedRect)
   const onImageLoaded = useEditorState((s) => s.onImageLoaded)
+  const imageSize = useEditorState((s) => s.imageSize)
 
   useEffect(() => {
     if (isDraggingImage) {
@@ -70,7 +71,8 @@ export default function Labeler() {
   const canvasController = useMemo(
     () =>
       new LabelerController(),
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [imageSize]
   );
 
   const annotationDrawerController = useMemo(

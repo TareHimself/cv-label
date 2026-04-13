@@ -9,7 +9,8 @@
     "package": "electron-forge package -- -release",
     "make": "electron-forge make -- -release",
     "publish": "electron-forge publish -- -release",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "conan:setup": "conan install ./cpp --build=missing -s build_type=Release  -s compiler.cppstd=20"
   },
   "keywords": [],
   "author": {
@@ -76,8 +77,9 @@
     "localforage": "^1.10.0",
     "match-sorter": "^6.3.1",
     "node-abi": "^4.24.0",
+    "node-addon-api": "^8.5.0",
     "react-contexify": "^6.0.0",
-    "react-hot-toast": "^2.4.1",
+    "react-hot-toast": "^2.6.0",
     "react-tooltip": "^5.25.1",
     "realm": "^20.1.0",
     "sharp": "^0.34.5",

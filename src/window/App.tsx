@@ -6,6 +6,7 @@ import "@mantine/core/styles.css";
 import "@mantine/dropzone/styles.css";
 import { useEffect } from "react";
 import { useProjectsState } from "@hooks/useProjectsState";
+import { Toaster } from "react-hot-toast";
 
 
 
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="projects/:id" element={<Editor />} />
         </Routes>
       </MemoryRouter>
+      <Toaster position="bottom-right" reverseOrder={false} />
     </MantineProvider>
   );
 }

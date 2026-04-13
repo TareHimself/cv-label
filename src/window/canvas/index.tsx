@@ -10,17 +10,17 @@ export interface ICanvasDrawData<ContextType extends RenderingContextType> {
   ctx: ContextType;
 }
 
-export interface ICanvasPrepData<ContextType extends RenderingContext> {
-  ctx: ContextType;
+export interface ICanvasPrepData {
+  canvas: HTMLCanvasElement;
 }
 
 export class CanvasController<ContextType extends RenderingContext = RenderingContext,DrawData extends ICanvasDrawData<ContextType> = ICanvasDrawData<ContextType>> {
 
-  onBegin(data: ICanvasPrepData<ContextType>){
+  onBegin(data: ICanvasPrepData){
     /** */
   }
 
-  onEnd(data: ICanvasPrepData<ContextType>){
+  onEnd(data: ICanvasPrepData){
     /** */
   }
 
@@ -85,12 +85,12 @@ export default function Canvas<ContextType extends RenderingContext>(props: Canv
 
       if (ctx) {
         controller.onBegin({
-          ctx: ctx,
+          canvas: canvasElement,
         })
 
         return () => {
           controller.onEnd({
-            ctx: ctx,
+            canvas: canvasElement,
           })
         };
       }
@@ -101,10 +101,11 @@ export default function Canvas<ContextType extends RenderingContext>(props: Canv
     <>
     <canvas
       id={canvasId}
-      style={{...(props.style ?? {}),
-        width: props.width,
-        height: props.height,
-      }}
+      // style={{...(props.style ?? {}),
+      //   width: props.width,
+      //   height: props.height,
+      // }}
+      style={props.style ?? {}}
       onClick={props.onClick}
     />
     </>

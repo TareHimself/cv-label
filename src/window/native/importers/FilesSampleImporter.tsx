@@ -1,4 +1,4 @@
-import { INewSample, PluginOption,  PluginOptionResultMap } from "@types";
+import { INewSample,  IPluginOption,  PluginOptionResultMap } from "@types";
 import { SampleImporter } from "./SampleImporter";
 import { FileSelectPluginOption } from "@components/PluginOptionComponents/FileSelectPluginOption";
 
@@ -11,11 +11,11 @@ export class FilesSampleImporter extends SampleImporter {
       return "TareHimself/FileSampleImporter"
   }
 
-  getOptions(): PluginOption[] {
+  getOptions(): IPluginOption[] {
     return [{
       id: "files",
       title: "Select Files",
-      component: FileSelectPluginOption,
+      component: (props) => <FileSelectPluginOption {...props} multiple />,
       defaultValue: []
     }]
   }

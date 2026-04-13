@@ -10,15 +10,9 @@ if (root) {
 
   rootNode.render(
       <>
+      
       <ContextMenuManager/>
-        <App />
-      {/* </DialogManager> */}
-      <Toaster position="bottom-right" reverseOrder={false} />
-      {/* <ToastContainer
-        style={{ bottom: "10px", right: "10px" }}
-        fadeInTime={100}
-        fadeOutTime={100}
-      /> */}
+      <App />
       </>
   );
 }

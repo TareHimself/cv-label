@@ -1,4 +1,4 @@
-import { PropsWithChildren } from "react";
+import {  PropsWithChildren } from "react";
 
 export type ValueOf<E> = E[keyof E];
 
@@ -35,13 +35,12 @@ export interface IDatabasePoint {
 export interface IDatabaseAnnotation {
   id: string;
   type: ELabelType;
-  class: number;
+  label: string;
   points: IDatabasePoint[];
 }
 
 export interface IDatabaseImage {
   id: string;
-  name: string;
   width: number;
   height: number;
   extension: string;
@@ -49,8 +48,15 @@ export interface IDatabaseImage {
 
 export interface IDatabaseSample {
   id: string;
+  name: string;
   imageId: string
   annotations: IDatabaseAnnotation[];
+}
+
+export interface IDatabaseLabel {
+  id: string
+  name: string
+  color: string
 }
 
 // export interface IDatabaseSampleOrder {
@@ -62,10 +68,12 @@ export interface IDatabaseInstance {
     close: () => void;
     getSample: (sampleId: string) => Promise<IDatabaseSample | undefined>
     getImage: (imageId: string) => Promise<IDatabaseImage | undefined>
-    getSamples: () => Promise<IDatabaseSample[] | undefined>
-    getImages: () => Promise<IDatabaseImage[] | undefined>
+    getSamples: () => Promise<IDatabaseSample[]>
+    getImages: () => Promise<IDatabaseImage[]>
     createImage: (image: IDatabaseImage) => Promise<boolean>
     createSample: (sample: IDatabaseSample) => Promise<boolean>
+    createLabel: (label: IDatabaseLabel) => Promise<boolean>
+    getLabels: () => Promise<IDatabaseLabel[]>
     createAnnotations: (sampleId: string,annotations: IDatabaseAnnotation[]) => Promise<IDatabaseSample | undefined>
     updateAnnotations: (sampleId: string,annotations: TUpdateWithId<IDatabaseAnnotation>[]) => Promise<IDatabaseSample | undefined>
     removeAnnotations: (sampleId: string, annotations: string[]) => Promise<IDatabaseSample | undefined>
@@ -162,19 +170,31 @@ export type PluginFolderOrFileOption = IPluginOptionBase<'fileSelect' | 'folderS
   multiple: boolean;
 }
 
-export type PluginOptionProps<T = unknown> = { 
-  id: string
-  title: string
-  onSelected: (data: T) => void
-}
+// export interface PluginOptionProps<T = unknown> { 
+//   id: string
+//   title: string
+//   onSelected: (data: T) => void
+// }
 // export type PluginOption = PluginStringOption | PluginNumberOption | PluginFolderOrFileOption;
-export type PluginOption = {
+// export type PluginOption = {
+//   id: string
+//   title: string
+//   component: React.FC<PluginOptionProps>
+//   defaultValue: unknown
+// }
+
+export interface IPluginOptionProps {
   id: string
   title: string
-  component: React.FC<PluginOptionProps>
-  defaultValue: unknown
+  onSelected: (data: unknown) => void
 }
 
+export interface IPluginOption {
+  id: string
+  title: string
+  component: React.FC<IPluginOptionProps>
+  defaultValue: unknown
+}
 // export type PluginOptionResult<T extends keyof IPluginOptionResults = keyof IPluginOptionResults> = {
 //   id: string;
 //   type: T;
@@ -187,7 +207,7 @@ export type PluginOptionResultMap = { [id: string]: unknown }
 export interface IPluginInfo {
   getId: () => string
   getName: () => string
-  getOptions: () => PluginOption[];
+  getOptions: () => IPluginOption[];
 }
 
 export interface CvBoxAnnotation extends IDatabaseAnnotation {
@@ -256,20 +276,19 @@ export type Vector2 = {
   y: number;
 }
 
-interface ITypedRequires{
-  fs: typeof import('fs')
-  sharp: typeof import('sharp')
-  uuid: typeof import('uuid')
-  path: typeof import('node:path')
-}
+// interface ITypedRequires{
+//   fs: typeof import('fs')
+//   sharp: typeof import('sharp')
+//   uuid: typeof import('uuid')
+//   path: typeof import('node:path')
+// }
 
 declare global {
-  const __non_webpack_require__: <K extends keyof ITypedRequires>(id: K) => ITypedRequires[K]
+  const __non_webpack_require__: NodeJS.Require
   interface ObjectConstructor {
     keys<T>(obj: T): Array<keyof T>;
   }
 }
-
 
 
 export {}

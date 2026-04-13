@@ -1,12 +1,12 @@
 import path from 'path';
-import { ELabelType, IDatabaseAnnotation,IDatabaseImage,IDatabaseInstance,IDatabasePoint, IDatabaseSample, IDatabaseSampleList,TUpdateWithId } from "@types";
+import { ELabelType, IDatabaseAnnotation, IDatabaseImage, IDatabaseInstance, IDatabaseLabel, IDatabasePoint, IDatabaseSample, IDatabaseSampleList, TUpdateWithId } from "@types";
 import { getProjectsPath } from "@root/utils";
 import Realm, { ObjectSchema } from "realm";
 
 
 
 
-export class DatabasePoint extends Realm.Object<IDatabasePoint>{
+export class DatabasePoint extends Realm.Object<IDatabasePoint> {
     declare id: string;
     declare x: number;
     declare y: number;
@@ -21,19 +21,32 @@ export class DatabasePoint extends Realm.Object<IDatabasePoint>{
     };
 }
 
-
+export class DatabaseLabel extends Realm.Object<IDatabaseLabel> {
+    declare id: string;
+    declare name: string;
+    declare color: string;
+    static schema: ObjectSchema = {
+        name: "DatabaseLabel",
+        properties: {
+            id: "string",
+            name: "string",
+            color: "string",
+        },
+        primaryKey: "id",
+    };
+}
 
 export class DatabaseAnnotation extends Realm.Object<IDatabaseAnnotation> {
     declare id: string;
     declare type: ELabelType;
-    declare class: number;
+    declare label: string;
     declare points: IDatabasePoint[];
     static schema: ObjectSchema = {
         name: "DatabaseAnnotation",
         properties: {
             id: "string",
             type: "int",
-            class: "int",
+            label: "string",
             points: "DatabasePoint[]",
         },
         primaryKey: "id",
@@ -42,7 +55,6 @@ export class DatabaseAnnotation extends Realm.Object<IDatabaseAnnotation> {
 
 export class DatabaseImage extends Realm.Object<IDatabaseImage> {
     declare id: string;
-    declare name: string;
     declare width: number;
     declare height: number;
     declare extension: string;
@@ -51,7 +63,6 @@ export class DatabaseImage extends Realm.Object<IDatabaseImage> {
         name: "DatabaseImage",
         properties: {
             id: "string",
-            name: "string",
             width: "int",
             height: "int",
             extension: "string",
@@ -62,6 +73,7 @@ export class DatabaseImage extends Realm.Object<IDatabaseImage> {
 
 export class DatabaseSample extends Realm.Object<IDatabaseSample> {
     declare id: string;
+    declare name: string;
     declare imageId: string;
     declare annotations: IDatabaseAnnotation[];
     //declare createdAt: string;
@@ -69,6 +81,7 @@ export class DatabaseSample extends Realm.Object<IDatabaseSample> {
         name: "DatabaseSample",
         properties: {
             id: "string",
+            name: "string",
             imageId: "string",
             annotations: "DatabaseAnnotation[]",
         },
@@ -104,17 +117,18 @@ function realmObjectToJsonChecked<T>(obj: Realm.Object<T>) {
 }
 
 export class RealmDatabaseInstance implements IDatabaseInstance {
+
     realm?: Realm
     path = "";
     async open(projectId: string) {
-        this.path = path.join(getProjectsPath(),projectId,"realm");
+        this.path = path.join(getProjectsPath(), projectId, "realm");
         this.realm = await Realm.open({
-            schema: [DatabasePoint, DatabaseAnnotation, DatabaseSample,DatabaseImage, DatabaseSampleList],
+            schema: [DatabasePoint, DatabaseLabel, DatabaseAnnotation, DatabaseSample, DatabaseImage, DatabaseSampleList],
             path: this.path,
         });
     }
 
-    close(){
+    close() {
         this.realm?.close();
     }
 
@@ -135,21 +149,21 @@ export class RealmDatabaseInstance implements IDatabaseInstance {
         return realmObjectToJson(data) ?? undefined
     }
 
-    async getSamples(): Promise<IDatabaseSample[] | undefined> {
+    async getSamples(): Promise<IDatabaseSample[]> {
         if (!this.realm) {
-            return undefined;
+            return [];
         }
         const data = this.realm.objects(DatabaseSample);
-        
+
         return data.map(realmObjectToJsonChecked);
     }
 
-    async getImages(): Promise<IDatabaseImage[] | undefined> {
+    async getImages(): Promise<IDatabaseImage[]> {
         if (!this.realm) {
-            return undefined;
+            return [];
         }
         const data = this.realm.objects(DatabaseImage);
-        
+
         return data.map(realmObjectToJsonChecked);
     }
 
@@ -169,6 +183,33 @@ export class RealmDatabaseInstance implements IDatabaseInstance {
             console.error(error)
             return false;
         }
+    }
+
+    async createLabel(label: IDatabaseLabel): Promise<boolean> {
+        if (!this.realm) {
+            return false;
+        }
+
+        try {
+            const realm = this.realm;
+
+            realm.write(() => {
+                realm.create(DatabaseLabel, label);
+            })
+            return true;
+        } catch (error) {
+            console.error(error)
+            return false;
+        }
+    }
+
+    async getLabels(): Promise<IDatabaseLabel[]> {
+        if (!this.realm) {
+            return [];
+        }
+        const data = this.realm.objects(DatabaseLabel);
+
+        return data.map(realmObjectToJsonChecked);
     }
 
     async createSample(data: IDatabaseSample): Promise<boolean> {
@@ -340,9 +381,9 @@ export class RealmDatabaseInstance implements IDatabaseInstance {
                 points.forEach((pt) => {
                     const ptFromDb = realm.objectForPrimaryKey(DatabasePoint, pt.id)
                     if (ptFromDb != null) {
-                        if(pt.x !== undefined)
+                        if (pt.x !== undefined)
                             ptFromDb.x = pt.x
-                        if(pt.y !== undefined)
+                        if (pt.y !== undefined)
                             ptFromDb.y = pt.y
                         const ptKeys = Object.keys(pt);
                         for (const ptKey of ptKeys) {

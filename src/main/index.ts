@@ -6,6 +6,7 @@ import { getProjectsPath, isDev } from '@root/utils';
 import path from 'path'
 import fs from 'fs/promises'
 import url from 'node:url'
+import { mainToRenderer } from '../ipc-impl'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require('@electron/remote/main').initialize()
 
@@ -41,7 +42,7 @@ declare const IO_WINDOW_WEBPACK_ENTRY: string;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 declare const IO_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
-// ipcMain.handle("getPreloadPath", () => MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY);
+mainToRenderer.handle("getPreloadPath", () => MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY);
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require("electron-squirrel-startup")) {
   app.quit();

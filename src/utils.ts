@@ -3,7 +3,7 @@ import { app } from "electron";
 import Module from 'module';
 import { TPartialExcept } from "@types";
 import fs from 'fs/promises'
-import { withNodeProcess } from "./main/worker";
+import { withNodeProcess } from "./worker";
 export function union(box1: number[], box2: number[]) {
   const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
   const [box2_x1, box2_y1, box2_x2, box2_y2] = box2;
@@ -168,5 +168,25 @@ export async function sha512(filePath: string){
     const digest = hash.digest();
     return digest.toString('hex');
   },filePath)
+}
+
+export function doNextLoop<T>(task: () => Promise<T>){
+  return new Promise<T>((res,rej) => {
+   setTimeout(() => {
+    task().then(res).catch(rej)
+   },0)
+  })
+}
+
+async function forEachAsyncInner<T>(index: number,array: T[],callbackfn: (value: T, index: number, array: T[]) => Promise<void>,batchSize: number){
+  await Promise.all(array.slice(index,Math.min(index + batchSize,array.length)).map((c,step) => callbackfn(c,index + step,array)))
+  if(index < array.length){
+    return doNextLoop(async ()=> {
+      await forEachAsyncInner(index + batchSize,array,callbackfn,batchSize)
+    })
+  }
+}
+export async function forEachAsync<T>(array: T[],callbackfn: (value: T, index: number, array: T[]) => Promise<void>,batchSize = 1,start = 0){
+  return forEachAsyncInner(start,array,callbackfn,batchSize)
 }
 // console.log(overlapPercentage([0,0,1,1],[0,0,1.5,1.5]))

@@ -38,6 +38,7 @@ class Drawable {
     callOnDestroy: (() => void)[] = []
     controlPointIds: string[] = [];
     controlPointLineIds: string[] = [];
+    dirty = false
 
     get isSelected() {
         return this.drawerIndex === this.owner.selectedControlPoint;
@@ -159,11 +160,12 @@ class BoxDrawable extends Drawable {
                         point.x = startPositions[idx].x + dx
                         point.y = startPositions[idx].y + dy
                     })
+                    this.dirty = true
                 },
                     () => {
                         if (!movedMouse) return;
                         useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, this.annotation.points)
-
+                        this.dirty = true
                     })
             }
             else {
@@ -225,12 +227,14 @@ class BoxDrawable extends Drawable {
                     point.y = startPosition.y + dy
 
                     console.log("Moving Control point")
+                    this.dirty = true
                 }, () => {
                     if (!movedMouse) return;
                     useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, [
                         point
                     ]
                     )
+                    this.dirty = true
                 })
 
                 mouseDownEvent.stopImmediatePropagation()
@@ -356,10 +360,12 @@ class SegmentationDrawable extends Drawable {
                         point.x = startPositions[idx].x + dx
                         point.y = startPositions[idx].y + dy
                     })
+                    this.dirty = true
                 },
                     () => {
                         if (!movedMouse) return;
                         useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, this.annotation.points)
+                        this.dirty = true
                     })
             }
             else {
@@ -423,11 +429,13 @@ class SegmentationDrawable extends Drawable {
                     point.y = startPosition.y + dy
                     //const { scaleX: x, scaleY: y } = drawable.scale
                     console.log("Moving Control point")
+                    this.dirty = true
                 }, () => {
                     if (!movedMouse) return;
                     useEditorState.getState().updatePoints(this.owner.sampleId, this.annotation.id, [
                         point
                     ])
+                    this.dirty = true
                 })
 
                 mouseDownEvent.stopImmediatePropagation()
@@ -463,6 +471,7 @@ class SegmentationDrawable extends Drawable {
                 const newPoints = [...this.annotation.points.slice(0, pointIdx + 1), newPoint, ...this.annotation.points.slice(pointIdx + 1)];
 
                 useEditorState.getState().replacePoints(this.owner.sampleId, this.annotation.id, newPoints)
+                this.dirty = true
             });
 
             return id;
@@ -544,12 +553,13 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     lastDrawTime: DOMHighResTimeStamp = 0;
     endCallbacks: (() => void)[] = []
     isActive = false;
-    cavasCtx: CanvasRenderingContext2D | null = null;
     hitTestCanvases: OffscreenCanvasRenderingContext2D[] = [];
     currentHitTestCanvas = 0
     selectedControlPoint = -1
     mouseEventCallbacks: Map<BindableMouseEvents, MouseEventCallbackValue> = new Map();
     createdAt: DOMHighResTimeStamp
+    canvas: HTMLCanvasElement | undefined = undefined
+    dirty = false
 
     get editorMode() {
         return this.state.mode
@@ -563,18 +573,22 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         return this.state.imageSize.width / this.state.imageDisplayedRect.width
     }
 
+    get canvasCtx(): CanvasRenderingContext2D | undefined {
+        return this.canvas?.getContext('2d') ?? undefined
+    }
+
     constructor() {
         super();
         this.createdAt = performance.now();
     }
 
     getCanvasRect() {
-        return this.cavasCtx!.canvas.getBoundingClientRect()
+        return this.canvasCtx!.canvas.getBoundingClientRect()
     }
 
     bindHitEvent(hitId: string, event: BindableMouseEvents, eventCallback: HitTestCallback): HitUnbind {
 
-        if (this.cavasCtx === null) throw new Error("Canvas Ctx is not valid");
+        if (this.canvasCtx === null) throw new Error("Canvas Ctx is not valid");
 
         // Add the event type to the map if we dont already have it
         if (!this.mouseEventCallbacks.has(event)) {
@@ -614,7 +628,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         mouseEventCallback.callbacks.set(hitId, eventCallback)
 
         if (this.mouseEventCallbacks.size === 1) {
-            this.cavasCtx?.canvas.addEventListener(event, mouseEventCallback.listener)
+            this.canvasCtx?.canvas.addEventListener(event, mouseEventCallback.listener)
         }
 
         return () => {
@@ -623,7 +637,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
             const callbacksLength = mouseEventCallback.callbacks.size
 
             if (callbacksLength !== 0) {
-                this.cavasCtx?.canvas.removeEventListener(event, mouseEventCallback.listener);
+                this.canvasCtx?.canvas.removeEventListener(event, mouseEventCallback.listener);
                 this.mouseEventCallbacks.delete(event);
             }
         }
@@ -634,23 +648,31 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
         this.selectedControlPoint = idx;
         this.state.setSelectedAnnotationIndex(idx);
+        this.dirty = true
     }
 
-    override onBegin(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
-        console.log("Creating labeler")
-        this.cavasCtx = data.ctx
-        data.ctx.canvas.width = this.state.imageDisplayedRect.width;
-        data.ctx.canvas.height = this.state.imageDisplayedRect.height;
+    override onBegin(data: ICanvasPrepData): void {
+        this.canvas = data.canvas
+        if (data.canvas === undefined) {
+            throw new Error("NuLL CONTEXT")
+        }
+        data.canvas.width = this.state.imageDisplayedRect.width;
+        data.canvas.height = this.state.imageDisplayedRect.height;
         {
-            const c1 = new OffscreenCanvas(data.ctx.canvas.width, data.ctx.canvas.height).getContext('2d', {
+            const c1 = new OffscreenCanvas(data.canvas.width, data.canvas.height).getContext('2d', {
                 willReadFrequently: true
             });
-            const c2 = new OffscreenCanvas(data.ctx.canvas.width, data.ctx.canvas.height).getContext('2d', {
+            const c2 = new OffscreenCanvas(data.canvas.width, data.canvas.height).getContext('2d', {
                 willReadFrequently: true
             });
             if (c1 !== null && c2 !== null) {
                 this.hitTestCanvases = [c1, c2]
             }
+        }
+
+        for (const ctx of this.hitTestCanvases) {
+            ctx.canvas.width = data.canvas.width;
+            ctx.canvas.height = data.canvas.height;
         }
 
         // Debug function for viewing the collision canvas
@@ -667,14 +689,16 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         const stateCallback = (state: ReturnType<typeof useEditorState.getState>, prevState: ReturnType<typeof useEditorState.getState>) => {
 
             this.state = state;
-            if (this.cavasCtx && this.hitTestCanvases) {
-                this.cavasCtx.canvas.width = this.state.imageDisplayedRect.width;
-                this.cavasCtx.canvas.height = this.state.imageDisplayedRect.height;
+            const newWidth = Math.round(state.imageDisplayedRect.width)
+            const newHeight = Math.round(state.imageDisplayedRect.height)
+            if (this.canvas && (this.canvas.width != newWidth || this.canvas.height != newHeight)) {
+                this.canvas.width = newWidth;
+                this.canvas.height = newHeight;
                 for (const ctx of this.hitTestCanvases) {
-                    ctx.canvas.width = this.state.imageDisplayedRect.width;
-                    ctx.canvas.height = this.state.imageDisplayedRect.height;
+                    ctx.canvas.width = newWidth;
+                    ctx.canvas.height = newHeight;
                 }
-
+                this.dirty = true
             }
 
             const editorModeChanged = state.mode != prevState.mode;
@@ -697,10 +721,12 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
 
         const animationFrameCallback = (() => {
 
-            this.draw({
-                ...data,
-                ctx: data.ctx,
-            })
+            if (this.canvasCtx !== undefined) {
+                this.draw({
+                    ...data,
+                    ctx: this.canvasCtx,
+                })
+            }
 
             if (this.isActive) {
                 requestAnimationFrame(animationFrameCallback);
@@ -719,8 +745,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    override onEnd(data: ICanvasPrepData<CanvasRenderingContext2D>): void {
-        this.cavasCtx = null;
+    override onEnd(data: ICanvasPrepData): void {
         this.endCallbacks.forEach(c => c())
         this.createDrawers([])
     }
@@ -743,6 +768,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         })
 
         this.annotations = deepCloneObject(annotations);
+        this.dirty = true
     }
 
     shouldReplaceDrawers(annotations: IDatabaseAnnotation[]) {
@@ -773,7 +799,7 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         // console.log("Scale",this.imageSpaceScale)
         // const delta = data.step - this.lastDrawTime;
 
-
+        //if(this.drawnOnce) return
         const currentSample = this.state.samples.get(this.state.sampleIds[this.state.selectedSampleIndex]);
 
         if (currentSample === undefined) {
@@ -783,6 +809,16 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
         const { ctx } = data;
 
         if (ctx.canvas.width <= 0 || ctx.canvas.height <= 0) {
+            return
+        }
+
+        if (this.dirty || this.drawers.some(c => c.dirty)) {
+            this.dirty = false
+            for (const drawer of this.drawers) {
+                drawer.dirty = false
+            }
+        }
+        else {
             return
         }
 
@@ -830,5 +866,6 @@ export default class LabelerController extends CanvasController<CanvasRenderingC
                 canvasCtx.globalAlpha = oldGlobalAlpha;
             }
         }
+        //this.drawnOnce = true
     }
 }
