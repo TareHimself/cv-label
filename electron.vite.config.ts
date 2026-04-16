@@ -19,7 +19,7 @@ export default defineConfig({
         output: {
           format: 'es'
         },
-        external: ['sharp']
+        external: ['sharp', 'better-sqlite3']
       },
       sourcemap: true
     }

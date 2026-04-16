@@ -126,7 +126,7 @@ const SampleCard = ({
               value={completedAt === undefined ? SampleStatus.InProgress : SampleStatus.Completed}
               onChange={(newStatus) => {
                 if (newStatus === SampleStatus.InProgress) {
-                  setCompletedAt(undefined)
+                  setCompletedAt(null)
                 } else {
                   const now = new Date().toISOString()
                   setCompletedAt(now)

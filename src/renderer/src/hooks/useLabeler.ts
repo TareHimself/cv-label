@@ -1,12 +1,13 @@
 import { IOptimisticSample, LabelerMode } from '@renderer/types'
-import { randomHexColor, rgb2hex } from '@shared/color'
-import { AnnotationType, IAnnotation, ILabel, INewAnnotation } from '@shared/types'
+import { rgb2hex } from '@shared/color'
+import { AnnotationType, IAnnotation, ILabel, INewAnnotation, IPoint } from '@shared/types'
 import { create } from 'zustand'
 import { useMemo } from 'react'
 import { makeUUID } from '@shared/utils'
 import { clamp } from '@mantine/hooks'
-import { useAppStore } from './useAppStore'
+import { useAppStore } from '@renderer/hooks/useAppStore'
 import { OptimisticObject } from '@renderer/optimistic'
+import { ColorGenerator } from '@renderer/util/color_generator'
 
 const ZOOM_STEP_DELTA = 0.15
 const MIN_ZOOM = 0.05
@@ -145,19 +146,17 @@ type LabelerStoreState = {
   /**
    * General purpose xy diff applied contextually to some item
    */
-  moveInitial: Vector2
   moveCurrent: Vector2
   pointIdsBeingMoved: string[] | null
   annotationIdBeingMoved: string | null
-  // readonly annotations: Map<string, OptimisticObject<IAnnotation>>
   mode: LabelerMode
   showHitTestDebugOverlay: boolean
 
   sample: IOptimisticSample | null
 
   readonly annotationsPendingDelete: Set<string>
-  readonly activeHitIds: Set<string>
-  readonly availableHitIds: Set<string>
+  // readonly activeHitIds: Set<string>
+  // readonly availableHitIds: Set<string>
   readonly hitTestCanvas: OffscreenCanvas
 
   isDragging: boolean
@@ -206,7 +205,7 @@ type LabelerStoreActions = {
   onMouseMove: (x: number, y: number) => void
   onConfirmPoint: (x: number, y: number) => void
   onConfirmAnnotationCreation: (discardLivePoint?: boolean) => void
-  setSelectedAnnotationLabelId: (newLabelId: string) => void
+  setAnnotationLabelId: (annotationId: string, newLabelId: string) => void
   moveSelectedAnnotationBy: (dx: number, dy: number) => void
   moveAnnotationPoint: (pointId: string, x: number, y: number) => void
   commitAnnotationMove: (annotationId: string) => void
@@ -214,6 +213,8 @@ type LabelerStoreActions = {
   canvasToBitmapSpace: (x: number, y: number) => [x: number, y: number]
   deleteAnnotation: (annotationId: string) => void
   deleteSelectedAnnotation: () => void
+  addControlPoint: (lineId: string, x: number, y: number) => string | undefined
+  deleteControlPoint: (controlPointId: string) => void
   hittest: (x: number, y: number) => HitTestResult | null
 }
 
@@ -223,35 +224,38 @@ export const useLabeler = (labels: ILabel[]) => {
   const store = useMemo(
     () =>
       create<LabelerStore>((set, get) => {
+        const colorGenerator = new ColorGenerator()
         let activeSampleAbort: AbortController | null = null
-        const imageHitId = randomHexColor()
+        const imageHitId = colorGenerator.make()
         const labelsMap = createLabelsMap(labels)
-        const activeHitIds = new Set([imageHitId])
-        const availableHitIds = new Set<string>()
+        // const activeHitIds = new Set([imageHitId])
+        // const availableHitIds = new Set<string>()
         const hitIdToAnnotationId = new OneToOneMap<string, string>()
         const selectedAnnotationControlHitIds = new OneToOneMap<string, string>()
         const selectedAnnotationLineHitIds = new OneToOneMap<string, string>()
 
         const makeHitId = () => {
-          const pooledId = availableHitIds.values().next().value
-          if (pooledId !== undefined) {
-            availableHitIds.delete(pooledId)
-            activeHitIds.add(pooledId)
-            return pooledId
-          }
+          // const pooledId = availableHitIds.values().next().value
+          // if (pooledId !== undefined) {
+          //   availableHitIds.delete(pooledId)
+          //   activeHitIds.add(pooledId)
+          //   return pooledId
+          // }
 
-          let color = randomHexColor()
-          while (activeHitIds.has(color)) {
-            color = randomHexColor()
-          }
+          // let color = randomHexColor()
+          // while (activeHitIds.has(color)) {
+          //   color = randomHexColor()
+          // }
 
-          activeHitIds.add(color)
-          return color
+          // activeHitIds.add(color)
+          // return color
+          return colorGenerator.make()
         }
 
         const freeHitId = (id: string) => {
-          activeHitIds.delete(id)
-          availableHitIds.add(id)
+          // activeHitIds.delete(id)
+          // availableHitIds.add(id)
+          colorGenerator.free(id)
         }
 
         const clearSelectedAnnotationHitIds = () => {
@@ -265,6 +269,35 @@ export const useLabeler = (labels: ILabel[]) => {
 
           selectedAnnotationControlHitIds.clear()
           selectedAnnotationLineHitIds.clear()
+        }
+
+        const addSelectedAnnotationPointId = (pointId: string) => {
+          clearSelectedAnnotationPointId(pointId)
+          {
+            const hitId = makeHitId()
+            selectedAnnotationControlHitIds.set(hitId, pointId)
+          }
+          {
+            const hitId = makeHitId()
+            selectedAnnotationLineHitIds.set(hitId, pointId)
+          }
+        }
+
+        const clearSelectedAnnotationPointId = (pointId: string) => {
+          {
+            const hitId = selectedAnnotationControlHitIds.getByValue(pointId)
+            if (hitId !== undefined) {
+              freeHitId(hitId)
+              selectedAnnotationControlHitIds.delete(pointId)
+            }
+          }
+          {
+            const hitId = selectedAnnotationLineHitIds.getByValue(pointId)
+            if (hitId !== undefined) {
+              freeHitId(hitId)
+              selectedAnnotationLineHitIds.delete(pointId)
+            }
+          }
         }
 
         const freeAnnotationHitIds = (annotationId: string) => {
@@ -368,52 +401,6 @@ export const useLabeler = (labels: ILabel[]) => {
           return getCanvasCenter()
         }
 
-        // const startAnnotationAdd = (annotation: IAnnotation) => {
-        //   const { annotations } = get()
-        //   annotations.set(annotation.id, new OptimisticObject(annotation))
-        //   const hitId = makeHitId()
-        //   hitIdToAnnotationId.set(hitId, annotation.id)
-
-        //   set({
-        //     annotationDirty: true
-        //   })
-        // }
-
-        // const commitAnnotationAdd = (annotation: IAnnotation) => {
-        //   const { annotations } = get()
-        //   annotations.set(annotation.id, new OptimisticObject(annotation))
-        //   const hitId = makeHitId()
-        //   hitIdToAnnotationId.set(hitId, annotation.id)
-
-        //   set({
-        //     annotationDirty: true
-        //   })
-        // }
-
-        // const startAnnotationRemove = (annotationId: string) => {
-
-        //   const { annotations } = get()
-        //   annotations.set(annotation.id, new OptimisticObject(annotation))
-        //   const hitId = makeHitId()
-        //   hitIdToAnnotationId.set(hitId, annotation.id)
-
-        //   set({
-        //     annotationDirty: true
-        //   })
-        // }
-
-        // const commitAnnotationRemove = (annotationId: string) => {
-
-        //   const { annotations } = get()
-        //   annotations.set(annotation.id, new OptimisticObject(annotation))
-        //   const hitId = makeHitId()
-        //   hitIdToAnnotationId.set(hitId, annotation.id)
-
-        //   set({
-        //     annotationDirty: true
-        //   })
-        // }
-
         const initialState: LabelerStoreState = {
           imageHitId: imageHitId,
           sizeDirty: false,
@@ -425,12 +412,11 @@ export const useLabeler = (labels: ILabel[]) => {
           canvasSize: [0, 0],
           scale: 1,
           mousePos: [0, 0],
-          moveInitial: [0, 0],
           //annotations: new Map(),
           mode: LabelerMode.Select,
           showHitTestDebugOverlay: false,
-          activeHitIds,
-          availableHitIds,
+          // activeHitIds,
+          // availableHitIds,
           hitTestCanvas: new OffscreenCanvas(0, 0),
           isDragging: false,
           selectedAnnotation: null,
@@ -543,36 +529,6 @@ export const useLabeler = (labels: ILabel[]) => {
             const delta = Math.log(targetZoom / state.scale)
             get().zoom(centerX, centerY, delta)
           },
-          // setAnnotations: (newAnnotations: IAnnotation[]) => {
-          //   const { annotations, annotationsPendingDelete } = get()
-          //   const newIds = new Set(newAnnotations.map((c) => c.id))
-          //   const intersection = annotationsPendingDelete.intersection(newIds)
-          //   annotations.clear()
-          //   annotationsPendingDelete.clear()
-          //   clearSelectedAnnotationHitIds()
-
-          //   for (const hitId of hitIdToAnnotationId.keys()) {
-          //     freeHitId(hitId)
-          //   }
-
-          //   hitIdToAnnotationId.clear()
-
-          //   for (const id of intersection) {
-          //     intersection.add(id)
-          //   }
-
-          //   for (const annotation of newAnnotations) {
-          //     annotations.set(annotation.id, new OptimisticObject(annotation))
-          //     const hitId = makeHitId()
-          //     hitIdToAnnotationId.set(hitId, annotation.id)
-          //   }
-
-          //   set({
-          //     selectedAnnotation: null,
-          //     hitTestDirty: get().mode === LabelerMode.Select,
-          //     annotationDirty: true
-          //   })
-          // },
           setMode: (mode) => {
             clearSelectedAnnotationHitIds()
             const state = get()
@@ -737,35 +693,42 @@ export const useLabeler = (labels: ILabel[]) => {
                   get().onBitmapLoaded(b)
                 }
               })
+              .catch((e) => {
+                if (e instanceof DOMException && e.name === 'AbortError') {
+                  return
+                }
+                throw e
+              })
               .finally(() => {
                 if (get().sample?.resolve().id === sampleId) {
                   activeSampleAbort = null
                 }
               })
           },
-          setSelectedAnnotationLabelId: (labelId) => {
+          setAnnotationLabelId: (annotationId, labelId) => {
             const state = get()
-            if (state.selectedAnnotation === null) {
+            const targetAnnotation =
+              state.sample?.resolve().annotations.resolve()[annotationId] ?? null
+            if (targetAnnotation === null) {
               return
             }
-            const selectedAnnotation = state.selectedAnnotation
-            const updateId = selectedAnnotation.update({ labelId: labelId })
+
+            const updateId = targetAnnotation.update({ labelId: labelId })
             const dataStore = useAppStore.getState().store
             set({ annotationDirty: true })
             const sampleId = state.sample?.resolve().id
             dataStore
               .updateAnnotations([
                 {
-                  id: selectedAnnotation.resolve().id,
+                  id: targetAnnotation.resolve().id,
                   labelId: labelId
                 }
               ])
               .then((c) => {
-                selectedAnnotation.commit(updateId)
-                selectedAnnotation.updateBase(c[0])
+                targetAnnotation.commit(updateId, c[0])
               })
               .catch(() => {
-                selectedAnnotation.rollback(updateId)
+                targetAnnotation.rollback(updateId)
               })
               .finally(() => {
                 if (sampleId === get().sample?.resolve().id) {
@@ -786,14 +749,6 @@ export const useLabeler = (labels: ILabel[]) => {
               annotationDirty: true,
               hitTestDirty: true
             })
-
-            // state.selectedAnnotation.get().points.forEach((point, idx) => {
-            //   const initialPoint = initialPoints[idx]
-            //   if (initialPoint !== undefined) {
-            //     point.x = initialPoint.x + dx
-            //     point.y = initialPoint.y + dy
-            //   }
-            // })
           },
           moveAnnotationPoint: (pointId, x, y) => {
             const state = get()
@@ -810,8 +765,6 @@ export const useLabeler = (labels: ILabel[]) => {
               annotationDirty: true,
               hitTestDirty: true
             })
-
-            set({ annotationDirty: true, hitTestDirty: true })
           },
           setShowHitTestDebugOverlay: (enabled) => {
             set({ showHitTestDebugOverlay: enabled, annotationDirty: true })
@@ -831,11 +784,15 @@ export const useLabeler = (labels: ILabel[]) => {
             const dataStore = useAppStore.getState().store
             const resolvedAnnotation = annotation.resolve()
             const pointsBeingMoved = new Set(state.pointIdsBeingMoved)
+            const annotationPointIds = new Set(resolvedAnnotation.points.map((c) => c.id))
+            const pointsToMove = pointsBeingMoved.intersection(annotationPointIds)
+
+            if (pointsToMove.size === 0) return
 
             const payload = normalizeAnnotationPoints({
               type: resolvedAnnotation.type,
               points: resolvedAnnotation.points.map((point) => {
-                const diff = pointsBeingMoved.has(point.id) ? state.moveCurrent : [0, 0]
+                const diff = pointsToMove.has(point.id) ? state.moveCurrent : [0, 0]
                 return {
                   id: point.id,
                   x: point.x + diff[0],
@@ -856,10 +813,9 @@ export const useLabeler = (labels: ILabel[]) => {
             })
 
             dataStore
-              .replacePoints(payload)
+              .replacePoints(annotationId, payload)
               .then((resultPoints) => {
-                annotation.commit(updateId)
-                annotation.updateBase({
+                annotation.commit(updateId, {
                   points: resultPoints
                 })
               })
@@ -926,6 +882,88 @@ export const useLabeler = (labels: ILabel[]) => {
               state.deleteAnnotation(annotation.resolve().id)
             }
           },
+          addControlPoint: (controlPointId: string, x: number, y: number) => {
+            const state = get()
+            const annotation = state.selectedAnnotation ?? null
+            if (annotation === null) return undefined
+            const pointIndex = annotation.resolve().points.findIndex((c) => c.id === controlPointId)
+            if (pointIndex === -1) return undefined
+
+            const [bitmapX, bitmapY] = canvasToBitmapSpace(x, y)
+
+            const newPoint: IPoint = {
+              id: makeUUID(),
+              x: bitmapX,
+              y: bitmapY
+            }
+            const resolvedAnnotation = structuredClone(annotation.resolve())
+            const points = resolvedAnnotation.points
+            points.splice(pointIndex + 1, 0, newPoint)
+            const store = useAppStore.getState().store
+            const updateId = annotation.update({
+              points: points
+            })
+            addSelectedAnnotationPointId(newPoint.id)
+            set({ annotationDirty: true, hitTestDirty: true })
+            store
+              .replacePoints(resolvedAnnotation.id, points)
+              .then((c) => {
+                annotation.commit(updateId, {
+                  points: c
+                })
+              })
+              .catch((e) => {
+                console.error(e)
+                annotation.rollback(updateId)
+              })
+              .finally(() => {
+                if (get().selectedAnnotation?.resolve().id === resolvedAnnotation.id) {
+                  clearSelectedAnnotationHitIds()
+                  for (const point of annotation.resolve().points) {
+                    addSelectedAnnotationPointId(point.id)
+                  }
+                }
+                set({ annotationDirty: true, hitTestDirty: true })
+              })
+            return newPoint.id
+          },
+          deleteControlPoint: (controlPointId: string) => {
+            const state = get()
+            const annotation = state.selectedAnnotation ?? null
+            if (annotation === null) return
+            const resolvedAnnotation = structuredClone(annotation.resolve())
+            const pointIndex = resolvedAnnotation.points.findIndex((c) => c.id === controlPointId)
+            if (pointIndex === -1 || resolvedAnnotation.points.length <= 3) return
+            const points = resolvedAnnotation.points
+            const pointToRemove = points[pointIndex]
+            points.splice(pointIndex, 1)
+            const store = useAppStore.getState().store
+            const updateId = annotation.update({
+              points: points
+            })
+            clearSelectedAnnotationPointId(pointToRemove.id)
+            set({ annotationDirty: true, hitTestDirty: true })
+            store
+              .replacePoints(resolvedAnnotation.id, points)
+              .then((c) => {
+                annotation.commit(updateId, {
+                  points: c
+                })
+              })
+              .catch((e) => {
+                console.error(e)
+                annotation.rollback(updateId)
+              })
+              .finally(() => {
+                if (get().selectedAnnotation?.resolve().id === resolvedAnnotation.id) {
+                  clearSelectedAnnotationHitIds()
+                  for (const point of annotation.resolve().points) {
+                    addSelectedAnnotationPointId(point.id)
+                  }
+                }
+                set({ annotationDirty: true, hitTestDirty: true })
+              })
+          },
           hittest: (x, y): HitTestResult | null => {
             const state = get()
 
@@ -957,7 +995,7 @@ export const useLabeler = (labels: ILabel[]) => {
                   controlPointId: controlPointId,
                   lineControlPointId: lineControlPointId
                 }
-              } else {
+              } else if (hitAnnotationId !== null) {
                 return {
                   annotationId: hitAnnotationId,
                   controlPointId: null,

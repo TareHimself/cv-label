@@ -66,13 +66,16 @@ export class OptimisticObject<T extends object> {
     this.diffs.splice(diffIdx, 1)
   }
 
-  commit(id: string) {
+  commit(id: string, override?: Partial<T>) {
     const diffIdx = this.diffs.findIndex((c) => c.id === id)
     if (diffIdx === -1) return
     this.recentMerge = null
     const diff = this.diffs[diffIdx]
     this.diffs.splice(diffIdx, 1)
     this.base = { ...this.base, ...diff.diff }
+    if (override !== undefined) {
+      this.base = { ...this.base, ...override }
+    }
     if (this.removeUndefined) {
       clearUndefined(this.base)
     }

@@ -11,7 +11,7 @@ import {
   IProject,
   ISample,
   ITask
-} from 'src/shared/types'
+} from '@shared/types'
 
 export class LocalDataStore implements IDataStore {
   connect(): Promise<void> {
@@ -99,7 +99,7 @@ export class LocalDataStore implements IDataStore {
     return window.localStore.deleteAnnotators(externalAnnotatorIds)
   }
 
-  replacePoints(points: IPointReplacement[]): Promise<IPoint[]> {
-    return window.localStore.replacePoints(points)
+  replacePoints(annotationId: string, points: IPointReplacement[]): Promise<IPoint[]> {
+    return window.localStore.replacePoints(annotationId, points)
   }
 }

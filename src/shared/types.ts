@@ -80,19 +80,14 @@ export interface IPointUpdate extends Partial<IPoint> {
   id: IPoint['id']
 }
 
-export type IPointReplacement =
-  | {
-      id: IPoint['id']
-      x: number
-      y: number
-      annotationId?: never
-    }
-  | {
-      id?: never
-      x: number
-      y: number
-      annotationId: IAnnotation['id']
-    }
+export interface INewPoint {
+  id: string
+  annotationId: IAnnotation['id']
+  x: number
+  y: number
+}
+
+export type IPointReplacement = INewPoint | IPointUpdate
 
 export interface IDataStore {
   connect(): Promise<void>
@@ -126,7 +121,7 @@ export interface IDataStore {
   ): Promise<IAnnotator>
   deleteAnnotators(annotatorIds: string[]): Promise<boolean[]>
 
-  replacePoints(points: IPointReplacement[]): Promise<IPoint[]>
+  replacePoints(annotationId: string, points: IPointReplacement[]): Promise<IPoint[]>
 }
 
 export interface ISystem {

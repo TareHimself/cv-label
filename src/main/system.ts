@@ -3,12 +3,11 @@ import { SystemKeys } from '../shared/ipcKeys'
 import { wrap } from './utils'
 import { ISystem } from '../shared/types'
 import fs from 'fs/promises'
-import { makeUUID } from '../shared/utils'
 import os from 'os'
 import path from 'path'
 
 const create: ISystem['createTemporaryDirectory'] = async () => {
-  return fs.mkdtemp(path.join(os.tmpdir(), `cv-label`, makeUUID()))
+  return fs.mkdtemp(path.join(os.tmpdir(), `cv-label-`))
 }
 
 const deleteFile: ISystem['deleteFile'] = async (filePath) => {

@@ -44,6 +44,13 @@ interface IStoredSample extends OmitV2<INewSample, 'base64Image' | 'annotations'
   completedAt?: string
 }
 
+type DatabasePoint = {
+  id: string
+  x: number
+  y: number
+  sequence: number
+}
+
 const storePath = path.join(APP_PATH, 'store')
 const databasePath = path.join(storePath, 'database', 'data.db')
 const imagesPath = path.join(storePath, 'images')
@@ -225,14 +232,22 @@ const CreatePointStatement = db.prepare<{
   annotationId: string
 }>(`INSERT INTO points (id,x,y,sequence,annotationId) VALUES (@id,@x,@y,@sequence,@annotationId)`)
 
-const GetPointsStatement = db.prepare<
-  [annotationId: string],
-  { id: string; x: number; y: number; sequence: number }
->(`SELECT id, x, y, sequence FROM points WHERE annotationId = ? ORDER BY sequence ASC`)
-
-const GetPointAnnotationIdStatement = db.prepare<[id: string], { annotationId: string }>(
-  'SELECT annotationId FROM points WHERE id = ?'
+const GetPointsStatement = db.prepare<[annotationId: string], DatabasePoint>(
+  `SELECT id, x, y, sequence FROM points WHERE annotationId = ? ORDER BY sequence ASC`
 )
+
+const GetPointsWithoutSequenceStatement = db.prepare<[annotationId: string], IPoint>(
+  `SELECT id, x, y FROM points WHERE annotationId = ? ORDER BY sequence ASC`
+)
+
+const UpdatePointStatement = db.prepare<{
+  id: string
+  x: number
+  y: number
+  sequence: number
+}>(`UPDATE points SET x = @x, y = @y, sequence = @sequence WHERE id = @id`)
+
+const DeletePointStatement = db.prepare<[id: string]>('DELETE FROM points WHERE id = ?')
 
 const GetSampleStatement = db.prepare<[taskId: string], IStoredSample>(
   `SELECT * FROM samples WHERE taskId = ? ORDER BY id ASC`
@@ -279,10 +294,6 @@ const DeleteSampleStatement = db.prepare<{
 const DeleteAnnotationStatement = db.prepare<{
   id: IAnnotation['id']
 }>('DELETE FROM annotations WHERE id = @id')
-
-const DeletePointsForAnnotationStatement = db.prepare<[annotationId: string]>(
-  'DELETE FROM points WHERE annotationId = ?'
-)
 
 const CreateAnnotationsTransaction = db.transaction(
   (sampleId: string, annotations: INewAnnotation[]): IAnnotation[] => {
@@ -353,82 +364,83 @@ const DeleteAnnotationsTransaction = db.transaction((ids: string[]) => {
   }
 })
 
-const ReplacePointsTransaction = db.transaction((points: IPointReplacement[]): IPoint[] => {
-  const existingPointIds = points
-    .map((point) => point.id)
-    .filter((id): id is string => id !== undefined)
+const ReplacePointsTransaction = db.transaction(
+  (annotationId: string, points: IPointReplacement[]): IPoint[] => {
+    // Get current points for the annotation
+    const currentPoints = GetPointsStatement.all(annotationId)
 
-  const annotationIdsFromInput = points
-    .map((point) => ('annotationId' in point ? point.annotationId : undefined))
-    .filter((annotationId): annotationId is string => annotationId !== undefined)
+    // Create a map of current points by id
+    const currentPointsMap = new Map(currentPoints.map((p) => [p.id, p]))
 
-  const annotationIds = new Set<string>()
-  const missingExistingPointIds: string[] = []
+    // Categorize operations
+    const toInsert: DatabasePoint[] = []
+    const toUpdate: DatabasePoint[] = []
+    const toDelete: string[] = []
 
-  for (const annotationId of annotationIdsFromInput) {
-    annotationIds.add(annotationId)
-  }
+    // Process each input point
+    for (let sequence = 0; sequence < points.length; sequence++) {
+      const pointInput = points[sequence]
+      const id = pointInput.id
 
-  for (const id of existingPointIds) {
-    const row = GetPointAnnotationIdStatement.get(id)
-    if (row === undefined) {
-      missingExistingPointIds.push(id)
-      continue
+      if (currentPointsMap.has(id)) {
+        // Update existing point
+        const existing = currentPointsMap.get(id)!
+        toUpdate.push({
+          id: id,
+          x: pointInput.x ?? existing.x,
+          y: pointInput.y ?? existing.y,
+          sequence: sequence
+        })
+      } else {
+        // Insert new point - must have x and y
+        if (pointInput.x === undefined || pointInput.y === undefined) {
+          throw new Error(`New point with id ${id} missing x or y coordinate`)
+        }
+        toInsert.push({
+          id: id,
+          x: pointInput.x,
+          y: pointInput.y,
+          sequence: sequence
+        })
+      }
     }
 
-    annotationIds.add(row.annotationId)
-  }
-
-  if (missingExistingPointIds.length > 0) {
-    throw new Error(
-      `replacePoints received ids not found in DB: ${missingExistingPointIds.join(',')}`
-    )
-  }
-
-  if (annotationIds.size === 0) {
-    throw new Error(
-      'replacePoints requires either existing point ids or annotationId for new points'
-    )
-  }
-
-  if (annotationIds.size > 1) {
-    throw new Error('replacePoints received point ids from multiple annotations')
-  }
-
-  const annotationId = Array.from(annotationIds)[0]
-
-  // Delete all existing points for the inferred annotation.
-  DeletePointsForAnnotationStatement.run(annotationId)
-
-  const resultPoints: IPoint[] = []
-
-  // Insert points in order with new sequences
-  for (let sequence = 0; sequence < points.length; sequence++) {
-    const pointInput = points[sequence]
-    const id = pointInput.id || makeUUID()
-
-    // Validate that x and y are provided
-    if (pointInput.x === undefined || pointInput.y === undefined) {
-      throw new Error(`Point at index ${sequence} missing x or y coordinate`)
+    // Points to delete: current points not in input
+    for (const current of currentPoints) {
+      const isInInput = points.some((p) => p.id === current.id)
+      if (!isInInput) {
+        toDelete.push(current.id)
+      }
     }
 
-    CreatePointStatement.run({
-      id: id,
-      x: pointInput.x,
-      y: pointInput.y,
-      sequence: sequence,
-      annotationId: annotationId
-    })
+    // Perform operations in order: delete, insert, update
+    for (const id of toDelete) {
+      DeletePointStatement.run(id)
+    }
 
-    resultPoints.push({
-      id: id,
-      x: pointInput.x,
-      y: pointInput.y
-    })
+    for (const point of toInsert) {
+      CreatePointStatement.run({
+        id: point.id,
+        x: point.x,
+        y: point.y,
+        sequence: point.sequence,
+        annotationId: annotationId
+      })
+    }
+
+    for (const point of toUpdate) {
+      UpdatePointStatement.run({
+        id: point.id,
+        x: point.x,
+        y: point.y,
+        sequence: point.sequence
+      })
+    }
+
+    // Return the full list of points ordered by sequence
+    return GetPointsWithoutSequenceStatement.all(annotationId) as IPoint[]
   }
-
-  return resultPoints
-})
+)
 
 export const IMAGES_PROTOCOL_URL = 'images'
 
@@ -459,12 +471,12 @@ const materializeSample = (s: IStoredSample): ISample => {
     id: s.id,
     name: s.name,
     annotations: annotations.map<IAnnotation>((a) => {
-      const pointRows = GetPointsStatement.all(a.id)
+      const pointRows = GetPointsWithoutSequenceStatement.all(a.id)
       return {
         id: a.id,
         type: a.type,
         labelId: a.labelId,
-        points: pointRows.map((p) => ({ id: p.id, x: p.x, y: p.y }))
+        points: pointRows
       }
     }),
     createdAt: s.createdAt,
@@ -494,12 +506,12 @@ const GetAnnotationsForSampleTransaction = db.transaction((sampleId: string): IA
   const annotations = GetAnnotationsStatement.all(sampleId)
 
   return annotations.map<IAnnotation>((annotation) => {
-    const pointRows = GetPointsStatement.all(annotation.id)
+    const pointRows = GetPointsWithoutSequenceStatement.all(annotation.id)
     return {
       id: annotation.id,
       type: annotation.type,
       labelId: annotation.labelId,
-      points: pointRows.map((point) => ({ id: point.id, x: point.x, y: point.y }))
+      points: pointRows
     }
   })
 })
@@ -726,8 +738,8 @@ const localStore: IDataStore = {
     return annotatorIds.map(() => true)
   },
 
-  replacePoints: async (points) => {
-    return ReplacePointsTransaction.immediate(points)
+  replacePoints: async (annotationId, points) => {
+    return ReplacePointsTransaction.immediate(annotationId, points)
   }
 }
 

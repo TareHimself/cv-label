@@ -15,3 +15,15 @@ export const checkBoundryResult = <T>(result: Promise<BoundaryResult<T>>) =>
   })
 
 export const mod = (x: number, m: number) => ((x % m) + m) % m
+
+export const errorToString = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  return JSON.stringify(error)
+}

@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { IDataStore, ISystem, IZip } from 'src/shared/types'
+import { IDataStore, ISystem, IZip } from '@shared/types'
 
 declare global {
   interface Window {

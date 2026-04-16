@@ -6,6 +6,7 @@ import {
   InitResult
 } from './module_worker_utils'
 import { isEntryFile } from './utils'
+import { errorToString } from '../../shared/utils'
 
 if (isEntryFile(import.meta.url)) {
   for (const k of Object.keys(workerData)) {
@@ -20,7 +21,7 @@ if (isEntryFile(import.meta.url)) {
   }
 
   const respondError = <T = unknown>(callRef: string, error: unknown) => {
-    const message: WorkerResponse<T> = { callRef, error: error, success: false }
+    const message: WorkerResponse<T> = { callRef, error: errorToString(error), success: false }
     parentPort?.postMessage(message)
   }
 

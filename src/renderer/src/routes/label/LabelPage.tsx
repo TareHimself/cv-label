@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react'
-import { Flex, NumberInput, SegmentedControl, Tooltip } from '@mantine/core'
+import { Flex, MantineSize, NumberInput, SegmentedControl, Tooltip } from '@mantine/core'
 import { Labeler } from '@renderer/components/Labeler'
 import { useLabeler } from '@renderer/hooks/useLabeler'
 import { useLabelNavState } from '@renderer/navigation'
@@ -71,10 +71,11 @@ const StyledLabeler = styled(Labeler)`
 type ModeSelectProps = {
   value: LabelerMode
   onChange: (newValue: LabelerMode) => void
+  size?: MantineSize
 }
-const ModeSelect = ({ value, onChange }: ModeSelectProps) => (
+const ModeSelect = ({ value, onChange, size = 'md' }: ModeSelectProps) => (
   <SegmentedControl
-    size="md"
+    size={size}
     value={value}
     onChange={(newMode) => {
       onChange(newMode as LabelerMode)
@@ -82,13 +83,17 @@ const ModeSelect = ({ value, onChange }: ModeSelectProps) => (
     styles={{
       label: {
         display: 'flex',
-        width: '50px',
-        height: '50px',
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 0
+        paddingTop: 0,
+        paddingBottom: 0
       },
       innerLabel: {
+        display: 'flex'
+      },
+      control: {
+        aspectRatio: 1,
         display: 'flex'
       }
     }}
@@ -135,13 +140,15 @@ const LabelSelect = ({ labels, selectedLabelId, onChange }: LabelSelectProps) =>
     styles={{
       label: {
         display: 'flex',
-        width: '100%',
-        height: '50px',
+        flex: 1,
         justifyContent: 'center',
-        alignItems: 'center',
-        padding: 10
+        alignItems: 'center'
       },
       innerLabel: {
+        display: 'flex'
+      },
+      control: {
+        // aspectRatio: 1,
         display: 'flex'
       }
     }}
@@ -240,6 +247,7 @@ export const LabelPage = () => {
         gap={'md'}
       >
         <ModeSelect value={mode} onChange={(e) => store.getState().setMode(e)} />
+
         {project.labels.length > 1 && (
           <Tooltip label="Select Label">
             <LabelSelect

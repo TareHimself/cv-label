@@ -24,7 +24,7 @@ export type WorkerResponse<T = unknown> =
   | {
       callRef: string
       success: false
-      error: unknown
+      error: string
     }
 
 export type MethodInfo = {

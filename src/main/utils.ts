@@ -2,6 +2,7 @@ import { app, IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
 import { BoundaryResult } from '../shared/types'
 import { inspect } from 'node:util'
+import { errorToString } from '../shared/utils'
 export const isDev = () => app.isPackaged
 
 export const getAppPath = () =>
@@ -32,7 +33,7 @@ export const wrap = <TResult = unknown, TArgs extends unknown[] = unknown[]>(
   return (_: IpcMainInvokeEvent, ...args: TArgs): Promise<BoundaryResult<TResult>> => {
     return func(...args)
       .then<BoundaryResult<TResult>>((d) => ({ ok: true, data: d }))
-      .catch((e) => ({ ok: false, error: e }))
+      .catch((e) => ({ ok: false, error: errorToString(e) }))
       .then((c) => {
         console.log(
           `${func.name}(${inspect(args, {
