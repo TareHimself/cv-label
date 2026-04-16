@@ -3,18 +3,12 @@ import { clamp } from '@mantine/hooks'
 import { LabelerStore, normalizeAnnotationPoints } from '@renderer/hooks/useLabeler'
 import { LabelerMode } from '@renderer/types'
 import { AnnotationType, IAnnotation, IPoint, OmitV2 } from '@shared/types'
-import {
-  MouseEventHandler,
-  RefObject,
-  TouchEventHandler,
-  useCallback,
-  useEffect,
-  useRef
-} from 'react'
+import { PointerEventHandler, RefObject, useCallback, useEffect, useRef } from 'react'
 import { StoreApi, UseBoundStore } from 'zustand'
 import { ContextMenuItemOptions, useContextMenu } from 'mantine-contextmenu'
 import { MdDeleteOutline } from 'react-icons/md'
 
+const SKIP_NEXT_CONTEXT_MENU_ATTRIBUTE = 'data-skip-next-context'
 type LabelerCommands = {
   enableHitTestDebug: () => void
   disableHitTestDebug: () => void
@@ -332,8 +326,15 @@ export type LabelerProps = {
 
 const useLabelerContextMenu = (store: UseBoundStore<StoreApi<LabelerStore>>) => {
   const { showContextMenu: originalShowContextMenu } = useContextMenu()
-  const onContextMenu = useCallback<MouseEventHandler<Element> & TouchEventHandler<Element>>(
+  const onContextMenu = useCallback<PointerEventHandler<HTMLDivElement>>(
     (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (e.currentTarget.hasAttribute(SKIP_NEXT_CONTEXT_MENU_ATTRIBUTE)) {
+        e.currentTarget.toggleAttribute(SKIP_NEXT_CONTEXT_MENU_ATTRIBUTE, false)
+        return
+      }
       const state = store.getState()
       const [mouseX, mouseY] = state.mousePos
       const result = state.hittest(mouseX, mouseY)
@@ -397,13 +398,13 @@ const usePointerMove = (
     if (documentElement === null || containerElement === null) return
 
     const { onMouseMove } = store.getState()
-    const callback: (ev: MouseEvent) => void = (e) => {
+    const callback: (ev: PointerEvent) => void = (e) => {
       const rect = containerElement.getBoundingClientRect()
       onMouseMove(e.clientX - rect.x, e.clientY - rect.y)
     }
 
-    documentElement.addEventListener('mousemove', callback)
-    return () => documentElement.removeEventListener('mousemove', callback)
+    documentElement.addEventListener('pointermove', callback)
+    return () => documentElement.removeEventListener('pointermove', callback)
   }, [container, store])
 }
 
@@ -417,7 +418,7 @@ const usePointerInteractions = (
     const documentElement = document.documentElement
     if (element === null || documentElement === null) return
 
-    const toCanvasSpace = (event: Pick<MouseEvent, 'clientX' | 'clientY'>) => {
+    const toCanvasSpace = (event: Pick<PointerEvent, 'clientX' | 'clientY'>) => {
       const rect = element.getBoundingClientRect()
       return {
         x: event.clientX - rect.left,
@@ -425,52 +426,60 @@ const usePointerInteractions = (
       }
     }
 
-    const watchMouseMove = (
-      downEvent: MouseEvent,
+    const watchPointerMove = (
+      downEvent: PointerEvent,
       onMove: (x: number, y: number) => void,
-      onRelease?: (ev: MouseEvent) => void
+      onRelease?: (ev: PointerEvent) => void
     ) => {
       store.setState({ isDragging: true })
 
-      const moveCallback = (e: MouseEvent) => {
+      const moveCallback = (e: PointerEvent) => {
         const movePos = toCanvasSpace(e)
         onMove(movePos.x, movePos.y)
       }
 
-      const upCallback = (e: MouseEvent) => {
+      const upCallback = (e: PointerEvent) => {
         if (e.button !== downEvent.button) {
           return
         }
-        documentElement.removeEventListener('mousemove', moveCallback)
-        documentElement.removeEventListener('mouseup', upCallback)
+        documentElement.removeEventListener('pointermove', moveCallback)
+        documentElement.removeEventListener('pointerup', upCallback)
         store.setState({ isDragging: false })
         onRelease?.(e)
       }
 
-      documentElement.addEventListener('mouseup', upCallback)
-      documentElement.addEventListener('mousemove', moveCallback)
+      documentElement.addEventListener('pointerup', upCallback)
+      documentElement.addEventListener('pointermove', moveCallback)
     }
 
-    const mouseDownListener = (mouseDownEvent: MouseEvent) => {
-      if ([0, 2].includes(mouseDownEvent.button)) {
-        mouseDownEvent.preventDefault()
+    const pointerDownListener = (pointerDownEvent: PointerEvent) => {
+      if ([0, 2].includes(pointerDownEvent.button)) {
+        const skipNextContextMenu = () =>
+          (pointerDownEvent.currentTarget as HTMLDivElement).toggleAttribute(
+            SKIP_NEXT_CONTEXT_MENU_ATTRIBUTE,
+            true
+          )
+        const handled = () => {
+          pointerDownEvent.preventDefault()
+          pointerDownEvent.stopImmediatePropagation()
+        }
         {
           const active = document.activeElement as HTMLElement | null
           if (active && active !== document.body) {
             active.blur()
           }
 
-          ;(mouseDownEvent.target as HTMLDivElement).focus()
+          ;(pointerDownEvent.target as HTMLDivElement).focus()
         }
-        const mouseDownPos = { x: mouseDownEvent.offsetX, y: mouseDownEvent.offsetY }
+        const mouseDownPos = { x: pointerDownEvent.offsetX, y: pointerDownEvent.offsetY }
 
-        const forcedPan = mouseDownEvent.button === 0 && mouseDownEvent.ctrlKey
+        const forcedPan = pointerDownEvent.button === 0 && pointerDownEvent.ctrlKey
         // Do hit test here
         if (!forcedPan) {
           let state = store.getState()
           const result = state.hittest(Math.floor(mouseDownPos.x), Math.floor(mouseDownPos.y))
 
-          if (mouseDownEvent.button === 0) {
+          if (pointerDownEvent.button === 0) {
             if (state.mode === LabelerMode.Select) {
               if (result !== null) {
                 // First we figure out selection then do other ops
@@ -485,6 +494,7 @@ const usePointerInteractions = (
                   const annotationId = result.annotationId
                   state.selectAnnotation(annotationId)
                   state = store.getState()
+                  handled()
                   return
                 }
                 if (state.selectedAnnotation !== null && result.annotationId !== null) {
@@ -499,8 +509,8 @@ const usePointerInteractions = (
                       const pointId = result.controlPointId
                       const annotationId = state.selectedAnnotation.resolve().id
                       //const initialPoints = structuredClone(state.selectedAnnotation.resolve().points)
-                      watchMouseMove(
-                        mouseDownEvent,
+                      watchPointerMove(
+                        pointerDownEvent,
                         (x, y) => {
                           state.moveAnnotationPoint(pointId, x, y)
                         },
@@ -508,6 +518,7 @@ const usePointerInteractions = (
                           state.commitAnnotationMove(annotationId)
                         }
                       )
+                      handled()
                       return
                     }
                     // Move annotation
@@ -538,8 +549,8 @@ const usePointerInteractions = (
                       )
                       const allowedDiffTowardsMinimum = [-minPoints.x, -minPoints.y]
                       const allowedDiffTowardMaximum = [endX - maxPoints.x, endY - maxPoints.y]
-                      watchMouseMove(
-                        mouseDownEvent,
+                      watchPointerMove(
+                        pointerDownEvent,
                         (x, y) => {
                           const [currentX, currentY] = state.canvasToBitmapSpace(x, y)
                           const dx = clamp(
@@ -559,17 +570,19 @@ const usePointerInteractions = (
                         }
                       )
                     }
+                    handled()
                     return
                   }
                 }
               } else {
                 state.selectAnnotation(null)
+                handled()
               }
             } else if (state.mode === LabelerMode.CreateBox) {
               state.onConfirmPoint(mouseDownPos.x, mouseDownPos.y)
 
-              watchMouseMove(
-                mouseDownEvent,
+              watchPointerMove(
+                pointerDownEvent,
                 (x, y) => {
                   store.getState().onMouseMove(x, y)
                 },
@@ -580,25 +593,33 @@ const usePointerInteractions = (
                   }
                 }
               )
+              handled()
               return
             } else if (state.mode === LabelerMode.CreateMask) {
               state.onConfirmPoint(mouseDownPos.x, mouseDownPos.y)
+              handled()
               return
             }
-          } else if (mouseDownEvent.button === 2) {
+          } else if (pointerDownEvent.button === 2) {
             if (state.mode === LabelerMode.Select) {
               if (result !== null && result.controlPointId !== null) {
                 state.deleteControlPoint(result.controlPointId)
+                skipNextContextMenu()
+                handled()
                 return
               }
             } else if (state.mode === LabelerMode.CreateBox) {
               if (state.annotationBeingCreated?.points.length === 2) {
                 state.onConfirmAnnotationCreation()
+                skipNextContextMenu()
+                handled()
                 return
               }
             } else if (state.mode === LabelerMode.CreateMask) {
               if ((state.annotationBeingCreated?.points.length ?? 0) >= 4) {
                 state.onConfirmAnnotationCreation(true)
+                skipNextContextMenu()
+                handled()
                 return
               }
             }
@@ -606,13 +627,13 @@ const usePointerInteractions = (
         }
 
         // If no hit default to pan
-        if (forcedPan || mouseDownEvent.button === 0) {
+        if (forcedPan || pointerDownEvent.button === 0) {
           const startX = mouseDownPos.x
           const startY = mouseDownPos.y
           const state = store.getState()
           const offsetStart = { x: state.imageRect.x, y: state.imageRect.y }
 
-          watchMouseMove(mouseDownEvent, (x, y) => {
+          watchPointerMove(pointerDownEvent, (x, y) => {
             const dx = x - startX
             const dy = y - startY
 
@@ -633,10 +654,10 @@ const usePointerInteractions = (
       store.getState().zoom(ev.offsetX, ev.offsetY, ev.deltaY * -0.001)
     }
 
-    element.addEventListener('mousedown', mouseDownListener)
+    element.addEventListener('pointerdown', pointerDownListener)
     element.addEventListener('wheel', wheelListener)
     return () => {
-      element.removeEventListener('mousedown', mouseDownListener)
+      element.removeEventListener('pointerdown', pointerDownListener)
       element.removeEventListener('wheel', wheelListener)
     }
   }, [container, store])
