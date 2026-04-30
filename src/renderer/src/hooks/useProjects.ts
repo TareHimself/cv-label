@@ -10,7 +10,7 @@ export const useProjects = () => {
   const queryClient = useQueryClient()
   const projectsQueryKey = ['projects', store] as const
 
-  const { data: items = [] } = useQuery({
+  const { data: items = [], isLoading } = useQuery({
     queryKey: projectsQueryKey,
     queryFn: () => store.getProjects()
   })
@@ -53,5 +53,5 @@ export const useProjects = () => {
     await navigateToTasks(item)
   }, [])
 
-  return { items, create, open }
+  return { items, create, open, isLoading }
 }

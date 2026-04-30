@@ -54,6 +54,10 @@ export interface ISample extends OmitV2<INewSample, 'base64Image'> {
   completedAt: string | null
 }
 
+export interface ISampleUpdate extends Partial<OmitV2<ISample, 'annotations' | 'imageUri'>> {
+  id: ISample['id']
+}
+
 export interface INewAnnotator {
   id: string
   name: string
@@ -104,6 +108,7 @@ export interface IDataStore {
   getSamplesForTask(taskId: string): Promise<ISample[]>
   getSamples(sampleIds: string[]): Promise<ISample[]>
   createSamples(taskId: string, samples: INewSample[]): Promise<ISample[]>
+  updateSamples(updates: ISampleUpdate[]): Promise<ISample[]>
   deleteSamples(sampleIds: string[]): Promise<boolean[]>
 
   getAnnotationsForSample(sampleId: string): Promise<IAnnotation[]>
@@ -142,3 +147,69 @@ export type WrapMethodsWithBoundary<T> = {
 }
 
 export type OmitV2<T, K extends keyof T> = Omit<T, K>
+
+export enum IPCKeys {
+  // LocalStore
+  LocalStore_Connect = 'localStore-connect',
+  LocalStore_Disconnect = 'localStore-disconnect',
+  LocalStore_GetProjects = 'localStore-getProjects',
+  LocalStore_CreateProject = 'localStore-createProject',
+  LocalStore_DeleteProjects = 'localStore-deleteProjects',
+  LocalStore_GetTasks = 'localStore-getTasks',
+  LocalStore_CreateTask = 'localStore-createTask',
+  LocalStore_DeleteTasks = 'localStore-deleteTasks',
+  LocalStore_GetSamplesForTask = 'localStore-getSamplesForTask',
+  LocalStore_GetSamples = 'localStore-getSamples',
+  LocalStore_CreateSamples = 'localStore-createSamples',
+  LocalStore_UpdateSamples = 'localStore-updateSamples',
+  LocalStore_DeleteSamples = 'localStore-deleteSamples',
+  LocalStore_GetAnnotationsForSample = 'localStore-getAnnotationsForSample',
+  LocalStore_CreateAnnotations = 'localStore-createAnnotations',
+  LocalStore_UpdateAnnotations = 'localStore-updateAnnotations',
+  LocalStore_DeleteAnnotations = 'localStore-deleteAnnotations',
+  LocalStore_GetAnnotators = 'localStore-getAnnotators',
+  LocalStore_CreateAnnotator = 'localStore-createAnnotator',
+  LocalStore_DeleteAnnotators = 'localStore-deleteAnnotators',
+  LocalStore_ReplacePoints = 'localStore-replacePoints',
+
+  // System
+  System_CreateTemporaryDirectory = 'system-createTemporaryDirectory',
+  System_DeleteFile = 'system-deleteFile',
+  System_DeleteDirectory = 'system-deleteDirectory',
+
+  // Zip
+  Zip_ExtractTo = 'zip-extractTo'
+}
+
+export type IPCEvents = {
+  // LocalStore
+  [IPCKeys.LocalStore_Connect]: IDataStore['connect']
+  [IPCKeys.LocalStore_Disconnect]: IDataStore['disconnect']
+  [IPCKeys.LocalStore_GetProjects]: IDataStore['getProjects']
+  [IPCKeys.LocalStore_CreateProject]: IDataStore['createProject']
+  [IPCKeys.LocalStore_DeleteProjects]: IDataStore['deleteProjects']
+  [IPCKeys.LocalStore_GetTasks]: IDataStore['getTasksForProject']
+  [IPCKeys.LocalStore_CreateTask]: IDataStore['createTask']
+  [IPCKeys.LocalStore_DeleteTasks]: IDataStore['deleteTasks']
+  [IPCKeys.LocalStore_GetSamplesForTask]: IDataStore['getSamplesForTask']
+  [IPCKeys.LocalStore_GetSamples]: IDataStore['getSamples']
+  [IPCKeys.LocalStore_CreateSamples]: IDataStore['createSamples']
+  [IPCKeys.LocalStore_UpdateSamples]: IDataStore['updateSamples']
+  [IPCKeys.LocalStore_DeleteSamples]: IDataStore['deleteSamples']
+  [IPCKeys.LocalStore_GetAnnotationsForSample]: IDataStore['getAnnotationsForSample']
+  [IPCKeys.LocalStore_CreateAnnotations]: IDataStore['createAnnotations']
+  [IPCKeys.LocalStore_UpdateAnnotations]: IDataStore['updateAnnotations']
+  [IPCKeys.LocalStore_DeleteAnnotations]: IDataStore['deleteAnnotations']
+  [IPCKeys.LocalStore_GetAnnotators]: IDataStore['getAnnotators']
+  [IPCKeys.LocalStore_CreateAnnotator]: IDataStore['createAnnotator']
+  [IPCKeys.LocalStore_DeleteAnnotators]: IDataStore['deleteAnnotators']
+  [IPCKeys.LocalStore_ReplacePoints]: IDataStore['replacePoints']
+
+  // System
+  [IPCKeys.System_CreateTemporaryDirectory]: ISystem['createTemporaryDirectory']
+  [IPCKeys.System_DeleteFile]: ISystem['deleteFile']
+  [IPCKeys.System_DeleteDirectory]: ISystem['deleteDirectory']
+
+  // Zip
+  [IPCKeys.Zip_ExtractTo]: IZip['extractTo']
+}

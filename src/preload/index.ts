@@ -1,68 +1,50 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { IDataStore, ISystem, IZip } from '../shared/types'
-import { LocalStoreKeys, SystemKeys, ZipKeys } from '../shared/ipcKeys'
+import { IDataStore, ISystem, IPCKeys, IZip } from '../shared/types'
 import { checkBoundryResult } from '../shared/utils'
-
+const wrap =
+  <T, TArgs extends unknown[]>(key: IPCKeys) =>
+  (...args: TArgs) =>
+    checkBoundryResult<T>(ipcRenderer.invoke(key, ...args))
 // Custom APIs for renderer
 const localStoreApi: IDataStore = {
-  connect: (...args) => checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.Connect, ...args)),
-  disconnect: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.Disconnect, ...args)),
+  connect: wrap(IPCKeys.LocalStore_Connect),
+  disconnect: wrap(IPCKeys.LocalStore_Disconnect),
 
-  getProjects: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.GetProjects, ...args)),
-  createProject: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.CreateProject, ...args)),
-  deleteProjects: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.DeleteProjects, ...args)),
+  getProjects: wrap(IPCKeys.LocalStore_GetProjects),
+  createProject: wrap(IPCKeys.LocalStore_CreateProject),
+  deleteProjects: wrap(IPCKeys.LocalStore_DeleteProjects),
 
-  getTasksForProject: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.GetTasks, ...args)),
-  createTask: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.CreateTask, ...args)),
-  deleteTasks: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.DeleteTasks, ...args)),
+  getTasksForProject: wrap(IPCKeys.LocalStore_GetTasks),
+  createTask: wrap(IPCKeys.LocalStore_CreateTask),
+  deleteTasks: wrap(IPCKeys.LocalStore_DeleteTasks),
 
-  getSamplesForTask: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.GetSamplesForTask, ...args)),
-  getSamples: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.GetSamples, ...args)),
-  createSamples: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.CreateSamples, ...args)),
-  deleteSamples: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.DeleteSamples, ...args)),
+  getSamplesForTask: wrap(IPCKeys.LocalStore_GetSamplesForTask),
+  getSamples: wrap(IPCKeys.LocalStore_GetSamples),
+  createSamples: wrap(IPCKeys.LocalStore_CreateSamples),
+  updateSamples: wrap(IPCKeys.LocalStore_UpdateSamples),
+  deleteSamples: wrap(IPCKeys.LocalStore_DeleteSamples),
 
-  getAnnotationsForSample: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.GetAnnotationsForSample, ...args)),
-  createAnnotations: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.CreateAnnotations, ...args)),
-  updateAnnotations: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.UpdateAnnotations, ...args)),
-  deleteAnnotations: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.DeleteAnnotations, ...args)),
+  getAnnotationsForSample: wrap(IPCKeys.LocalStore_GetAnnotationsForSample),
+  createAnnotations: wrap(IPCKeys.LocalStore_CreateAnnotations),
+  updateAnnotations: wrap(IPCKeys.LocalStore_UpdateAnnotations),
+  deleteAnnotations: wrap(IPCKeys.LocalStore_DeleteAnnotations),
 
-  getAnnotators: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.GetAnnotators, ...args)),
-  createAnnotator: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.CreateAnnotator, ...args)),
-  deleteAnnotators: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.DeleteAnnotators, ...args)),
+  getAnnotators: wrap(IPCKeys.LocalStore_GetAnnotators),
+  createAnnotator: wrap(IPCKeys.LocalStore_CreateAnnotator),
+  deleteAnnotators: wrap(IPCKeys.LocalStore_DeleteAnnotators),
 
-  replacePoints: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(LocalStoreKeys.ReplacePoints, ...args))
+  replacePoints: wrap(IPCKeys.LocalStore_ReplacePoints)
 }
 
 const systemApi: ISystem = {
-  createTemporaryDirectory: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(SystemKeys.CreateTemporaryDirectory, ...args)),
-  deleteFile: (...args) => checkBoundryResult(ipcRenderer.invoke(SystemKeys.DeleteFile, ...args)),
-  deleteDirectory: (...args) =>
-    checkBoundryResult(ipcRenderer.invoke(SystemKeys.DeleteDirectory, ...args))
+  createTemporaryDirectory: wrap(IPCKeys.System_CreateTemporaryDirectory),
+  deleteFile: wrap(IPCKeys.System_DeleteFile),
+  deleteDirectory: wrap(IPCKeys.System_DeleteDirectory)
 }
 
 const zipApi: IZip = {
-  extractTo: (...args) => checkBoundryResult(ipcRenderer.invoke(ZipKeys.ExtractTo, ...args))
+  extractTo: wrap(IPCKeys.Zip_ExtractTo)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

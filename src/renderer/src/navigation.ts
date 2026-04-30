@@ -1,5 +1,6 @@
-import { IProject, ISample, ITask } from '@shared/types'
+import { IProject, ITask } from '@shared/types'
 import { useLocation } from 'react-router'
+import { OptimisticSample } from './types'
 
 export type TasksNavState = {
   project: IProject
@@ -36,14 +37,14 @@ export const useSamplesNavState = (): SamplesNavState => {
 }
 
 export type LabelNavState = SamplesNavState & {
-  samples: ISample[]
+  samples: OptimisticSample[]
   initial: number
 }
 
 export const navigateToLabel = (
   project: IProject,
   task: ITask,
-  samples: ISample[],
+  samples: OptimisticSample[],
   initial: number = 0
 ) => {
   return window.navigate(`/label/${task.id}`, {

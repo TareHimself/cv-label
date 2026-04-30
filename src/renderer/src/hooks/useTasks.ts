@@ -15,7 +15,7 @@ export const useTasks = () => {
   const { project } = useTasksNavState()
   const tasksQueryKey = ['tasks', project.id, store] as const
 
-  const { data: items = [] } = useQuery({
+  const { data: items = [], isLoading } = useQuery({
     queryKey: tasksQueryKey,
     queryFn: () => store.getTasksForProject(project.id)
   })
@@ -75,5 +75,5 @@ export const useTasks = () => {
     [project]
   )
 
-  return { items, create, open }
+  return { items, create, open, isLoading }
 }

@@ -1,4 +1,4 @@
-import { IOptimisticSample, LabelerMode } from '@renderer/types'
+import { LabelerMode, OptimisticSample } from '@renderer/types'
 import { rgb2hex } from '@shared/color'
 import { AnnotationType, IAnnotation, ILabel, INewAnnotation, IPoint } from '@shared/types'
 import { create } from 'zustand'
@@ -6,7 +6,7 @@ import { useMemo } from 'react'
 import { makeUUID } from '@shared/utils'
 import { clamp } from '@mantine/hooks'
 import { useAppStore } from '@renderer/hooks/useAppStore'
-import { OptimisticObject } from '@renderer/optimistic'
+import { OptimisticObject } from '@renderer/util/optimistic_object'
 import { ColorGenerator } from '@renderer/util/color_generator'
 
 const ZOOM_STEP_DELTA = 0.15
@@ -152,7 +152,7 @@ type LabelerStoreState = {
   mode: LabelerMode
   showHitTestDebugOverlay: boolean
 
-  sample: IOptimisticSample | null
+  sample: OptimisticSample | null
 
   readonly annotationsPendingDelete: Set<string>
   // readonly activeHitIds: Set<string>
@@ -191,7 +191,7 @@ type LabelerStoreActions = {
   markAllDirty: () => void
   preDraw: () => void
   onCanvasResize: (width: number, height: number) => void
-  setSample: (sample: IOptimisticSample) => void
+  setSample: (sample: OptimisticSample) => void
   onBitmapLoaded: (bitmap: ImageBitmap) => void
   //onMouseOver: (x: number, y: number) => void
   zoom: (x: number, y: number, delta: number) => void
@@ -636,7 +636,7 @@ export const useLabeler = (labels: ILabel[]) => {
 
               const annotations = state.sample.resolve().annotations
               const newAnnotation = new OptimisticObject(annotation)
-              const updateId = annotations.update({
+              const { commit, rollback } = annotations.update({
                 [annotation.id]: newAnnotation
               })
 
@@ -645,14 +645,14 @@ export const useLabeler = (labels: ILabel[]) => {
                 .createAnnotations(sampleId, [annotation])
                 .then((results) => {
                   newAnnotation.updateBase(results[0])
-                  annotations.commit(updateId)
+                  commit()
                   if (sampleId === get().sample?.resolve().id) {
                     addAnnotationHitIds(results[0].id)
                     set({ annotationDirty: true, hitTestDirty: true })
                   }
                 })
                 .catch(() => {
-                  annotations.rollback(updateId)
+                  rollback()
                   if (sampleId === get().sample?.resolve().id) {
                     set({ annotationDirty: true })
                   }
@@ -694,7 +694,7 @@ export const useLabeler = (labels: ILabel[]) => {
                 }
               })
               .catch((e) => {
-                if (e instanceof DOMException && e.name === 'AbortError') {
+                if (e instanceof DOMException && e.name === 'Aborted') {
                   return
                 }
                 throw e
@@ -713,7 +713,7 @@ export const useLabeler = (labels: ILabel[]) => {
               return
             }
 
-            const updateId = targetAnnotation.update({ labelId: labelId })
+            const { commit, rollback } = targetAnnotation.update({ labelId: labelId })
             const dataStore = useAppStore.getState().store
             set({ annotationDirty: true })
             const sampleId = state.sample?.resolve().id
@@ -725,10 +725,10 @@ export const useLabeler = (labels: ILabel[]) => {
                 }
               ])
               .then((c) => {
-                targetAnnotation.commit(updateId, c[0])
+                commit(c[0])
               })
               .catch(() => {
-                targetAnnotation.rollback(updateId)
+                rollback()
               })
               .finally(() => {
                 if (sampleId === get().sample?.resolve().id) {
@@ -801,7 +801,7 @@ export const useLabeler = (labels: ILabel[]) => {
               })
             }).points
 
-            const updateId = annotation.update({
+            const { commit, rollback } = annotation.update({
               points: payload
             })
 
@@ -815,12 +815,12 @@ export const useLabeler = (labels: ILabel[]) => {
             dataStore
               .replacePoints(annotationId, payload)
               .then((resultPoints) => {
-                annotation.commit(updateId, {
+                commit({
                   points: resultPoints
                 })
               })
               .catch(() => {
-                annotation.rollback(updateId)
+                rollback()
               })
               .finally(() => {
                 if (sampleId === get().sample?.resolve().id) {
@@ -843,7 +843,7 @@ export const useLabeler = (labels: ILabel[]) => {
             }
 
             if (annotation !== null) {
-              const updateId = annotations.update({
+              const { commit, rollback } = annotations.update({
                 [annotation.id]: undefined
               })
               const store = useAppStore.getState().store
@@ -860,10 +860,10 @@ export const useLabeler = (labels: ILabel[]) => {
                   if (!c[0]) {
                     throw new Error('Failed to delete annotation')
                   }
-                  annotations.commit(updateId)
+                  commit()
                 })
                 .catch(() => {
-                  annotations.rollback(updateId)
+                  rollback()
                   if (sampleId === get().sample?.resolve().id) {
                     addAnnotationHitIds(annotationId)
                   }
@@ -900,7 +900,7 @@ export const useLabeler = (labels: ILabel[]) => {
             const points = resolvedAnnotation.points
             points.splice(pointIndex + 1, 0, newPoint)
             const store = useAppStore.getState().store
-            const updateId = annotation.update({
+            const { commit, rollback } = annotation.update({
               points: points
             })
             addSelectedAnnotationPointId(newPoint.id)
@@ -908,13 +908,13 @@ export const useLabeler = (labels: ILabel[]) => {
             store
               .replacePoints(resolvedAnnotation.id, points)
               .then((c) => {
-                annotation.commit(updateId, {
+                commit({
                   points: c
                 })
               })
               .catch((e) => {
                 console.error(e)
-                annotation.rollback(updateId)
+                rollback()
               })
               .finally(() => {
                 if (get().selectedAnnotation?.resolve().id === resolvedAnnotation.id) {
@@ -938,7 +938,7 @@ export const useLabeler = (labels: ILabel[]) => {
             const pointToRemove = points[pointIndex]
             points.splice(pointIndex, 1)
             const store = useAppStore.getState().store
-            const updateId = annotation.update({
+            const { commit, rollback } = annotation.update({
               points: points
             })
             clearSelectedAnnotationPointId(pointToRemove.id)
@@ -946,13 +946,13 @@ export const useLabeler = (labels: ILabel[]) => {
             store
               .replacePoints(resolvedAnnotation.id, points)
               .then((c) => {
-                annotation.commit(updateId, {
+                commit({
                   points: c
                 })
               })
               .catch((e) => {
                 console.error(e)
-                annotation.rollback(updateId)
+                rollback()
               })
               .finally(() => {
                 if (get().selectedAnnotation?.resolve().id === resolvedAnnotation.id) {

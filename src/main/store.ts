@@ -1,11 +1,11 @@
-import { ipcMain, net, protocol, app } from 'electron'
-import { LocalStoreKeys } from '../shared/ipcKeys'
+import { net, protocol, app } from 'electron'
+import { IPCKeys } from '../shared/types'
 import url from 'node:url'
 // import path from 'path'
 import { importWorkerModule } from './worker'
 import { getAppPath } from './utils'
 import databaseWorkerPath from './database?modulePath'
-import { wrap } from './utils'
+import { handleIpc } from './ipc'
 const database = await importWorkerModule<typeof import('./database')>(
   url.pathToFileURL(databaseWorkerPath),
   {
@@ -45,30 +45,31 @@ app.whenReady().then(() => {
   })
 })
 
-// const foo = wrap(database.connect)
-ipcMain.handle(LocalStoreKeys.Connect, wrap(database.connect))
-ipcMain.handle(LocalStoreKeys.Disconnect, wrap(database.disconnect))
+// const foo = database.connect)
+handleIpc(IPCKeys.LocalStore_Connect, database.connect)
+handleIpc(IPCKeys.LocalStore_Disconnect, database.disconnect)
 
-ipcMain.handle(LocalStoreKeys.GetProjects, wrap(database.getProjects))
-ipcMain.handle(LocalStoreKeys.CreateProject, wrap(database.createProject))
-ipcMain.handle(LocalStoreKeys.DeleteProjects, wrap(database.deleteProjects))
+handleIpc(IPCKeys.LocalStore_GetProjects, database.getProjects)
+handleIpc(IPCKeys.LocalStore_CreateProject, database.createProject)
+handleIpc(IPCKeys.LocalStore_DeleteProjects, database.deleteProjects)
 
-ipcMain.handle(LocalStoreKeys.GetTasks, wrap(database.getTasks))
-ipcMain.handle(LocalStoreKeys.CreateTask, wrap(database.createTask))
-ipcMain.handle(LocalStoreKeys.DeleteTasks, wrap(database.deleteTasks))
+handleIpc(IPCKeys.LocalStore_GetTasks, database.getTasks)
+handleIpc(IPCKeys.LocalStore_CreateTask, database.createTask)
+handleIpc(IPCKeys.LocalStore_DeleteTasks, database.deleteTasks)
 
-ipcMain.handle(LocalStoreKeys.GetSamplesForTask, wrap(database.getSamplesForTask))
-ipcMain.handle(LocalStoreKeys.GetSamples, wrap(database.getSamples))
-ipcMain.handle(LocalStoreKeys.CreateSamples, wrap(database.createSamples))
-ipcMain.handle(LocalStoreKeys.DeleteSamples, wrap(database.deleteSamples))
+handleIpc(IPCKeys.LocalStore_GetSamplesForTask, database.getSamplesForTask)
+handleIpc(IPCKeys.LocalStore_GetSamples, database.getSamples)
+handleIpc(IPCKeys.LocalStore_CreateSamples, database.createSamples)
+handleIpc(IPCKeys.LocalStore_UpdateSamples, database.updateSamples)
+handleIpc(IPCKeys.LocalStore_DeleteSamples, database.deleteSamples)
 
-ipcMain.handle(LocalStoreKeys.GetAnnotationsForSample, wrap(database.getAnnotationsForSample))
-ipcMain.handle(LocalStoreKeys.CreateAnnotations, wrap(database.createAnnotations))
-ipcMain.handle(LocalStoreKeys.UpdateAnnotations, wrap(database.updateAnnotations))
-ipcMain.handle(LocalStoreKeys.DeleteAnnotations, wrap(database.deleteAnnotations))
+handleIpc(IPCKeys.LocalStore_GetAnnotationsForSample, database.getAnnotationsForSample)
+handleIpc(IPCKeys.LocalStore_CreateAnnotations, database.createAnnotations)
+handleIpc(IPCKeys.LocalStore_UpdateAnnotations, database.updateAnnotations)
+handleIpc(IPCKeys.LocalStore_DeleteAnnotations, database.deleteAnnotations)
 
-ipcMain.handle(LocalStoreKeys.GetAnnotators, wrap(database.getAnnotators))
-ipcMain.handle(LocalStoreKeys.CreateAnnotator, wrap(database.createAnnotator))
-ipcMain.handle(LocalStoreKeys.DeleteAnnotators, wrap(database.deleteAnnotators))
+handleIpc(IPCKeys.LocalStore_GetAnnotators, database.getAnnotators)
+handleIpc(IPCKeys.LocalStore_CreateAnnotator, database.createAnnotator)
+handleIpc(IPCKeys.LocalStore_DeleteAnnotators, database.deleteAnnotators)
 
-ipcMain.handle(LocalStoreKeys.ReplacePoints, wrap(database.replacePoints))
+handleIpc(IPCKeys.LocalStore_ReplacePoints, database.replacePoints)

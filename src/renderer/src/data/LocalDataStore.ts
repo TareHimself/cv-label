@@ -10,6 +10,7 @@ import {
   IPointReplacement,
   IProject,
   ISample,
+  ISampleUpdate,
   ITask
 } from '@shared/types'
 
@@ -60,6 +61,10 @@ export class LocalDataStore implements IDataStore {
 
   createSamples(taskId: string, samples: INewSample[]): Promise<ISample[]> {
     return window.localStore.createSamples(taskId, samples)
+  }
+
+  updateSamples(updates: ISampleUpdate[]): Promise<ISample[]> {
+    return window.localStore.updateSamples(updates)
   }
 
   deleteSamples(sampleIds: string[]): Promise<boolean[]> {

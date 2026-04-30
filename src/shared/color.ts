@@ -13,7 +13,7 @@ export const randomRGBColor = () => tinycolor.random().toRgb() as RGBColor
 
 export const randomHexColor = () => tinycolor.random().toHexString()
 
-export const indexToHex = (i: number) =>  {
+export const indexToHex = (i: number) => {
   const value = (i * 0x9e3779) & 0xffffff
   return `#${value.toString(16).padStart(6, '0')}`
 }

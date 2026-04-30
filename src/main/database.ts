@@ -11,6 +11,7 @@ import {
   IPointReplacement,
   IProject,
   ISample,
+  ISampleUpdate,
   ITask,
   OmitV2
 } from '../shared/types'
@@ -259,6 +260,10 @@ const GetSampleByIdStatement = db.prepare<[sampleId: string], IStoredSample>(
 
 const CreateSampleStatement = db.prepare<IStoredSample>(
   `INSERT INTO samples (id,name,split,createdAt,imageId,taskId) VALUES (@id,@name,@split,@createdAt,@imageId,@taskId)`
+)
+
+const UpdateSampleStatement = db.prepare<ISampleUpdate>(
+  `UPDATE samples SET name = @name, split = @split, createdAt = @createdAt, completedAt = @completedAt WHERE id = @id`
 )
 
 const CreateAnnotatorStatement = db.prepare<IStoredAnnotator>(
@@ -546,6 +551,41 @@ const CreateSamplesTransaction = db.transaction(
   }
 )
 
+const UpdateSamplesTransaction = db.transaction((updates: ISampleUpdate[]): ISample[] => {
+  const updatedSamples: ISample[] = []
+
+  for (const update of updates) {
+    const existing = GetSampleByIdStatement.get(update.id)
+    if (existing === undefined) {
+      throw new Error(`sample not found: ${update.id}`)
+    }
+
+    // Materialize once
+    const existingSample = materializeSample(existing)
+
+    UpdateSampleStatement.run({
+      id: update.id,
+      name: update.name ?? existing.name,
+      split: update.split ?? existing.split,
+      createdAt: update.createdAt ?? existing.createdAt,
+      completedAt: update.completedAt ?? existing.completedAt
+    })
+
+    // Construct updated sample from existing materialized sample
+    const updatedSample: ISample = {
+      ...existingSample,
+      name: update.name ?? existingSample.name,
+      split: update.split ?? existingSample.split,
+      createdAt: update.createdAt ?? existingSample.createdAt,
+      completedAt: update.completedAt ?? existingSample.completedAt
+    }
+
+    updatedSamples.push(updatedSample)
+  }
+
+  return updatedSamples
+})
+
 const CreateTaskTransaction = db.transaction(
   (
     projectId: string,
@@ -657,6 +697,10 @@ const localStore: IDataStore = {
     return newSamples
   },
 
+  updateSamples: async (updates) => {
+    return UpdateSamplesTransaction.immediate(updates)
+  },
+
   deleteSamples: async (sampleIds) => {
     DeleteSamplesTransaction.immediate(sampleIds)
     return sampleIds.map(() => true)
@@ -756,6 +800,7 @@ export const {
   getSamplesForTask,
   getSamples,
   createSamples,
+  updateSamples,
   deleteSamples,
   getAnnotationsForSample,
   createAnnotations,

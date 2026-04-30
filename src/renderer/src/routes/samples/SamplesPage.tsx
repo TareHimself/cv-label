@@ -18,9 +18,11 @@ import { IoMdArrowBack } from 'react-icons/io'
 import { FaFileImport } from 'react-icons/fa'
 import { CiSearch } from 'react-icons/ci'
 import { useNavigate } from 'react-router'
-import { ISample, TrainingSplit } from '@shared/types'
+import { TrainingSplit } from '@shared/types'
 import { useSamples } from '@renderer/hooks/useSamples'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
+import { OptimisticSample } from '@renderer/types'
+import { useAppStore } from '@renderer/hooks/useAppStore'
 
 const TopContainer = styled.div`
   display: flex;
@@ -73,14 +75,17 @@ const STATUS_COMBO_BOX_OPTIONS: SegmentedControlItem[] = [
 ]
 
 const SampleCard = ({
-  sample,
+  optimisticSample,
   onLabel
 }: {
-  sample: ISample
+  optimisticSample: OptimisticSample
   onLabel: (sampleId: string) => void
 }) => {
-  const [split, setSplit] = useState(sample.split)
-  const [completedAt, setCompletedAt] = useState(sample.completedAt)
+  const sample = useSyncExternalStore(
+    (c) => optimisticSample.subscribe(() => c()),
+    () => optimisticSample.resolve()
+  )
+  const store = useAppStore((s) => s.store)
   const [isLoadingImage, setIsLoadingImage] = useState(true)
   return (
     <Card shadow="sm" padding="md">
@@ -111,9 +116,21 @@ const SampleCard = ({
             </Text>
             <SegmentedControl
               data={SPLIT_COMBO_BOX_OPTIONS}
-              value={split}
-              onChange={(newSplit) => {
-                setSplit(newSplit as TrainingSplit)
+              value={sample.split}
+              onChange={(split) => {
+                const newSplit = split as TrainingSplit
+                const { commit, rollback } = optimisticSample.update({
+                  split: newSplit
+                })
+                store
+                  .updateSamples([
+                    {
+                      id: sample.id,
+                      split: newSplit
+                    }
+                  ])
+                  .then(() => commit())
+                  .catch(() => rollback())
               }}
             />
           </Flex>
@@ -123,14 +140,22 @@ const SampleCard = ({
             </Text>
             <SegmentedControl
               data={STATUS_COMBO_BOX_OPTIONS}
-              value={completedAt === undefined ? SampleStatus.InProgress : SampleStatus.Completed}
+              value={sample.completedAt === null ? SampleStatus.InProgress : SampleStatus.Completed}
               onChange={(newStatus) => {
-                if (newStatus === SampleStatus.InProgress) {
-                  setCompletedAt(null)
-                } else {
-                  const now = new Date().toISOString()
-                  setCompletedAt(now)
-                }
+                const newCompletedAt =
+                  newStatus === SampleStatus.InProgress ? null : new Date().toISOString()
+                const { commit, rollback } = optimisticSample.update({
+                  completedAt: newCompletedAt
+                })
+                store
+                  .updateSamples([
+                    {
+                      id: sample.id,
+                      completedAt: newCompletedAt
+                    }
+                  ])
+                  .then(() => commit())
+                  .catch(() => rollback())
               }}
             />
           </Flex>
@@ -190,7 +215,7 @@ export const SamplesPage = () => {
         )} */}
 
         {items.map((p) => (
-          <SampleCard key={p.id} sample={p} onLabel={label} />
+          <SampleCard key={p.resolve().id} optimisticSample={p} onLabel={label} />
         ))}
       </Stack>
     </BasicListPage>

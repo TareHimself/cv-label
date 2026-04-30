@@ -5,7 +5,7 @@
 
 import { AnnotationType, IAnnotation, ILabel, IPoint, ISample, OmitV2 } from '@shared/types'
 import type { NavigateFunction } from 'react-router'
-import { OptimisticObject } from './optimistic'
+import { OptimisticObject } from './util/optimistic_object'
 
 // export interface IProject {
 //   id: string
@@ -103,8 +103,8 @@ export type AnnotatorAnnotateResponse = {
   annotations: AnnotatorAnnotation[]
 }
 
-export interface IOptimisticSample extends OptimisticObject<
+export type OptimisticSample = OptimisticObject<
   OmitV2<ISample, 'annotations'> & {
     annotations: OptimisticObject<{ [key: string]: OptimisticObject<IAnnotation> }>
   }
-> {}
+>

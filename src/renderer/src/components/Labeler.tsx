@@ -773,36 +773,29 @@ const useCanvasDraw = (
 
         if (state.mode === LabelerMode.Select) {
           for (const annotation of allAnnotationsGenerator(annotations, selectedAnnotation)) {
-            const points = transformPoints(
-              annotation.points,
-              state.imageRect.x,
-              state.imageRect.y,
-              xScale,
-              yScale
-            )
+            const hitId = state.hitIdToAnnotationId.getByValue(annotation.id)
+            if (hitId !== undefined) {
+              const points = transformPoints(
+                annotation.points,
+                state.imageRect.x,
+                state.imageRect.y,
+                xScale,
+                yScale
+              )
 
-            switch (annotation.type) {
-              case AnnotationType.Box:
-                {
-                  drawPolygon(
-                    hitTestCtx,
-                    getBoxPoints(points),
-                    state.hitIdToAnnotationId.getByValue(annotation.id)!,
-                    true
-                  )
-                }
-                break
+              switch (annotation.type) {
+                case AnnotationType.Box:
+                  {
+                    drawPolygon(hitTestCtx, getBoxPoints(points), hitId, true)
+                  }
+                  break
 
-              case AnnotationType.Mask:
-                {
-                  drawPolygon(
-                    hitTestCtx,
-                    points,
-                    state.hitIdToAnnotationId.getByValue(annotation.id)!,
-                    true
-                  )
-                }
-                break
+                case AnnotationType.Mask:
+                  {
+                    drawPolygon(hitTestCtx, points, hitId, true)
+                  }
+                  break
+              }
             }
           }
 

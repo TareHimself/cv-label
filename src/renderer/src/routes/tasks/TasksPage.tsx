@@ -1,6 +1,6 @@
 import { BasicListPage } from '@renderer/components/BasicListPage'
 import { styled } from '@linaria/react'
-import { Button, Group, Modal, Stack, TextInput } from '@mantine/core'
+import { Button, Group, Modal, Skeleton, Stack, TextInput } from '@mantine/core'
 import { IoMdArrowBack } from 'react-icons/io'
 import { CiSearch } from 'react-icons/ci'
 import { useNavigate } from 'react-router'
@@ -16,7 +16,7 @@ const TopContainer = styled.div`
 `
 
 export const TasksPage = () => {
-  const { items, create, open } = useTasks()
+  const { items, create, open, isLoading } = useTasks()
   const navigate = useNavigate()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   return (
@@ -55,16 +55,29 @@ export const TasksPage = () => {
         }
       >
         <Stack>
-          {items.map((t) => (
-            <Button
-              key={t.id}
-              onClick={() => {
-                open(t)
-              }}
-            >
-              {t.name}
-            </Button>
-          ))}
+          {isLoading && (
+            <>
+              <Skeleton height={34} />
+              <Skeleton height={34} />
+              <Skeleton height={34} />
+              <Skeleton height={34} />
+              <Skeleton height={34} />
+            </>
+          )}
+          {!isLoading && (
+            <>
+              {items.map((t) => (
+                <Button
+                  key={t.id}
+                  onClick={() => {
+                    open(t)
+                  }}
+                >
+                  {t.name}
+                </Button>
+              ))}
+            </>
+          )}
         </Stack>
       </BasicListPage>
     </>

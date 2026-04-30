@@ -1,15 +1,22 @@
 import { styled } from '@linaria/react'
-import { Flex, MantineSize, NumberInput, SegmentedControl, Tooltip } from '@mantine/core'
+import {
+  Flex,
+  MantineSize,
+  NumberInput,
+  SegmentedControl,
+  SegmentedControlProps,
+  Tooltip
+} from '@mantine/core'
 import { Labeler } from '@renderer/components/Labeler'
 import { useLabeler } from '@renderer/hooks/useLabeler'
 import { useLabelNavState } from '@renderer/navigation'
-import { IOptimisticSample, LabelerMode } from '@renderer/types'
-import { useLayoutEffect, useMemo, useState } from 'react'
+import { LabelerMode } from '@renderer/types'
+import { useCallback, useLayoutEffect, useState } from 'react'
 import { PiHandPalmBold, PiPolygonLight } from 'react-icons/pi'
 import { BsBoundingBoxCircles } from 'react-icons/bs'
-import { OptimisticObject } from '@renderer/optimistic'
-import { IAnnotation, ILabel } from '@shared/types'
+import { ILabel, OmitV2 } from '@shared/types'
 import { mod } from '@shared/utils'
+import { useAppStore } from '@renderer/hooks/useAppStore'
 
 const Container = styled.div`
   position: relative;
@@ -68,12 +75,16 @@ const StyledLabeler = styled(Labeler)`
 //   )
 // }
 
-type ModeSelectProps = {
+type LabelerModeControlProps = {
   value: LabelerMode
   onChange: (newValue: LabelerMode) => void
   size?: MantineSize
 }
-const ModeSelect = ({ value, onChange, size = 'md' }: ModeSelectProps) => (
+const ICON_SIZE = 15
+const ICON_STYLE: React.CSSProperties = {
+  margin: '-5px'
+}
+const LabelerModeControl = ({ value, onChange, size = 'md' }: LabelerModeControlProps) => (
   <SegmentedControl
     size={size}
     value={value}
@@ -102,7 +113,7 @@ const ModeSelect = ({ value, onChange, size = 'md' }: ModeSelectProps) => (
         value: LabelerMode.Select,
         label: (
           <Tooltip label="Select">
-            <PiHandPalmBold size={20} />
+            <PiHandPalmBold size={ICON_SIZE} style={ICON_STYLE} />
           </Tooltip>
         )
       },
@@ -110,7 +121,7 @@ const ModeSelect = ({ value, onChange, size = 'md' }: ModeSelectProps) => (
         value: LabelerMode.CreateBox,
         label: (
           <Tooltip label="Create Boxes">
-            <BsBoundingBoxCircles size={20} />
+            <BsBoundingBoxCircles size={ICON_SIZE} style={ICON_STYLE} />
           </Tooltip>
         )
       },
@@ -118,7 +129,7 @@ const ModeSelect = ({ value, onChange, size = 'md' }: ModeSelectProps) => (
         value: LabelerMode.CreateMask,
         label: (
           <Tooltip label="Create Segments">
-            <PiPolygonLight size={20} />
+            <PiPolygonLight size={ICON_SIZE} style={ICON_STYLE} />
           </Tooltip>
         )
       }
@@ -126,64 +137,81 @@ const ModeSelect = ({ value, onChange, size = 'md' }: ModeSelectProps) => (
   />
 )
 
-type LabelSelectProps = {
+const TextSegmentedControl = (props: OmitV2<SegmentedControlProps, 'styles'>) => {
+  return (
+    <SegmentedControl
+      size="sm"
+      styles={{
+        label: {
+          display: 'flex',
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center'
+        },
+        innerLabel: {
+          display: 'flex'
+        },
+        control: {
+          // aspectRatio: 1,
+          display: 'flex'
+        }
+      }}
+      {...props}
+    />
+  )
+}
+
+type SelectedLabelControlProps = {
   labels: ILabel[]
   selectedLabelId: string
   onChange: (labelId: string) => void
 }
 
-const LabelSelect = ({ labels, selectedLabelId, onChange }: LabelSelectProps) => (
-  <SegmentedControl
-    size="md"
+const SelectedLabelControl = ({ labels, selectedLabelId, onChange }: SelectedLabelControlProps) => (
+  <TextSegmentedControl
     value={selectedLabelId}
     onChange={onChange}
-    styles={{
-      label: {
-        display: 'flex',
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center'
-      },
-      innerLabel: {
-        display: 'flex'
-      },
-      control: {
-        // aspectRatio: 1,
-        display: 'flex'
-      }
-    }}
     data={labels.map((c) => ({
       value: c.id,
       label: c.name
     }))}
   />
+)
 
-  // [
-  //     {
-  //       value: LabelerMode.Select,
-  //       label: (
-  //         <Tooltip label="Select">
-  //           <PiHandPalmBold size={20} />
-  //         </Tooltip>
-  //       )
-  //     },
-  //     {
-  //       value: LabelerMode.CreateBox,
-  //       label: (
-  //         <Tooltip label="Create Boxes">
-  //           <BsBoundingBoxCircles size={20} />
-  //         </Tooltip>
-  //       )
-  //     },
-  //     {
-  //       value: LabelerMode.CreateMask,
-  //       label: (
-  //         <Tooltip label="Create Segments">
-  //           <PiPolygonLight size={20} />
-  //         </Tooltip>
-  //       )
-  //     }
-  //   ]
+type LabelingCompletedControlProps = {
+  value: string | null
+  onChange: (newValue: string | null) => void
+}
+
+const SAMPLE_COMPLETED_CONTROL_IN_PROGRESS = 'in-progress'
+const SAMPLE_COMPLETED_CONTROL_COMPLETED = 'completed'
+
+const SampleCompletedControl = ({ value, onChange }: LabelingCompletedControlProps) => (
+  <TextSegmentedControl
+    value={
+      value === null ? SAMPLE_COMPLETED_CONTROL_IN_PROGRESS : SAMPLE_COMPLETED_CONTROL_COMPLETED
+    }
+    onChange={(e) => {
+      switch (e) {
+        case SAMPLE_COMPLETED_CONTROL_COMPLETED:
+          onChange(new Date().toISOString())
+          break
+        case SAMPLE_COMPLETED_CONTROL_IN_PROGRESS:
+          onChange(null)
+          break
+      }
+    }}
+    data={[
+      {
+        value: SAMPLE_COMPLETED_CONTROL_IN_PROGRESS,
+        label: 'In Progress'
+      },
+      {
+        value: SAMPLE_COMPLETED_CONTROL_COMPLETED,
+        label: 'Completed'
+      }
+    ]}
+  />
 )
 
 type SampleSelectProps = {
@@ -217,27 +245,41 @@ const SampleSelect = ({ value, maxIndex, onChange }: SampleSelectProps) => (
 
 export const LabelPage = () => {
   const { project, samples, initial } = useLabelNavState()
-  const optimisticSamples = useMemo<IOptimisticSample[]>(() => {
-    return samples.map((c) => {
-      const annotationsObj = c.annotations.reduce<{ [key: string]: OptimisticObject<IAnnotation> }>(
-        (t, c) => {
-          return { ...t, [c.id]: new OptimisticObject(c) }
-        },
-        {}
-      )
-
-      return new OptimisticObject({ ...c, annotations: new OptimisticObject(annotationsObj, true) })
-    })
-  }, [samples])
 
   const [index, setIndex] = useState(initial)
   const { store } = useLabeler(project.labels)
   const mode = store((s) => s.mode)
   const selecteLabelId = store((s) => s.selectedLabelId)
+  const currentSampleId = store((s) => s.sample?.resolve().id ?? null)
+  const sampleCompletedAt = store((s) => s.sample?.resolve().completedAt ?? null)
+  const onSampleCompletedChanged = useCallback(
+    (sampleId: string, newValue: string | null) => {
+      const sample = samples.find((c) => c.resolve().id === sampleId)
+      if (sample === undefined) return
+      const { commit, rollback } = sample.update({
+        completedAt: newValue
+      })
+      useAppStore
+        .getState()
+        .store.updateSamples([
+          {
+            id: sampleId,
+            completedAt: newValue
+          }
+        ])
+        .then(() => {
+          commit()
+        })
+        .catch(() => {
+          rollback()
+        })
+    },
+    [samples]
+  )
 
   useLayoutEffect(() => {
-    store.getState().setSample(optimisticSamples[index])
-  }, [index, optimisticSamples, samples, store])
+    store.getState().setSample(samples[index])
+  }, [index, samples, store])
 
   return (
     <Container>
@@ -246,18 +288,25 @@ export const LabelPage = () => {
         style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translate(-50%,0)' }}
         gap={'md'}
       >
-        <ModeSelect value={mode} onChange={(e) => store.getState().setMode(e)} />
+        <LabelerModeControl value={mode} onChange={(e) => store.getState().setMode(e)} />
 
         {project.labels.length > 1 && (
           <Tooltip label="Select Label">
-            <LabelSelect
+            <SelectedLabelControl
               selectedLabelId={selecteLabelId}
               labels={project.labels}
               onChange={(e) => store.getState().setLabelId(e)}
             />
           </Tooltip>
         )}
-        <SampleSelect value={index} onChange={setIndex} maxIndex={optimisticSamples.length - 1} />
+        {currentSampleId && (
+          <SampleCompletedControl
+            value={sampleCompletedAt}
+            onChange={(newCompletedAt) => onSampleCompletedChanged(currentSampleId, newCompletedAt)}
+          />
+        )}
+        <SampleSelect value={index} onChange={setIndex} maxIndex={samples.length - 1} />
+
         {/* <Icon
             icon={MdAutoAwesome}
             isActive={labeler !== undefined || isLoadingLabeler}
