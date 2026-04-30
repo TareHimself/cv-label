@@ -5,7 +5,7 @@ export const makeUUID = () => {
   return uuidv7()
 }
 
-export const checkBoundryResult = <T>(result: Promise<BoundaryResult<T>>) =>
+export const checkBoundaryResult = <T>(result: Promise<BoundaryResult<T>>) =>
   result.then((c) => {
     if (c.ok) {
       return c.data

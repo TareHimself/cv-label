@@ -5,8 +5,9 @@
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/*.d.ts",
-    "src/shared/**/*"
-, "onetime_worker.incl.ts"  ],
+    "src/shared/**/*",
+    "onetime_worker.incl.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "types": [

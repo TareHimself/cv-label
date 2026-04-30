@@ -1,11 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IDataStore, ISystem, IPCKeys, IZip } from '../shared/types'
-import { checkBoundryResult } from '../shared/utils'
+import { checkBoundaryResult } from '../shared/utils'
 const wrap =
   <T, TArgs extends unknown[]>(key: IPCKeys) =>
   (...args: TArgs) =>
-    checkBoundryResult<T>(ipcRenderer.invoke(key, ...args))
+    checkBoundaryResult<T>(ipcRenderer.invoke(key, ...args))
 // Custom APIs for renderer
 const localStoreApi: IDataStore = {
   connect: wrap(IPCKeys.LocalStore_Connect),
