@@ -94,7 +94,7 @@ const SampleCard = ({
           <Image
             src={sample.imageUri}
             h={200}
-            width={'100%'}
+            w={'100%'}
             alt={sample.name}
             decoding="async"
             onLoad={() => setIsLoadingImage(false)}
@@ -196,11 +196,11 @@ export const SamplesPage = () => {
       <Stack>
         {loading && items.length === 0 && (
           <>
-            <Skeleton height={268} />
-            <Skeleton height={268} />
-            <Skeleton height={268} />
-            <Skeleton height={268} />
-            <Skeleton height={268} />
+            <Skeleton h={268} />
+            <Skeleton h={268} />
+            <Skeleton h={268} />
+            <Skeleton h={268} />
+            <Skeleton h={268} />
           </>
         )}
 

@@ -60,7 +60,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
         <Stack gap={'lg'}>
           <TextInput
             label="Name"
-            width={500}
+            w={500}
             placeholder="Task Name"
             value={taskName}
             onChange={(e) => setTaskName(e.target.value)}

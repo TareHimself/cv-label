@@ -52,7 +52,7 @@ export const CreateProjectButton: FC<CreateProjectButtonProps> = ({ create }) =>
         <Stack gap={'lg'}>
           <TextInput
             label="Name"
-            width={500}
+            w={500}
             placeholder="Project name"
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}

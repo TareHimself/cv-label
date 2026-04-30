@@ -32,11 +32,11 @@ export const ProjectsPage = () => {
         <Stack>
           {isLoading && (
             <>
-              <Skeleton height={34} />
-              <Skeleton height={34} />
-              <Skeleton height={34} />
-              <Skeleton height={34} />
-              <Skeleton height={34} />
+              <Skeleton h={34} />
+              <Skeleton h={34} />
+              <Skeleton h={34} />
+              <Skeleton h={34} />
+              <Skeleton h={34} />
             </>
           )}
           {!isLoading && (
