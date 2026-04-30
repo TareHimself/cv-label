@@ -1,7 +1,6 @@
-# Ignore artifacts:
-build
-coverage
-node_modules
-.webpack
-.old_github
 out
+dist
+pnpm-lock.yaml
+LICENSE.md
+tsconfig.json
+tsconfig.*.json
