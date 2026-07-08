@@ -1,17 +1,21 @@
 import { styled } from '@linaria/react'
 import {
+  Button,
   Flex,
   MantineSize,
   NumberInput,
   SegmentedControl,
   SegmentedControlProps,
-  Tooltip
+  Tooltip,
+  VisuallyHidden
 } from '@mantine/core'
 import { Labeler } from '@renderer/components/Labeler'
 import { useLabeler } from '@renderer/hooks/useLabeler'
 import { useLabelNavState } from '@renderer/navigation'
 import { LabelerMode } from '@renderer/types'
 import { useCallback, useLayoutEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
+import { IoMdArrowBack } from 'react-icons/io'
 import { PiHandPalmBold, PiPolygonLight } from 'react-icons/pi'
 import { BsBoundingBoxCircles } from 'react-icons/bs'
 import { ILabel, OmitV2 } from '@shared/types'
@@ -31,49 +35,6 @@ const StyledLabeler = styled(Labeler)`
   width: 100%;
   height: 100%;
 `
-
-// type IconProps = {
-//   icon: IconType
-//   iconSize?: number
-//   disabled?: boolean
-//   style?: React.CSSProperties
-//   isActive?: boolean
-//   onClicked?: () => void
-//   tooltip?: string
-// }
-// export default function Icon({
-//   icon,
-//   onClicked,
-//   iconSize,
-//   disabled,
-//   style,
-//   isActive,
-//   tooltip
-// }: IconProps) {
-//   const IconComponent = icon
-//   const size = iconSize ?? 20
-
-//   return (
-//     <Tooltip label="Tooltip">
-//       <Button disabled={disabled} variant='filled'>
-//         <IconComponent size={size} />
-//       </Button>
-//     </Tooltip>
-//     // <>
-//     // <button
-//     //   data-tooltip-id={iconId}
-//     //   onClick={onClicked}
-//     //   className={isActive ? "active-icon" : ""}
-//     //   style={style}
-//     //   disabled={disabled}
-//     //   data-tooltip-content={tooltip ?? "Someone forgot to add this tooltip"}
-//     // >
-
-//     // </button>
-//     // <Tooltip id={iconId} />
-//     // </>
-//   )
-// }
 
 type LabelerModeControlProps = {
   value: LabelerMode
@@ -113,7 +74,10 @@ const LabelerModeControl = ({ value, onChange, size = 'md' }: LabelerModeControl
         value: LabelerMode.Select,
         label: (
           <Tooltip label="Select">
-            <PiHandPalmBold size={ICON_SIZE} style={ICON_STYLE} />
+            <span>
+              <PiHandPalmBold size={ICON_SIZE} style={ICON_STYLE} />
+              <VisuallyHidden>Select</VisuallyHidden>
+            </span>
           </Tooltip>
         )
       },
@@ -121,7 +85,10 @@ const LabelerModeControl = ({ value, onChange, size = 'md' }: LabelerModeControl
         value: LabelerMode.CreateBox,
         label: (
           <Tooltip label="Create Boxes">
-            <BsBoundingBoxCircles size={ICON_SIZE} style={ICON_STYLE} />
+            <span>
+              <BsBoundingBoxCircles size={ICON_SIZE} style={ICON_STYLE} />
+              <VisuallyHidden>Create Boxes</VisuallyHidden>
+            </span>
           </Tooltip>
         )
       },
@@ -129,7 +96,10 @@ const LabelerModeControl = ({ value, onChange, size = 'md' }: LabelerModeControl
         value: LabelerMode.CreateMask,
         label: (
           <Tooltip label="Create Segments">
-            <PiPolygonLight size={ICON_SIZE} style={ICON_STYLE} />
+            <span>
+              <PiPolygonLight size={ICON_SIZE} style={ICON_STYLE} />
+              <VisuallyHidden>Create Segments</VisuallyHidden>
+            </span>
           </Tooltip>
         )
       }
@@ -223,6 +193,7 @@ type SampleSelectProps = {
 const SampleSelect = ({ value, maxIndex, onChange }: SampleSelectProps) => (
   <Flex>
     <NumberInput
+      aria-label="Sample index"
       styles={{
         root: {
           width: '104px'
@@ -245,6 +216,7 @@ const SampleSelect = ({ value, maxIndex, onChange }: SampleSelectProps) => (
 
 export const LabelPage = () => {
   const { project, samples, initial } = useLabelNavState()
+  const navigate = useNavigate()
 
   const [index, setIndex] = useState(initial)
   const { store } = useLabeler(project.labels)
@@ -259,6 +231,11 @@ export const LabelPage = () => {
       const { commit, rollback } = sample.update({
         completedAt: newValue
       })
+      // sample.update() mutates the OptimisticObject through its own private
+      // subscription system, which the labeler zustand store never hears about.
+      // Force a notify so selectors reading sample.resolve() (currentSampleId,
+      // sampleCompletedAt) actually re-render.
+      store.setState((s) => ({ ...s }))
       useAppStore
         .getState()
         .store.updateSamples([
@@ -269,12 +246,14 @@ export const LabelPage = () => {
         ])
         .then(() => {
           commit()
+          store.setState((s) => ({ ...s }))
         })
         .catch(() => {
           rollback()
+          store.setState((s) => ({ ...s }))
         })
     },
-    [samples]
+    [samples, store]
   )
 
   useLayoutEffect(() => {
@@ -284,6 +263,14 @@ export const LabelPage = () => {
   return (
     <Container>
       <StyledLabeler store={store} />
+      <Button
+        leftSection={<IoMdArrowBack />}
+        variant="outline"
+        style={{ position: 'absolute', top: 20, left: 20 }}
+        onClick={() => navigate(-1)}
+      >
+        Back
+      </Button>
       <Flex
         style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translate(-50%,0)' }}
         gap={'md'}
@@ -306,75 +293,6 @@ export const LabelPage = () => {
           />
         )}
         <SampleSelect value={index} onChange={setIndex} maxIndex={samples.length - 1} />
-
-        {/* <Icon
-            icon={MdAutoAwesome}
-            isActive={labeler !== undefined || isLoadingLabeler}
-            tooltip="Auto Label"
-            onClicked={useCallback(() => {
-              if (labeler === undefined) {
-                createDialog((p) => (
-                  <DialogBox
-                    onCloseRequest={() => {
-                      closeDialog(p.id);
-                    }}
-                  >
-                    <PluginSelectionList
-                      plugins={models}
-                      onPluginSelected={(plugin) => {
-                        dispatch(
-                          loadModel({
-                            modelId: plugin.id,
-                          })
-                        );
-                        closeDialog(p.id);
-                      }}
-                    />
-                  </DialogBox>
-                ));
-              } else {
-                dispatch(unloadModel());
-              }
-            }, [dispatch, labeler, models])}
-          /> */}
-        {/* <Icon
-          icon={BsFiles}
-          tooltip="Samples"
-          onClicked={() => {
-            setSidePanel('samples')
-          }}
-        />
-        <Icon icon={MdLabel} tooltip="Annotations" />
-        <ImportSamplesIcon />
-        <ExportSamplesIcon />
-        <Icon
-          icon={AiOutlineZoomIn}
-          onClicked={() => {
-            setScale(sampleScale + 0.1)
-          }}
-          tooltip="Zoom In"
-        />
-        <Icon
-          icon={AiOutlineZoomOut}
-          onClicked={() => {
-            setScale(sampleScale - 0.1)
-          }}
-          tooltip="Zoom Out"
-        />
-        <Icon
-          icon={MdOutlineNavigateBefore}
-          onClicked={() => {
-            setCurrentSampleIndex(currentSampleIndex - 1)
-          }}
-          tooltip="Previous Sample"
-        />
-        <Icon
-          icon={MdOutlineNavigateNext}
-          onClicked={() => {
-            setCurrentSampleIndex(currentSampleIndex + 1)
-          }}
-          tooltip="Next Sample"
-        /> */}
       </Flex>
     </Container>
   )

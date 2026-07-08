@@ -1,0 +1,32 @@
+import '@testing-library/jest-dom/vitest'
+import { afterEach, vi } from 'vitest'
+import { cleanup } from '@testing-library/react'
+
+// vitest doesn't run in "globals" mode here, so RTL's auto-cleanup detection
+// (which looks for a global afterEach) doesn't kick in on its own.
+afterEach(() => {
+  cleanup()
+})
+
+// jsdom doesn't implement matchMedia; Mantine's color-scheme handling needs it.
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  }))
+})
+
+// jsdom doesn't implement ResizeObserver; Mantine's ScrollArea and the Labeler both use it.
+class ResizeObserverStub {
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub)

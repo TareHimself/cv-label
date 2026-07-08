@@ -52,7 +52,7 @@ export const CreateProjectButton: FC<CreateProjectButtonProps> = ({ create }) =>
         <Stack gap={'lg'}>
           <TextInput
             label="Name"
-            w={500}
+            //w={500}
             placeholder="Project name"
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
@@ -114,6 +114,7 @@ export const CreateProjectButton: FC<CreateProjectButtonProps> = ({ create }) =>
                       }}
                     />
                     <Button
+                      aria-label="Remove label"
                       onClick={() => {
                         const idx = labels.findIndex((a) => a.id === label.id)
                         if (idx !== -1) {

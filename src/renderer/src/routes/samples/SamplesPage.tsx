@@ -1,4 +1,5 @@
 import { BasicListPage } from '@renderer/components/BasicListPage'
+import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { styled } from '@linaria/react'
 import {
   Text,
@@ -17,6 +18,8 @@ import {
 import { IoMdArrowBack } from 'react-icons/io'
 import { FaFileImport } from 'react-icons/fa'
 import { CiSearch } from 'react-icons/ci'
+import { MdDeleteOutline } from 'react-icons/md'
+import { useContextMenu } from 'mantine-contextmenu'
 import { useNavigate } from 'react-router'
 import { TrainingSplit } from '@shared/types'
 import { useSamples } from '@renderer/hooks/useSamples'
@@ -76,10 +79,12 @@ const STATUS_COMBO_BOX_OPTIONS: SegmentedControlItem[] = [
 
 const SampleCard = ({
   optimisticSample,
-  onLabel
+  onLabel,
+  onDelete
 }: {
   optimisticSample: OptimisticSample
   onLabel: (sampleId: string) => void
+  onDelete: (sample: OptimisticSample) => void
 }) => {
   const sample = useSyncExternalStore(
     (c) => optimisticSample.subscribe(() => c()),
@@ -87,8 +92,21 @@ const SampleCard = ({
   )
   const store = useAppStore((s) => s.store)
   const [isLoadingImage, setIsLoadingImage] = useState(true)
+  const { showContextMenu } = useContextMenu()
   return (
-    <Card shadow="sm" padding="md">
+    <Card
+      shadow="sm"
+      padding="md"
+      onContextMenu={showContextMenu([
+        {
+          key: 'delete',
+          icon: <MdDeleteOutline size={16} />,
+          title: 'Delete',
+          color: 'red',
+          onClick: () => onDelete(optimisticSample)
+        }
+      ])}
+    >
       <Card.Section>
         <Skeleton visible={isLoadingImage}>
           <Image
@@ -166,58 +184,67 @@ const SampleCard = ({
   )
 }
 export const SamplesPage = () => {
-  const { items, loading, label } = useSamples()
+  const { items, loading, label, remove } = useSamples()
   const navigate = useNavigate()
+  const [pendingDelete, setPendingDelete] = useState<OptimisticSample | null>(null)
 
   return (
-    <BasicListPage
-      top={
-        <TopContainer>
-          <Group>
-            <Button
-              leftSection={<IoMdArrowBack />}
-              variant="outline"
-              onClick={() => {
-                navigate(-1)
-              }}
-            >
-              Back
-            </Button>
-            <Button leftSection={<FaFileImport />} onClick={() => {}}>
-              Import Samples
-            </Button>
-          </Group>
-          <Group>
-            <TextInput placeholder="Search" rightSection={<CiSearch />} />
-          </Group>
-        </TopContainer>
-      }
-    >
-      <Stack>
-        {loading && items.length === 0 && (
-          <>
-            <Skeleton h={268} />
-            <Skeleton h={268} />
-            <Skeleton h={268} />
-            <Skeleton h={268} />
-            <Skeleton h={268} />
-          </>
-        )}
+    <>
+      <ConfirmDeleteModal
+        opened={pendingDelete !== null}
+        entityName="sample"
+        itemName={pendingDelete?.resolve().name}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete !== null) {
+            remove(pendingDelete.resolve().id)
+          }
+        }}
+      />
+      <BasicListPage
+        top={
+          <TopContainer>
+            <Group>
+              <Button
+                leftSection={<IoMdArrowBack />}
+                variant="outline"
+                onClick={() => {
+                  navigate(-1)
+                }}
+              >
+                Back
+              </Button>
+              <Button leftSection={<FaFileImport />} onClick={() => {}}>
+                Import Samples
+              </Button>
+            </Group>
+            <Group>
+              <TextInput placeholder="Search" rightSection={<CiSearch />} />
+            </Group>
+          </TopContainer>
+        }
+      >
+        <Stack>
+          {loading && items.length === 0 && (
+            <>
+              <Skeleton h={268} />
+              <Skeleton h={268} />
+              <Skeleton h={268} />
+              <Skeleton h={268} />
+              <Skeleton h={268} />
+            </>
+          )}
 
-        {/* {items.length > 0 && (
-          <Flex w={1000} h={1000}>
-            <Labeler
-              sample={items[sampleIndex]}
-              isCreatingAnnotation={false}
-              labels={project.labels}
+          {items.map((p) => (
+            <SampleCard
+              key={p.resolve().id}
+              optimisticSample={p}
+              onLabel={label}
+              onDelete={setPendingDelete}
             />
-          </Flex>
-        )} */}
-
-        {items.map((p) => (
-          <SampleCard key={p.resolve().id} optimisticSample={p} onLabel={label} />
-        ))}
-      </Stack>
-    </BasicListPage>
+          ))}
+        </Stack>
+      </BasicListPage>
+    </>
   )
 }

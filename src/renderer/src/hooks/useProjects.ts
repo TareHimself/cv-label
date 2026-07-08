@@ -53,5 +53,32 @@ export const useProjects = () => {
     await navigateToTasks(item)
   }, [])
 
-  return { items, create, open, isLoading }
+  const { mutateAsync: removeMutateAsync } = useMutation({
+    mutationFn: (id: string) => store.deleteProjects([id]),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey })
+      const previousProjects = queryClient.getQueryData<IProject[]>(projectsQueryKey) ?? []
+
+      queryClient.setQueryData<IProject[]>(projectsQueryKey, (current = []) =>
+        current.filter((project) => project.id !== id)
+      )
+
+      return { previousProjects }
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData<IProject[]>(projectsQueryKey, context?.previousProjects ?? [])
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectsQueryKey })
+    }
+  })
+
+  const remove = useCallback(
+    async (id: string) => {
+      await removeMutateAsync(id)
+    },
+    [removeMutateAsync]
+  )
+
+  return { items, create, open, remove, isLoading }
 }
