@@ -55,8 +55,20 @@ export class LabelPage {
     await this.clickOption(this.labelRadio(labelName))
   }
 
-  async setCompleted(state: CompletedStateName) {
-    await this.clickOption(this.completedRadio(state))
+  // Unlike setMode/selectLabel (a single synchronous zustand action), toggling
+  // "completed" goes through an optimistic update plus an async IPC round trip to
+  // the main process before the UI reflects it — on a loaded CI runner that can
+  // occasionally outlast even a generous assertion timeout. Retry the click itself
+  // rather than trust one attempt to land within a fixed window.
+  async setCompleted(state: CompletedStateName, maxAttempts = 3) {
+    const radio = this.completedRadio(state)
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await this.clickOption(radio)
+      for (let i = 0; i < 20; i++) {
+        if (await radio.isChecked()) return
+        await this.page.waitForTimeout(250)
+      }
+    }
   }
 
   async setSampleIndex(index: number) {

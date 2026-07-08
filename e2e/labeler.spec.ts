@@ -46,9 +46,7 @@ test.describe('Labeler', () => {
 
     await labelPage.setCompleted('Completed')
 
-    // This goes through an optimistic update + IPC round trip before the UI reflects
-    // it; give it a bit more headroom than the default 5s under a loaded test run.
-    await expect(labelPage.completedRadio('Completed')).toBeChecked({ timeout: 10_000 })
+    await expect(labelPage.completedRadio('Completed')).toBeChecked()
   })
 
   test('navigates back to the samples page', async ({ labelPage, samplesPage }) => {
