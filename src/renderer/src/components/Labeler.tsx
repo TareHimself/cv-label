@@ -1,5 +1,4 @@
 import { styled } from '@linaria/react'
-import { clamp } from '@mantine/hooks'
 import { LabelerStore, normalizeAnnotationPoints } from '@renderer/hooks/useLabeler'
 import { LabelerMode } from '@renderer/types'
 import { AnnotationType, IAnnotation, IPoint, OmitV2 } from '@shared/types'
@@ -7,6 +6,8 @@ import { PointerEventHandler, RefObject, useCallback, useEffect, useRef } from '
 import { StoreApi, UseBoundStore } from 'zustand'
 import { ContextMenuItemOptions, useContextMenu } from 'mantine-contextmenu'
 import { MdDeleteOutline } from 'react-icons/md'
+import { tools } from './labeler/tools'
+import { PointerResult, type LabelerToolContext } from './labeler/types'
 
 const SKIP_NEXT_CONTEXT_MENU_ATTRIBUTE = 'data-skip-next-context'
 type LabelerCommands = {
@@ -19,7 +20,6 @@ const CREATION_ANNOTATION_ALPHA = 0.45
 const CONTROL_POINT_CIRCLE_RADIUS = 7
 const HIT_TEST_LINE_WIDTH = 8
 const HIT_TEST_OVERLAY_ALPHA = 0.5
-const MAX_BITMAP_COORDINATE = 9_000_000
 
 const CanvasContainer = styled.div`
   display: flex;
@@ -429,7 +429,7 @@ const usePointerInteractions = (
     const watchPointerMove = (
       downEvent: PointerEvent,
       onMove: (x: number, y: number) => void,
-      onRelease?: (ev: PointerEvent) => void
+      onRelease?: () => void
     ) => {
       store.setState({ isDragging: true })
 
@@ -445,210 +445,89 @@ const usePointerInteractions = (
         documentElement.removeEventListener('pointermove', moveCallback)
         documentElement.removeEventListener('pointerup', upCallback)
         store.setState({ isDragging: false })
-        onRelease?.(e)
+        onRelease?.()
       }
 
       documentElement.addEventListener('pointerup', upCallback)
       documentElement.addEventListener('pointermove', moveCallback)
     }
 
+    const startPan = (pointerDownEvent: PointerEvent, mouseDownPos: { x: number; y: number }) => {
+      const startX = mouseDownPos.x
+      const startY = mouseDownPos.y
+      const state = store.getState()
+      const offsetStart = { x: state.imageRect.x, y: state.imageRect.y }
+
+      watchPointerMove(pointerDownEvent, (x, y) => {
+        const dx = x - startX
+        const dy = y - startY
+
+        const current = store.getState()
+        store.setState({
+          imageRect: {
+            ...current.imageRect,
+            x: offsetStart.x + dx,
+            y: offsetStart.y + dy
+          }
+        })
+        store.getState().markAllDirty()
+      })
+    }
+
     const pointerDownListener = (pointerDownEvent: PointerEvent) => {
-      if ([0, 2].includes(pointerDownEvent.button)) {
-        const skipNextContextMenu = () =>
-          (pointerDownEvent.currentTarget as HTMLDivElement).toggleAttribute(
-            SKIP_NEXT_CONTEXT_MENU_ATTRIBUTE,
-            true
-          )
-        const handled = () => {
-          pointerDownEvent.preventDefault()
-          pointerDownEvent.stopImmediatePropagation()
-        }
-        {
-          const active = document.activeElement as HTMLElement | null
-          if (active && active !== document.body) {
-            active.blur()
-          }
+      if (![0, 2].includes(pointerDownEvent.button)) return
 
-          ;(pointerDownEvent.target as HTMLDivElement).focus()
-        }
-        const mouseDownPos = { x: pointerDownEvent.offsetX, y: pointerDownEvent.offsetY }
-
-        const forcedPan = pointerDownEvent.button === 0 && pointerDownEvent.ctrlKey
-        // Do hit test here
-        if (!forcedPan) {
-          let state = store.getState()
-          const result = state.hittest(Math.floor(mouseDownPos.x), Math.floor(mouseDownPos.y))
-
-          if (pointerDownEvent.button === 0) {
-            if (state.mode === LabelerMode.Select) {
-              if (result !== null) {
-                // First we figure out selection then do other ops
-                if (
-                  state.selectedAnnotation !== null &&
-                  state.selectedAnnotation.resolve().id !== result.annotationId
-                ) {
-                  state.selectAnnotation(null)
-                  state = store.getState()
-                }
-                if (state.selectedAnnotation === null && result.annotationId !== undefined) {
-                  const annotationId = result.annotationId
-                  state.selectAnnotation(annotationId)
-                  state = store.getState()
-                  handled()
-                  return
-                }
-                if (state.selectedAnnotation !== null && result.annotationId !== null) {
-                  if (state.selectedAnnotation.resolve().id === result.annotationId) {
-                    if (result.lineControlPointId !== null) {
-                      const pointId = result.lineControlPointId
-                      result.controlPointId =
-                        state.addControlPoint(pointId, mouseDownPos.x, mouseDownPos.y) ?? null
-                    }
-                    // Move annotation control point
-                    if (result.controlPointId !== null) {
-                      const pointId = result.controlPointId
-                      const annotationId = state.selectedAnnotation.resolve().id
-                      //const initialPoints = structuredClone(state.selectedAnnotation.resolve().points)
-                      watchPointerMove(
-                        pointerDownEvent,
-                        (x, y) => {
-                          state.moveAnnotationPoint(pointId, x, y)
-                        },
-                        () => {
-                          state.commitAnnotationMove(annotationId)
-                        }
-                      )
-                      handled()
-                      return
-                    }
-                    // Move annotation
-                    {
-                      const annotationId = state.selectedAnnotation.resolve().id
-                      const initialPoints = structuredClone(
-                        state.selectedAnnotation.resolve().points
-                      )
-                      const minPoints = initialPoints.reduce(
-                        (t, c) => {
-                          return { x: Math.min(c.x, t.x), y: Math.min(c.y, t.y) }
-                        },
-                        { x: initialPoints[0].x, y: initialPoints[0].y }
-                      )
-                      const maxPoints = initialPoints.reduce(
-                        (t, c) => {
-                          return { x: Math.max(c.x, t.x), y: Math.max(c.y, t.y) }
-                        },
-                        { x: initialPoints[0].x, y: initialPoints[0].y }
-                      )
-                      const [startX, startY] = state.canvasToBitmapSpace(
-                        mouseDownPos.x,
-                        mouseDownPos.y
-                      )
-                      const [endX, endY] = state.canvasToBitmapSpace(
-                        MAX_BITMAP_COORDINATE,
-                        MAX_BITMAP_COORDINATE
-                      )
-                      const allowedDiffTowardsMinimum = [-minPoints.x, -minPoints.y]
-                      const allowedDiffTowardMaximum = [endX - maxPoints.x, endY - maxPoints.y]
-                      watchPointerMove(
-                        pointerDownEvent,
-                        (x, y) => {
-                          const [currentX, currentY] = state.canvasToBitmapSpace(x, y)
-                          const dx = clamp(
-                            currentX - startX,
-                            allowedDiffTowardsMinimum[0],
-                            allowedDiffTowardMaximum[0]
-                          )
-                          const dy = clamp(
-                            currentY - startY,
-                            allowedDiffTowardsMinimum[1],
-                            allowedDiffTowardMaximum[1]
-                          )
-                          state.moveSelectedAnnotationBy(dx, dy)
-                        },
-                        () => {
-                          state.commitAnnotationMove(annotationId)
-                        }
-                      )
-                    }
-                    handled()
-                    return
-                  }
-                }
-              } else {
-                state.selectAnnotation(null)
-                handled()
-              }
-            } else if (state.mode === LabelerMode.CreateBox) {
-              state.onConfirmPoint(mouseDownPos.x, mouseDownPos.y)
-
-              watchPointerMove(
-                pointerDownEvent,
-                (x, y) => {
-                  store.getState().onMouseMove(x, y)
-                },
-                () => {
-                  const releaseState = store.getState()
-                  if (releaseState.annotationBeingCreated?.points.length === 2) {
-                    releaseState.onConfirmAnnotationCreation()
-                  }
-                }
-              )
-              handled()
-              return
-            } else if (state.mode === LabelerMode.CreateMask) {
-              state.onConfirmPoint(mouseDownPos.x, mouseDownPos.y)
-              handled()
-              return
-            }
-          } else if (pointerDownEvent.button === 2) {
-            if (state.mode === LabelerMode.Select) {
-              if (result !== null && result.controlPointId !== null) {
-                state.deleteControlPoint(result.controlPointId)
-                skipNextContextMenu()
-                handled()
-                return
-              }
-            } else if (state.mode === LabelerMode.CreateBox) {
-              if (state.annotationBeingCreated?.points.length === 2) {
-                state.onConfirmAnnotationCreation()
-                skipNextContextMenu()
-                handled()
-                return
-              }
-            } else if (state.mode === LabelerMode.CreateMask) {
-              if ((state.annotationBeingCreated?.points.length ?? 0) >= 4) {
-                state.onConfirmAnnotationCreation(true)
-                skipNextContextMenu()
-                handled()
-                return
-              }
-            }
-          }
-        }
-
-        // If no hit default to pan
-        if (forcedPan || pointerDownEvent.button === 0) {
-          const startX = mouseDownPos.x
-          const startY = mouseDownPos.y
-          const state = store.getState()
-          const offsetStart = { x: state.imageRect.x, y: state.imageRect.y }
-
-          watchPointerMove(pointerDownEvent, (x, y) => {
-            const dx = x - startX
-            const dy = y - startY
-
-            const current = store.getState()
-            store.setState({
-              imageRect: {
-                ...current.imageRect,
-                x: offsetStart.x + dx,
-                y: offsetStart.y + dy
-              }
-            })
-            store.getState().markAllDirty()
-          })
-        }
+      const skipNextContextMenu = () =>
+        (pointerDownEvent.currentTarget as HTMLDivElement).toggleAttribute(
+          SKIP_NEXT_CONTEXT_MENU_ATTRIBUTE,
+          true
+        )
+      const handled = () => {
+        pointerDownEvent.preventDefault()
+        pointerDownEvent.stopImmediatePropagation()
       }
+      {
+        const active = document.activeElement as HTMLElement | null
+        if (active && active !== document.body) {
+          active.blur()
+        }
+
+        ;(pointerDownEvent.target as HTMLDivElement).focus()
+      }
+      const mouseDownPos = { x: pointerDownEvent.offsetX, y: pointerDownEvent.offsetY }
+
+      const forcedPan = pointerDownEvent.button === 0 && pointerDownEvent.ctrlKey
+
+      if (!forcedPan) {
+        const state = store.getState()
+        const hit = state.hittest(Math.floor(mouseDownPos.x), Math.floor(mouseDownPos.y))
+        const tool = tools[state.mode]
+        const ctx: LabelerToolContext = {
+          store,
+          startDrag: (onMove, onRelease) => watchPointerMove(pointerDownEvent, onMove, onRelease)
+        }
+
+        if (pointerDownEvent.button === 2) {
+          const result = tool.onRightPointerDown?.(ctx, mouseDownPos, hit) ?? PointerResult.Default
+          if (result === PointerResult.Consumed) {
+            skipNextContextMenu()
+            handled()
+          }
+          return
+        }
+
+        // button === 0
+        const result = tool.onPointerDown?.(ctx, mouseDownPos, hit) ?? PointerResult.Default
+        handled()
+        if (result === PointerResult.Consumed) {
+          return
+        }
+        // Default: fall through to the pan below (e.g. deselecting on empty canvas
+        // still lets the same drag pan the view).
+      }
+
+      // Pan fallback: either forced (ctrl+left-click) or an unconsumed left-click.
+      startPan(pointerDownEvent, mouseDownPos)
     }
     const wheelListener = (ev: WheelEvent) => {
       store.getState().zoom(ev.offsetX, ev.offsetY, ev.deltaY * -0.001)
@@ -931,20 +810,57 @@ const useCanvasDraw = (
     }
   }, [annotationCanvas, crosshairCanvas, imageCanvas, store])
 
-  // Animation loop, maybe do somekind of request on dirty system in the future
+  // Render-on-demand: only schedule a frame when the store actually has something
+  // dirty, instead of ticking requestAnimationFrame forever. drawCanvases() detects
+  // canvas-size mismatches itself and marks everything dirty on the first call, which
+  // covers the initial paint; a ResizeObserver covers later container resizes, since
+  // those don't otherwise touch the store.
   useEffect(() => {
-    let frameId: number | null
-    const callback = () => {
-      drawCanvases()
-      frameId = requestAnimationFrame(callback)
+    let frameId: number | null = null
+
+    const isDirty = () => {
+      const state = store.getState()
+      return state.sizeDirty || state.imageDirty || state.annotationDirty || state.hitTestDirty
     }
-    frameId = requestAnimationFrame(callback)
+
+    const scheduleFrame = () => {
+      if (frameId !== null) return
+      frameId = requestAnimationFrame(() => {
+        frameId = null
+        drawCanvases()
+        // Some modes (e.g. crosshair tracking while creating an annotation) keep
+        // marking annotationDirty on every mouse move, so keep going until clean.
+        if (isDirty()) {
+          scheduleFrame()
+        }
+      })
+    }
+
+    scheduleFrame()
+
+    const unsubscribe = store.subscribe(() => {
+      if (isDirty()) {
+        scheduleFrame()
+      }
+    })
+
+    const imageCanvasElement = imageCanvas.current
+    const resizeObserver = new ResizeObserver(() => {
+      store.getState().markAllDirty()
+      scheduleFrame()
+    })
+    if (imageCanvasElement !== null) {
+      resizeObserver.observe(imageCanvasElement)
+    }
+
     return () => {
+      unsubscribe()
+      resizeObserver.disconnect()
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }
     }
-  }, [drawCanvases])
+  }, [drawCanvases, imageCanvas, store])
 }
 
 const useHitTestDebugging = (store: UseBoundStore<StoreApi<LabelerStore>>) => {
@@ -986,6 +902,7 @@ export const Labeler = ({ store, className }: LabelerProps) => {
       className={className}
       onContextMenu={onContextMenu}
       tabIndex={0}
+      data-testid="labeler-canvas"
     >
       <Canvas ref={imageCanvasRef} />
       <Canvas ref={annotationCanvasRef} />

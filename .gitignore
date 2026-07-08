@@ -5,3 +5,8 @@ out
 .eslintcache
 *.log*
 store
+.env
+.env.*
+e2e/screenshots
+test-results
+playwright-report

@@ -6,6 +6,7 @@ import { OptimisticObject } from '@renderer/util/optimistic_object'
 import { IAnnotation, INewSample, TrainingSplit } from '@shared/types'
 import { fileToBase64, normalizeFilename } from '@renderer/utils'
 import { makeUUID } from '@shared/utils'
+import { OptimisticSample } from '@renderer/types'
 
 export const useSamples = () => {
   const store = useAppStore((s) => s.store)
@@ -75,11 +76,39 @@ export const useSamples = () => {
     [items, project, task]
   )
 
+  const { mutateAsync: removeMutateAsync } = useMutation({
+    mutationFn: (id: string) => store.deleteSamples([id]),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: samplesQueryKey })
+      const previousItems = queryClient.getQueryData<OptimisticSample[]>(samplesQueryKey) ?? []
+
+      queryClient.setQueryData<OptimisticSample[]>(samplesQueryKey, (current = []) =>
+        current.filter((sample) => sample.resolve().id !== id)
+      )
+
+      return { previousItems }
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData<OptimisticSample[]>(samplesQueryKey, context?.previousItems ?? [])
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: samplesQueryKey })
+    }
+  })
+
+  const remove = useCallback(
+    async (id: string) => {
+      await removeMutateAsync(id)
+    },
+    [removeMutateAsync]
+  )
+
   return {
     items,
     loading,
     project,
     label,
+    remove,
     createSamples: createSamplesMutation.mutateAsync,
     isCreatingSamples: createSamplesMutation.isPending
   }
