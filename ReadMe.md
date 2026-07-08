@@ -2,8 +2,7 @@
 
 A desktop app for labeling image datasets for computer vision — organize work into
 Projects → Tasks → Samples, and annotate images with bounding boxes or polygon masks
-in a canvas-based labeler with pan/zoom, undo-safe optimistic edits, and per-label
-colors.
+in a canvas-based labeler with pan/zoom and per-label colors.
 
 Built with Electron, React, and TypeScript. Data is stored locally in SQLite by
 default, behind an `IDataStore` interface designed to be swapped for other backends
