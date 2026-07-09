@@ -8,19 +8,21 @@ import {
   Group,
   Image,
   Text,
-  ScrollArea,
-  FileButton
+  ScrollArea
 } from '@mantine/core'
 import { styled } from '@linaria/react'
 import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone'
-import { FC, useCallback, useEffect, useState } from 'react'
+import { FC, useCallback, useState } from 'react'
 import toast from 'react-hot-toast'
 import { IoMdAdd } from 'react-icons/io'
 import { MdDeleteOutline } from 'react-icons/md'
-import { normalizeFilename } from '@renderer/utils'
+import { INewSample, IProject } from '@shared/types'
+import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
+import { filesToSamples } from '@renderer/components/sampleIO/importers/filesToSamples'
 
 export type CreateTaskButtonProps = {
-  create: (name: string, files: File[]) => Promise<void>
+  project: IProject
+  create: (name: string, samples: INewSample[]) => Promise<void>
 }
 
 const FileRow = styled.div`
@@ -47,28 +49,25 @@ const formatFileSize = (bytes: number) => {
   return `${value.toFixed(1)} ${units[unitIndex]}`
 }
 
-const SelectedFileRow: FC<{ file: File; onRemove: () => void }> = ({ file, onRemove }) => {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    const url = URL.createObjectURL(file)
-    // Must create and revoke within the same effect run: StrictMode's dev-only
-    // mount->cleanup->remount cycle would otherwise revoke a URL created outside
-    // this effect (e.g. via useMemo) without ever recreating it.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
-
+const SelectedSampleRow: FC<{ sample: INewSample; onRemove: () => void }> = ({
+  sample,
+  onRemove
+}) => {
   return (
     <FileRow>
-      <Image src={previewUrl ?? undefined} w={36} h={36} radius="sm" fit="cover" />
+      <Image
+        src={`data:image/png;base64,${sample.base64Image}`}
+        w={36}
+        h={36}
+        radius="sm"
+        fit="cover"
+      />
       <Flex direction="column" flex={1} miw={0} mx="sm">
         <Text size="sm" truncate>
-          {normalizeFilename(file.name)}
+          {sample.name}
         </Text>
         <Text size="xs" c="dimmed">
-          {formatFileSize(file.size)}
+          {formatFileSize(Math.floor((sample.base64Image.length * 3) / 4))}
         </Text>
       </Flex>
       <ActionIcon aria-label="Remove file" variant="subtle" color="red" onClick={onRemove}>
@@ -78,10 +77,12 @@ const SelectedFileRow: FC<{ file: File; onRemove: () => void }> = ({ file, onRem
   )
 }
 
-export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
+export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isDropProcessing, setIsDropProcessing] = useState(false)
   const [taskName, setTaskName] = useState('')
-  const [files, setFiles] = useState<File[]>([])
+  const [samples, setSamples] = useState<INewSample[]>([])
   const closeModal = useCallback(() => {
     setIsModalOpen(false)
   }, [])
@@ -95,10 +96,25 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
     <>
       <Dropzone.FullScreen
         active={!isModalOpen}
+        loading={isDropProcessing}
         accept={IMAGE_MIME_TYPE}
         onDrop={(files) => {
-          setFiles(files)
-          openModal()
+          setIsDropProcessing(true)
+          toast
+            .promise(filesToSamples(files), {
+              loading: `Processing ${files.length} file${files.length === 1 ? '' : 's'}`,
+              success: 'Files added',
+              error: (e) => {
+                console.error(e)
+                return 'Failed to read image files'
+              }
+            })
+            .then((newSamples) => {
+              setSamples(newSamples)
+              openModal()
+            })
+            .catch(() => {})
+            .finally(() => setIsDropProcessing(false))
         }}
       >
         <Group justify="center" gap="xl" mih={220} style={{ pointerEvents: 'none' }}>
@@ -109,6 +125,14 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
           </div>
         </Group>
       </Dropzone.FullScreen>
+      <ImportSamplesModal
+        opened={isImportOpen}
+        project={project}
+        onClose={() => setIsImportOpen(false)}
+        onImported={async (newSamples) => {
+          setSamples((s) => [...s, ...newSamples])
+        }}
+      />
       <Modal
         opened={isModalOpen}
         onClose={closeModal}
@@ -125,25 +149,15 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
             onChange={(e) => setTaskName(e.target.value)}
           />
           <Flex justify={'space-between'} align={'center'}>
-            <FileButton
-              onChange={(f) => {
-                setFiles((s) => [...s, ...f])
-              }}
-              multiple
-              accept="image/*"
-            >
-              {(props) => (
-                <Button {...props} variant="outline">
-                  Add Samples
-                </Button>
-              )}
-            </FileButton>
-            {files.length > 0 && (
+            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+              Add Samples
+            </Button>
+            {samples.length > 0 && (
               <Group gap="xs">
                 <Text size="sm" c="dimmed">
-                  {files.length} file{files.length === 1 ? '' : 's'}
+                  {samples.length} file{samples.length === 1 ? '' : 's'}
                 </Text>
-                <Button variant="subtle" color="red" size="xs" onClick={() => setFiles([])}>
+                <Button variant="subtle" color="red" size="xs" onClick={() => setSamples([])}>
                   Clear all
                 </Button>
               </Group>
@@ -158,17 +172,17 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
               type="always"
               scrollbars="y"
             >
-              {files.length === 0 ? (
+              {samples.length === 0 ? (
                 <Text ta="center" c="dimmed" size="sm" py="md">
                   No files selected yet
                 </Text>
               ) : (
                 <Stack gap={2}>
-                  {files.map((file, idx) => (
-                    <SelectedFileRow
-                      key={`${file.name}-${file.size}-${file.lastModified}`}
-                      file={file}
-                      onRemove={() => setFiles((s) => s.filter((_, i) => i !== idx))}
+                  {samples.map((sample, idx) => (
+                    <SelectedSampleRow
+                      key={sample.id}
+                      sample={sample}
+                      onRemove={() => setSamples((s) => s.filter((_, i) => i !== idx))}
                     />
                   ))}
                 </Stack>
@@ -178,7 +192,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
           <Button
             fullWidth
             onClick={() => {
-              toast.promise(create(taskName, files), {
+              toast.promise(create(taskName, samples), {
                 loading: 'Creating task',
                 success: 'Task created',
                 error: (e) => {
@@ -197,7 +211,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ create }) => {
       <Button
         leftSection={<IoMdAdd />}
         onClick={() => {
-          setFiles([])
+          setSamples([])
           openModal()
         }}
       >

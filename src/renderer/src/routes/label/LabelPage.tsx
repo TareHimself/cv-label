@@ -11,16 +11,15 @@ import {
 } from '@mantine/core'
 import { Labeler } from '@renderer/components/Labeler'
 import { useLabeler } from '@renderer/hooks/useLabeler'
-import { useLabelNavState } from '@renderer/navigation'
-import { LabelerMode } from '@renderer/types'
+import { LabelerMode, OptimisticSample } from '@renderer/types'
 import { useCallback, useLayoutEffect, useState } from 'react'
-import { useNavigate } from 'react-router'
 import { IoMdArrowBack } from 'react-icons/io'
 import { PiHandPalmBold, PiPolygonLight } from 'react-icons/pi'
 import { BsBoundingBoxCircles } from 'react-icons/bs'
-import { ILabel, OmitV2 } from '@shared/types'
+import { ILabel, IProject, ITask, OmitV2 } from '@shared/types'
 import { mod } from '@shared/utils'
 import { useAppStore } from '@renderer/hooks/useAppStore'
+import { back } from '@renderer/router/appRouter'
 
 const Container = styled.div`
   position: relative;
@@ -214,10 +213,14 @@ const SampleSelect = ({ value, maxIndex, onChange }: SampleSelectProps) => (
   </Flex>
 )
 
-export const LabelPage = () => {
-  const { project, samples, initial } = useLabelNavState()
-  const navigate = useNavigate()
+export type LabelPageProps = {
+  project: IProject
+  task: ITask
+  samples: OptimisticSample[]
+  initial: number
+}
 
+export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
   const [index, setIndex] = useState(initial)
   const { store } = useLabeler(project.labels)
   const mode = store((s) => s.mode)
@@ -267,7 +270,7 @@ export const LabelPage = () => {
         leftSection={<IoMdArrowBack />}
         variant="outline"
         style={{ position: 'absolute', top: 20, left: 20 }}
-        onClick={() => navigate(-1)}
+        onClick={() => back()}
       >
         Back
       </Button>

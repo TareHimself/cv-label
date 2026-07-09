@@ -1,12 +1,5 @@
 import { AnnotationType, IAnnotation, ILabel, IPoint, ISample, OmitV2 } from '@shared/types'
-import type { NavigateFunction } from 'react-router'
 import { OptimisticObject } from './util/optimistic_object'
-
-declare global {
-  interface Window {
-    navigate: NavigateFunction
-  }
-}
 
 export enum LabelerMode {
   Select = 'select',

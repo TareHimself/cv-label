@@ -5,15 +5,17 @@ import {
 } from '@renderer/components/BasicListPageItem'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { styled } from '@linaria/react'
-import { Button, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Button, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { IoMdArrowBack } from 'react-icons/io'
 import { CiSearch } from 'react-icons/ci'
-import { MdOutlineAssignment } from 'react-icons/md'
-import { useNavigate } from 'react-router'
+import { MdDeleteOutline, MdOutlineAssignment } from 'react-icons/md'
+import { FaFileExport } from 'react-icons/fa'
 import { useMemo, useState } from 'react'
 import { CreateTaskButton } from './CreateTaskButton'
 import { useTasks } from '@renderer/hooks/useTasks'
-import { ITask } from '@shared/types'
+import { IProject, ITask } from '@shared/types'
+import { ExportSamplesModal } from '@renderer/components/sampleIO/ExportSamplesModal'
+import { back } from '@renderer/router/appRouter'
 
 const TopContainer = styled.div`
   display: flex;
@@ -22,16 +24,36 @@ const TopContainer = styled.div`
   justify-content: space-between;
 `
 
-export const TasksPage = () => {
-  const { items, create, open, remove, isLoading } = useTasks()
-  const navigate = useNavigate()
+export type TasksPageProps = {
+  project: IProject
+}
+
+export const TasksPage = ({ project }: TasksPageProps) => {
+  const { items, create, open, remove, removeMany, isLoading } = useTasks(project)
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<ITask | null>(null)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
+  const [isBatchExportOpen, setIsBatchExportOpen] = useState(false)
+  const [isBatchDeletePending, setIsBatchDeletePending] = useState(false)
 
   const filteredItems = useMemo(
     () => items.filter((t) => t.name.toLowerCase().includes(search.trim().toLowerCase())),
     [items, search]
   )
+
+  const selectedTasks = items.filter((t) => selectedTaskIds.has(t.id))
+
+  const toggleSelected = (taskId: string, selected: boolean) => {
+    setSelectedTaskIds((current) => {
+      const next = new Set(current)
+      if (selected) {
+        next.add(taskId)
+      } else {
+        next.delete(taskId)
+      }
+      return next
+    })
+  }
 
   return (
     <>
@@ -46,6 +68,24 @@ export const TasksPage = () => {
           }
         }}
       />
+      <ConfirmDeleteModal
+        opened={isBatchDeletePending}
+        entityName="task"
+        itemName={
+          selectedTasks.length === 1 ? selectedTasks[0].name : `${selectedTasks.length} tasks`
+        }
+        onCancel={() => setIsBatchDeletePending(false)}
+        onConfirm={() => {
+          removeMany(selectedTasks.map((t) => t.id))
+          setSelectedTaskIds(new Set())
+        }}
+      />
+      <ExportSamplesModal
+        opened={isBatchExportOpen}
+        project={project}
+        tasks={selectedTasks}
+        onClose={() => setIsBatchExportOpen(false)}
+      />
       <BasicListPage
         top={
           <TopContainer>
@@ -54,12 +94,40 @@ export const TasksPage = () => {
                 leftSection={<IoMdArrowBack />}
                 variant="outline"
                 onClick={() => {
-                  navigate(-1)
+                  back()
                 }}
               >
                 Back
               </Button>
-              <CreateTaskButton create={create} />
+              <CreateTaskButton project={project} create={create} />
+              {selectedTaskIds.size > 0 && (
+                <>
+                  <Divider orientation="vertical" />
+                  <Text size="sm" fw={500}>
+                    {selectedTaskIds.size} selected
+                  </Text>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    leftSection={<FaFileExport size={14} />}
+                    onClick={() => setIsBatchExportOpen(true)}
+                  >
+                    Export
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    color="red"
+                    leftSection={<MdDeleteOutline size={14} />}
+                    onClick={() => setIsBatchDeletePending(true)}
+                  >
+                    Delete
+                  </Button>
+                  <Button size="xs" variant="subtle" onClick={() => setSelectedTaskIds(new Set())}>
+                    Clear
+                  </Button>
+                </>
+              )}
             </Group>
             <Group>
               <TextInput
@@ -85,7 +153,7 @@ export const TasksPage = () => {
           {!isLoading && filteredItems.length === 0 && (
             <Text c="dimmed" ta="center" mt="xl">
               {items.length === 0
-                ? 'No tasks yet — create one to get started.'
+                ? 'No tasks yet, create one to get started.'
                 : 'No tasks match your search.'}
             </Text>
           )}
@@ -97,6 +165,8 @@ export const TasksPage = () => {
                 title={t.name}
                 onClick={() => open(t)}
                 onDelete={() => setPendingDelete(t)}
+                selected={selectedTaskIds.has(t.id)}
+                onSelectedChange={(selected) => toggleSelected(t.id, selected)}
               />
             ))}
         </Stack>

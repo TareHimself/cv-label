@@ -96,7 +96,7 @@ export const ProjectsPage = () => {
           {!isLoading && filteredItems.length === 0 && (
             <Text c="dimmed" ta="center" mt="xl">
               {items.length === 0
-                ? 'No projects yet — create one to get started.'
+                ? 'No projects yet, create one to get started.'
                 : 'No projects match your search.'}
             </Text>
           )}

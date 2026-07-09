@@ -5,7 +5,7 @@ declare global {
   interface Window {
     electron: ElectronAPI
     localStore: IDataStore
-    temp: ISystem
+    system: ISystem
     zip: IZip
   }
 }

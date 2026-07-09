@@ -43,7 +43,7 @@ function createWindow(): void {
   }
 }
 
-// Only one instance of the app should run against a given userData dir at a time —
+// Only one instance of the app should run against a given userData dir at a time -
 // two instances writing to the same sqlite database concurrently can corrupt it,
 // and they'd also fight over the same GPU cache dir and renderer dev-server port.
 const gotSingleInstanceLock = app.requestSingleInstanceLock()

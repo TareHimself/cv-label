@@ -12,7 +12,13 @@ vi.mock('@renderer/hooks/useAppStore', async () => {
   return { useAppStore }
 })
 
+vi.mock('@renderer/router/appRouter', () => ({
+  navigate: vi.fn(),
+  back: vi.fn()
+}))
+
 import { useAppStore } from '@renderer/hooks/useAppStore'
+import { navigate } from '@renderer/router/appRouter'
 import { SamplesPage } from '../SamplesPage'
 
 const project: IProject = { id: 'p1', name: 'Street Signs', labels: [] }
@@ -39,15 +45,10 @@ const samples: ISample[] = [
   }
 ]
 
-const renderSamplesPage = () =>
-  renderWithProviders(<SamplesPage />, {
-    routerProps: {
-      initialEntries: [{ pathname: '/samples/t1', state: { project, task } }]
-    }
-  })
+const renderSamplesPage = () => renderWithProviders(<SamplesPage project={project} task={task} />)
 
 beforeEach(() => {
-  window.navigate = vi.fn()
+  vi.mocked(navigate).mockReset()
   vi.mocked(useAppStore.getState().store.getSamplesForTask).mockReset().mockResolvedValue(samples)
 })
 
@@ -66,9 +67,9 @@ describe('SamplesPage', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Label' })[0])
 
     await waitFor(() => {
-      expect(window.navigate).toHaveBeenCalledWith(
-        '/label/t1',
-        expect.objectContaining({ state: expect.objectContaining({ project, task, initial: 0 }) })
+      expect(navigate).toHaveBeenCalledWith(
+        'label',
+        expect.objectContaining({ project, task, initial: 0 })
       )
     })
   })

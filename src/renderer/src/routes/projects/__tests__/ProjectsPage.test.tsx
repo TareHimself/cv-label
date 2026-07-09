@@ -12,7 +12,13 @@ vi.mock('@renderer/hooks/useAppStore', async () => {
   return { useAppStore }
 })
 
+vi.mock('@renderer/router/appRouter', () => ({
+  navigate: vi.fn(),
+  back: vi.fn()
+}))
+
 import { useAppStore } from '@renderer/hooks/useAppStore'
+import { navigate } from '@renderer/router/appRouter'
 import { ProjectsPage } from '../ProjectsPage'
 
 const projects: IProject[] = [
@@ -32,7 +38,7 @@ const projects: IProject[] = [
 ]
 
 beforeEach(() => {
-  window.navigate = vi.fn()
+  vi.mocked(navigate).mockReset()
   vi.mocked(useAppStore.getState().store.getProjects).mockReset().mockResolvedValue(projects)
 })
 
@@ -42,7 +48,7 @@ describe('ProjectsPage', () => {
     renderWithProviders(<ProjectsPage />)
 
     expect(
-      await screen.findByText('No projects yet — create one to get started.')
+      await screen.findByText('No projects yet, create one to get started.')
     ).toBeInTheDocument()
   })
 
@@ -73,7 +79,7 @@ describe('ProjectsPage', () => {
     fireEvent.click(screen.getByText('Street Signs'))
 
     await waitFor(() => {
-      expect(window.navigate).toHaveBeenCalledWith('/tasks/p1', { state: { project: projects[0] } })
+      expect(navigate).toHaveBeenCalledWith('tasks', { project: projects[0] })
     })
   })
 

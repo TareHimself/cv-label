@@ -15,6 +15,7 @@ const mainEntry = join(rootDir, 'out', 'main', 'index.js')
 
 type Fixtures = {
   electronApp: ElectronApplication
+  appDataDir: string
   window: Page
   projectsPage: ProjectsPage
   tasksPage: TasksPage
@@ -24,21 +25,24 @@ type Fixtures = {
 
 export const test = base.extend<Fixtures>({
   // eslint-disable-next-line no-empty-pattern
-  electronApp: async ({}, runTest) => {
+  appDataDir: async ({}, runTest) => {
     const dataDir = mkdtempSync(join(tmpdir(), 'cv-label-e2e-'))
+    await runTest(dataDir)
+    rmSync(dataDir, { recursive: true, force: true })
+  },
 
+  electronApp: async ({ appDataDir }, runTest) => {
     const app = await electron.launch({
       args: [mainEntry],
       env: {
         ...process.env,
-        CV_LABEL_APP_PATH: dataDir
+        CV_LABEL_APP_PATH: appDataDir
       }
     })
 
     await runTest(app)
 
     await app.close()
-    rmSync(dataDir, { recursive: true, force: true })
   },
 
   window: async ({ electronApp }, runTest) => {

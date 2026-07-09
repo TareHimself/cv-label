@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures'
 import { createTestImage, cleanupTestImage } from './testImage'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 test.describe('Tasks page', () => {
   test.beforeEach(async ({ projectsPage, tasksPage }) => {
@@ -90,6 +92,54 @@ test.describe('Tasks page', () => {
     } finally {
       cleanupTestImage(imageA)
       cleanupTestImage(imageB)
+    }
+  })
+
+  test('exports selected tasks to the path chosen in the save dialog', async ({
+    tasksPage,
+    electronApp,
+    appDataDir
+  }) => {
+    const image = await createTestImage('sample-1')
+    const savePath = join(appDataDir, 'export.zip')
+    try {
+      await tasksPage.createTask('Batch 1', [image])
+
+      // The real dialog is native and blocks Playwright, so stub it to resolve
+      // immediately with a fixed path, same as a user picking one and confirming.
+      await electronApp.evaluate(({ dialog }, targetPath) => {
+        dialog.showSaveDialog = (async () => ({
+          canceled: false,
+          filePath: targetPath
+        })) as typeof dialog.showSaveDialog
+      }, savePath)
+
+      await tasksPage.exportTasks(['Batch 1'])
+
+      expect(existsSync(savePath)).toBe(true)
+    } finally {
+      cleanupTestImage(image)
+    }
+  })
+
+  test('deletes multiple selected tasks via the batch action bar', async ({ tasksPage }) => {
+    const imageA = await createTestImage('sample-a')
+    const imageB = await createTestImage('sample-b')
+    const imageC = await createTestImage('sample-c')
+    try {
+      await tasksPage.createTask('Batch 1', [imageA])
+      await tasksPage.createTask('Batch 2', [imageB])
+      await tasksPage.createTask('Batch 3', [imageC])
+
+      await tasksPage.deleteSelectedTasks(['Batch 1', 'Batch 2'])
+
+      await expect(tasksPage.row('Batch 1')).not.toBeVisible()
+      await expect(tasksPage.row('Batch 2')).not.toBeVisible()
+      await expect(tasksPage.row('Batch 3')).toBeVisible()
+    } finally {
+      cleanupTestImage(imageA)
+      cleanupTestImage(imageB)
+      cleanupTestImage(imageC)
     }
   })
 })

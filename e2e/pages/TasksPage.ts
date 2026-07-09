@@ -19,20 +19,61 @@ export class TasksPage {
     return this.page.getByRole('dialog', { name: 'Create Task' })
   }
 
+  get addSamplesButton() {
+    return this.page.getByRole('button', { name: 'Add Samples' })
+  }
+
+  get importDialog() {
+    return this.page.getByRole('dialog', { name: /Import Samples/ })
+  }
+
   get fileInput() {
-    return this.createDialog.locator('input[type=file]')
+    return this.importDialog.locator('input[type=file]')
   }
 
   get createButton() {
     return this.page.getByRole('button', { name: 'Create', exact: true })
   }
 
+  // Every stack-router page has an identically-placeholdered search box, and hidden
+  // (not unmounted) pages still match placeholder-based locators, unlike getByRole -
+  // scope to the visible one.
   get searchInput() {
-    return this.page.getByPlaceholder('Search')
+    return this.page.getByPlaceholder('Search').and(this.page.locator(':visible'))
+  }
+
+  /** The batch action bar's "Export" button, visible once at least one task is selected. */
+  get exportSelectedButton() {
+    return this.page.getByRole('button', { name: 'Export', exact: true })
+  }
+
+  /** The batch action bar's "Delete" button, visible once at least one task is selected. */
+  get deleteSelectedButton() {
+    return this.page.getByRole('button', { name: 'Delete', exact: true })
+  }
+
+  get clearSelectionButton() {
+    return this.page.getByRole('button', { name: 'Clear' })
+  }
+
+  get exportDialog() {
+    return this.page.getByRole('dialog', { name: /Export Samples/ })
+  }
+
+  get confirmDeleteDialog() {
+    return this.page.getByRole('dialog', { name: 'Delete task' })
+  }
+
+  taskCheckbox(name: string) {
+    return this.page.getByRole('checkbox', { name: `Select ${name}` })
+  }
+
+  get confirmExportButton() {
+    return this.exportDialog.getByRole('button', { name: 'Export', exact: true })
   }
 
   get emptyState() {
-    return this.page.getByText('No tasks yet — create one to get started.')
+    return this.page.getByText('No tasks yet, create one to get started.')
   }
 
   get noSearchMatchesState() {
@@ -43,13 +84,47 @@ export class TasksPage {
     return this.page.getByText(name, { exact: true })
   }
 
-  /** Opens the create-task modal, names it, and attaches sample image files. */
+  /** Opens the create-task modal, names it, and attaches sample image files via the
+   *  Plain Images importer (opened in a nested modal by "Add Samples"). */
   async createTask(name: string, filePaths: string[]) {
     await this.createTaskButton.click()
     await this.nameInput.waitFor()
     await this.nameInput.fill(name)
+    await this.addSamplesButton.click()
+    await this.importDialog.getByText('Plain Images').click()
+    await this.fileInput.waitFor()
     await this.fileInput.setInputFiles(filePaths)
+    // The importer completes as soon as files are selected, closing the nested modal.
+    await this.importDialog.waitFor({ state: 'hidden' })
     await this.createButton.click()
+  }
+
+  /** Selects the given tasks via their row checkboxes. */
+  async selectTasks(names: string[]) {
+    for (const name of names) {
+      await this.taskCheckbox(name).check()
+    }
+  }
+
+  /** Selects the given tasks and runs the (single, default) exporter via the batch action
+   *  bar. The exporter shows a native save dialog (`dialog.showSaveDialog` in
+   *  main/system.ts) to pick where the zip goes, so callers driving this in a test must
+   *  stub `dialog.showSaveDialog` via `electronApp.evaluate` first. Resolves once the
+   *  modal closes, signalling export completion. */
+  async exportTasks(names: string[]) {
+    await this.selectTasks(names)
+    await this.exportSelectedButton.click()
+    await this.exportDialog.waitFor()
+    await this.exportDialog.getByText('cv-label JSON').click()
+    await this.confirmExportButton.click()
+    await this.exportDialog.waitFor({ state: 'hidden' })
+  }
+
+  /** Selects the given tasks and deletes them all via the batch action bar. */
+  async deleteSelectedTasks(names: string[]) {
+    await this.selectTasks(names)
+    await this.deleteSelectedButton.click()
+    await this.confirmDeleteDialog.getByRole('button', { name: 'Delete', exact: true }).click()
   }
 
   async search(text: string) {

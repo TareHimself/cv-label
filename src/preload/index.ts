@@ -40,7 +40,8 @@ const localStoreApi: IDataStore = {
 const systemApi: ISystem = {
   createTemporaryDirectory: wrap(IPCKeys.System_CreateTemporaryDirectory),
   deleteFile: wrap(IPCKeys.System_DeleteFile),
-  deleteDirectory: wrap(IPCKeys.System_DeleteDirectory)
+  deleteDirectory: wrap(IPCKeys.System_DeleteDirectory),
+  saveFile: wrap(IPCKeys.System_SaveFile)
 }
 
 const zipApi: IZip = {

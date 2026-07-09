@@ -22,7 +22,7 @@ export class LabelPage {
     return this.page.getByLabel('Sample index')
   }
 
-  /** The underlying (visually hidden) radio input — use for state assertions like toBeChecked(). */
+  /** The underlying (visually hidden) radio input - use for state assertions like toBeChecked(). */
   modeRadio(mode: LabelerModeName) {
     return this.page.getByRole('radio', { name: mode })
   }
@@ -37,7 +37,7 @@ export class LabelPage {
 
   // Mantine's SegmentedControl keeps the native radio visually hidden and pairs it with
   // a <label> that's the actual visible/clickable surface. Resolve and click that label
-  // via the DOM's own `labels` association in a single atomic evaluate() — reading the
+  // via the DOM's own `labels` association in a single atomic evaluate() - reading the
   // id and clicking it as two separate round-trips is racy if the control re-renders
   // (and gets a fresh Mantine-generated id) in between.
   private async clickOption(radioLocator: Locator) {
@@ -57,7 +57,7 @@ export class LabelPage {
 
   // Unlike setMode/selectLabel (a single synchronous zustand action), toggling
   // "completed" goes through an optimistic update plus an async IPC round trip to
-  // the main process before the UI reflects it — on a loaded CI runner that can
+  // the main process before the UI reflects it - on a loaded CI runner that can
   // occasionally outlast even a generous assertion timeout. Retry the click itself
   // rather than trust one attempt to land within a fixed window.
   async setCompleted(state: CompletedStateName, maxAttempts = 3) {
@@ -91,7 +91,7 @@ export class LabelPage {
     await this.page.mouse.up()
   }
 
-  /** Clicks the canvas center — selects whatever annotation is there in Select mode. */
+  /** Clicks the canvas center - selects whatever annotation is there in Select mode. */
   async clickCenter() {
     const { x, y } = await this.canvasCenter()
     await this.page.mouse.move(x, y)
