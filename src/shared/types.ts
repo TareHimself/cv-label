@@ -133,6 +133,9 @@ export interface ISystem {
   createTemporaryDirectory(): Promise<string>
   deleteFile(filePath: string): Promise<void>
   deleteDirectory(filePath: string): Promise<void>
+  /** Shows a native save dialog defaulted to suggestedName; writes data to the chosen
+   *  path. Returns false if the user cancelled the dialog. */
+  saveFile(suggestedName: string, data: ArrayBuffer): Promise<boolean>
 }
 
 export interface IZip {
@@ -176,6 +179,7 @@ export enum IPCKeys {
   System_CreateTemporaryDirectory = 'system-createTemporaryDirectory',
   System_DeleteFile = 'system-deleteFile',
   System_DeleteDirectory = 'system-deleteDirectory',
+  System_SaveFile = 'system-saveFile',
 
   // Zip
   Zip_ExtractTo = 'zip-extractTo'
@@ -209,6 +213,7 @@ export type IPCEvents = {
   [IPCKeys.System_CreateTemporaryDirectory]: ISystem['createTemporaryDirectory']
   [IPCKeys.System_DeleteFile]: ISystem['deleteFile']
   [IPCKeys.System_DeleteDirectory]: ISystem['deleteDirectory']
+  [IPCKeys.System_SaveFile]: ISystem['saveFile']
 
   // Zip
   [IPCKeys.Zip_ExtractTo]: IZip['extractTo']

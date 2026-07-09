@@ -1,6 +1,5 @@
-import { navigateToSamples, useTasksNavState } from '@renderer/navigation'
-import { fileToBase64, normalizeFilename } from '@renderer/utils'
-import { INewSample, ITask, TrainingSplit } from '@shared/types'
+import { navigate } from '@renderer/router/appRouter'
+import { INewSample, IProject, ITask } from '@shared/types'
 import { makeUUID } from '@shared/utils'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
@@ -8,11 +7,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 //import toast from 'react-hot-toast'
 //toast.promise()
 
-export const useTasks = () => {
+export const useTasks = (project: IProject) => {
   const store = useAppStore((s) => s.store)
   const queryClient = useQueryClient()
 
-  const { project } = useTasksNavState()
   const tasksQueryKey = ['tasks', project.id, store] as const
 
   const { data: items = [], isLoading } = useQuery({
@@ -21,23 +19,8 @@ export const useTasks = () => {
   })
 
   const { mutateAsync } = useMutation({
-    mutationFn: ({ id, name, files }: { id: string; name: string; files: File[] }) => {
-      return (async () => {
-        const base64Data = await Promise.all(files.map((c) => fileToBase64(c)))
-        const newSamples = files.map<INewSample>((c, idx) => {
-          return {
-            id: makeUUID(),
-            name: normalizeFilename(c.name),
-            base64Image: base64Data[idx],
-            split: TrainingSplit.Train,
-            annotations: [],
-            createdAt: new Date().toISOString()
-          }
-        })
-
-        return store.createTask(project.id, id, name, newSamples)
-      })()
-    },
+    mutationFn: ({ id, name, samples }: { id: string; name: string; samples: INewSample[] }) =>
+      store.createTask(project.id, id, name, samples),
     onMutate: async ({ id, name }) => {
       await queryClient.cancelQueries({ queryKey: tasksQueryKey })
       const previousTasks = queryClient.getQueryData<ITask[]>(tasksQueryKey) ?? []
@@ -62,27 +45,28 @@ export const useTasks = () => {
   })
 
   const create = useCallback(
-    async (name: string, files: File[]) => {
-      await mutateAsync({ id: makeUUID(), name, files })
+    async (name: string, samples: INewSample[]) => {
+      await mutateAsync({ id: makeUUID(), name, samples })
     },
     [mutateAsync]
   )
 
   const open = useCallback(
-    async (item: ITask) => {
-      await navigateToSamples(project, item)
+    (item: ITask) => {
+      navigate('samples', { project, task: item })
     },
     [project]
   )
 
   const { mutateAsync: removeMutateAsync } = useMutation({
-    mutationFn: (id: string) => store.deleteTasks([id]),
-    onMutate: async (id) => {
+    mutationFn: (ids: string[]) => store.deleteTasks(ids),
+    onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey: tasksQueryKey })
       const previousTasks = queryClient.getQueryData<ITask[]>(tasksQueryKey) ?? []
+      const idSet = new Set(ids)
 
       queryClient.setQueryData<ITask[]>(tasksQueryKey, (current = []) =>
-        current.filter((task) => task.id !== id)
+        current.filter((task) => !idSet.has(task.id))
       )
 
       return { previousTasks }
@@ -97,10 +81,17 @@ export const useTasks = () => {
 
   const remove = useCallback(
     async (id: string) => {
-      await removeMutateAsync(id)
+      await removeMutateAsync([id])
     },
     [removeMutateAsync]
   )
 
-  return { items, create, open, remove, isLoading }
+  const removeMany = useCallback(
+    async (ids: string[]) => {
+      await removeMutateAsync(ids)
+    },
+    [removeMutateAsync]
+  )
+
+  return { items, create, open, remove, removeMany, isLoading }
 }

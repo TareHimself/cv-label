@@ -12,7 +12,13 @@ vi.mock('@renderer/hooks/useAppStore', async () => {
   return { useAppStore }
 })
 
+vi.mock('@renderer/router/appRouter', () => ({
+  navigate: vi.fn(),
+  back: vi.fn()
+}))
+
 import { useAppStore } from '@renderer/hooks/useAppStore'
+import { navigate } from '@renderer/router/appRouter'
 import { TasksPage } from '../TasksPage'
 
 const project: IProject = { id: 'p1', name: 'Street Signs', labels: [] }
@@ -21,15 +27,10 @@ const tasks: ITask[] = [
   { id: 't2', name: 'Batch 2' }
 ]
 
-const renderTasksPage = () =>
-  renderWithProviders(<TasksPage />, {
-    routerProps: {
-      initialEntries: [{ pathname: '/tasks/p1', state: { project } }]
-    }
-  })
+const renderTasksPage = () => renderWithProviders(<TasksPage project={project} />)
 
 beforeEach(() => {
-  window.navigate = vi.fn()
+  vi.mocked(navigate).mockReset()
   vi.mocked(useAppStore.getState().store.getTasksForProject).mockReset().mockResolvedValue(tasks)
 })
 
@@ -38,7 +39,7 @@ describe('TasksPage', () => {
     vi.mocked(useAppStore.getState().store.getTasksForProject).mockResolvedValue([])
     renderTasksPage()
 
-    expect(await screen.findByText('No tasks yet — create one to get started.')).toBeInTheDocument()
+    expect(await screen.findByText('No tasks yet, create one to get started.')).toBeInTheDocument()
   })
 
   it('lists the tasks for the current project', async () => {
@@ -65,9 +66,7 @@ describe('TasksPage', () => {
     fireEvent.click(screen.getByText('Batch 1'))
 
     await waitFor(() => {
-      expect(window.navigate).toHaveBeenCalledWith('/samples/t1', {
-        state: { project, task: tasks[0] }
-      })
+      expect(navigate).toHaveBeenCalledWith('samples', { project, task: tasks[0] })
     })
   })
 

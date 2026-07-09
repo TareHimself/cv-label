@@ -2,7 +2,7 @@ import { ILabel, IProject } from '@shared/types'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
 import { makeUUID } from '@shared/utils'
-import { navigateToTasks } from '@renderer/navigation'
+import { navigate } from '@renderer/router/appRouter'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 export const useProjects = () => {
@@ -49,8 +49,8 @@ export const useProjects = () => {
     [mutateAsync]
   )
 
-  const open = useCallback(async (item: IProject) => {
-    await navigateToTasks(item)
+  const open = useCallback((item: IProject) => {
+    navigate('tasks', { project: item })
   }, [])
 
   const { mutateAsync: removeMutateAsync } = useMutation({

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject, ITask } from '@shared/types'
-import { LabelerMode } from '@renderer/types'
+import { LabelerMode, OptimisticSample } from '@renderer/types'
 import { create } from 'zustand'
 
 const setSample = vi.fn()
@@ -37,6 +37,11 @@ vi.mock('@renderer/hooks/useAppStore', async () => {
   return { useAppStore }
 })
 
+vi.mock('@renderer/router/appRouter', () => ({
+  navigate: vi.fn(),
+  back: vi.fn()
+}))
+
 import { LabelPage } from '../LabelPage'
 
 const project: IProject = {
@@ -51,19 +56,12 @@ const task: ITask = { id: 't1', name: 'Batch 1' }
 const fakeSamples = [
   { resolve: () => ({ id: 'sample-1' }) },
   { resolve: () => ({ id: 'sample-2' }) }
-]
+] as unknown as OptimisticSample[]
 
 const renderLabelPage = (projectOverride: IProject = project) =>
-  renderWithProviders(<LabelPage />, {
-    routerProps: {
-      initialEntries: [
-        {
-          pathname: '/label/t1',
-          state: { project: projectOverride, task, samples: fakeSamples, initial: 0 }
-        }
-      ]
-    }
-  })
+  renderWithProviders(
+    <LabelPage project={projectOverride} task={task} samples={fakeSamples} initial={0} />
+  )
 
 beforeEach(() => {
   setSample.mockClear()

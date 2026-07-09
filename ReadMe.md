@@ -1,6 +1,6 @@
 # cv-label
 
-A desktop app for labeling image datasets for computer vision — organize work into
+A desktop app for labeling image datasets for computer vision. Organize work into
 Projects → Tasks → Samples, and annotate images with bounding boxes or polygon masks
 in a canvas-based labeler with pan/zoom and per-label colors.
 
@@ -61,11 +61,11 @@ $ pnpm run test:e2e
 
 Electron has no headless mode, so this opens real windows while it runs. On Linux CI
 (see `.github/workflows/ci.yml`), that's handled by running under Xvfb rather than by
-hiding the window — Electron/Chromium throttle rendering for hidden windows, which
+hiding the window, since Electron/Chromium throttle rendering for hidden windows, which
 makes tests slower and flakier, not faster.
 
 ## CI
 
 Pull requests and pushes to `master` run both test suites via GitHub Actions
-(`.github/workflows/ci.yml`). `master` is protected — changes go through a PR and are
+(`.github/workflows/ci.yml`). `master` is protected, so changes go through a PR and are
 squash-merged.

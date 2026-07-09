@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react'
-import { Group, Paper, Skeleton, Text, ThemeIcon } from '@mantine/core'
+import { Checkbox, Group, Paper, Skeleton, Text, ThemeIcon } from '@mantine/core'
 import type { FC, MouseEventHandler, ReactNode } from 'react'
 import { MdChevronRight, MdDeleteOutline } from 'react-icons/md'
 import { useContextMenu } from 'mantine-contextmenu'
@@ -44,6 +44,8 @@ export type BasicListPageItemProps = {
   tags?: ReactNode
   onClick: () => void
   onDelete?: () => void
+  selected?: boolean
+  onSelectedChange?: (selected: boolean) => void
 }
 
 export const BasicListPageItem: FC<BasicListPageItemProps> = ({
@@ -52,7 +54,9 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   subtitle,
   tags,
   onClick,
-  onDelete
+  onDelete,
+  selected,
+  onSelectedChange
 }) => {
   const { showContextMenu } = useContextMenu()
 
@@ -70,6 +74,15 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
 
   return (
     <Row shadow="xs" withBorder onClick={onClick} onContextMenu={onContextMenu}>
+      {onSelectedChange && (
+        <Checkbox
+          aria-label={`Select ${title}`}
+          checked={selected ?? false}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onSelectedChange(e.currentTarget.checked)}
+          mr="md"
+        />
+      )}
       <ThemeIcon variant="light" size="lg" radius="md">
         {icon}
       </ThemeIcon>

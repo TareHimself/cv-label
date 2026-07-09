@@ -1,18 +1,15 @@
-import { navigateToLabel, useSamplesNavState } from '@renderer/navigation'
+import { navigate } from '@renderer/router/appRouter'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { OptimisticObject } from '@renderer/util/optimistic_object'
-import { IAnnotation, INewSample, TrainingSplit } from '@shared/types'
-import { fileToBase64, normalizeFilename } from '@renderer/utils'
-import { makeUUID } from '@shared/utils'
+import { IAnnotation, INewSample, IProject, ITask } from '@shared/types'
 import { OptimisticSample } from '@renderer/types'
 
-export const useSamples = () => {
+export const useSamples = (project: IProject, task: ITask) => {
   const store = useAppStore((s) => s.store)
   const queryClient = useQueryClient()
 
-  const { task, project } = useSamplesNavState()
   const samplesQueryKey = ['samples', task.id, store] as const
 
   const {
@@ -41,23 +38,7 @@ export const useSamples = () => {
   const loading = isLoading || isFetching
 
   const createSamplesMutation = useMutation({
-    mutationFn: (files: File[]) => {
-      return (async () => {
-        const base64Data = await Promise.all(files.map((c) => fileToBase64(c)))
-        const newSamples = files.map<INewSample>((c, idx) => {
-          return {
-            id: makeUUID(),
-            name: normalizeFilename(c.name),
-            base64Image: base64Data[idx],
-            split: TrainingSplit.Train,
-            annotations: [],
-            createdAt: new Date().toISOString()
-          }
-        })
-
-        return store.createSamples(task.id, newSamples)
-      })()
-    },
+    mutationFn: (samples: INewSample[]) => store.createSamples(task.id, samples),
     onSuccess: async () => {
       // Wait for all existing samples to complete pending operations
       await Promise.all(items.map((sample) => sample.waitForResolve()))
@@ -71,7 +52,7 @@ export const useSamples = () => {
     (sampleId: string) => {
       const startAt = items.findIndex((c) => c.resolve().id == sampleId)
       // We send a copy because the label route handles cache and other things differently
-      navigateToLabel(project, task, items, startAt)
+      navigate('label', { project, task, samples: items, initial: startAt })
     },
     [items, project, task]
   )
@@ -106,7 +87,6 @@ export const useSamples = () => {
   return {
     items,
     loading,
-    project,
     label,
     remove,
     createSamples: createSamplesMutation.mutateAsync,

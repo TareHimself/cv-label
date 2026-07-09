@@ -23,12 +23,15 @@ export class ProjectsPage {
     return this.page.getByRole('button', { name: 'Create', exact: true })
   }
 
+  // Every stack-router page has an identically-placeholdered search box, and hidden
+  // (not unmounted) pages still match placeholder-based locators, unlike getByRole -
+  // scope to the visible one.
   get searchInput() {
-    return this.page.getByPlaceholder('Search')
+    return this.page.getByPlaceholder('Search').and(this.page.locator(':visible'))
   }
 
   get emptyState() {
-    return this.page.getByText('No projects yet — create one to get started.')
+    return this.page.getByText('No projects yet, create one to get started.')
   }
 
   get noSearchMatchesState() {

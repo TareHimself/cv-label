@@ -20,12 +20,13 @@ import { FaFileImport } from 'react-icons/fa'
 import { CiSearch } from 'react-icons/ci'
 import { MdDeleteOutline } from 'react-icons/md'
 import { useContextMenu } from 'mantine-contextmenu'
-import { useNavigate } from 'react-router'
-import { TrainingSplit } from '@shared/types'
+import { IProject, ITask, TrainingSplit } from '@shared/types'
 import { useSamples } from '@renderer/hooks/useSamples'
 import { useState, useSyncExternalStore } from 'react'
 import { OptimisticSample } from '@renderer/types'
 import { useAppStore } from '@renderer/hooks/useAppStore'
+import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
+import { back } from '@renderer/router/appRouter'
 
 const TopContainer = styled.div`
   display: flex;
@@ -183,10 +184,15 @@ const SampleCard = ({
     </Card>
   )
 }
-export const SamplesPage = () => {
-  const { items, loading, label, remove } = useSamples()
-  const navigate = useNavigate()
+export type SamplesPageProps = {
+  project: IProject
+  task: ITask
+}
+
+export const SamplesPage = ({ project, task }: SamplesPageProps) => {
+  const { items, loading, label, remove, createSamples } = useSamples(project, task)
   const [pendingDelete, setPendingDelete] = useState<OptimisticSample | null>(null)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   return (
     <>
@@ -201,6 +207,14 @@ export const SamplesPage = () => {
           }
         }}
       />
+      <ImportSamplesModal
+        opened={isImportOpen}
+        project={project}
+        onClose={() => setIsImportOpen(false)}
+        onImported={async (samples) => {
+          await createSamples(samples)
+        }}
+      />
       <BasicListPage
         top={
           <TopContainer>
@@ -209,12 +223,12 @@ export const SamplesPage = () => {
                 leftSection={<IoMdArrowBack />}
                 variant="outline"
                 onClick={() => {
-                  navigate(-1)
+                  back()
                 }}
               >
                 Back
               </Button>
-              <Button leftSection={<FaFileImport />} onClick={() => {}}>
+              <Button leftSection={<FaFileImport />} onClick={() => setIsImportOpen(true)}>
                 Import Samples
               </Button>
             </Group>
