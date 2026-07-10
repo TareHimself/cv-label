@@ -186,6 +186,11 @@ test.describe('Samples page', () => {
     tasksPage,
     samplesPage
   }) => {
+    // This test pushes 30 images through the full create-task pipeline (file picker ->
+    // base64 conversion -> IPC/SQLite writes) - an order of magnitude more work than any
+    // other test here, so it gets proportionally more time (3x) rather than sharing the
+    // same budget as a 1-2 image test.
+    test.slow()
     const images = await Promise.all(
       Array.from({ length: 30 }, (_, i) => createTestImage(`sample-${i}`))
     )
