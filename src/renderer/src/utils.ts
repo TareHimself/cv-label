@@ -1,4 +1,4 @@
-export const fileToBase64 = async (file: File) => {
+export const fileToBase64 = async (file: Blob) => {
   // use a FileReader to generate a base64 data URI:
   const buffer = await file.arrayBuffer()
   const base64url = await new Promise<string>((r) => {

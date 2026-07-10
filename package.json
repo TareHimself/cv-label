@@ -46,6 +46,7 @@
     "sharp": "^0.34.5",
     "tinycolor2": "^1.6.0",
     "uuid": "^13.0.2",
+    "yaml": "^2.9.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

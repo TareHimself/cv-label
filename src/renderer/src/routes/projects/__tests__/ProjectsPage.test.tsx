@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject } from '@shared/types'
 
@@ -81,6 +81,55 @@ describe('ProjectsPage', () => {
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('tasks', { project: projects[0] })
     })
+  })
+
+  it('edits a project name and label names via the context menu', async () => {
+    vi.mocked(useAppStore.getState().store.updateProjects).mockImplementation(async (updates) => [
+      {
+        ...projects[0],
+        name: updates[0].name ?? projects[0].name,
+        labels: projects[0].labels.map((label) => {
+          const renamed = updates[0].labels?.find((l) => l.id === label.id)
+          return renamed ? { ...label, name: renamed.name } : label
+        })
+      }
+    ])
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Edit'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Project' })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed Signs' } })
+    fireEvent.change(screen.getByDisplayValue('Stop Sign'), {
+      target: { value: 'Stop Sign Renamed' }
+    })
+    // The mutation settling triggers a refetch - point it at the post-edit state too, so
+    // it doesn't revert the optimistic update back to the stale name once it lands.
+    vi.mocked(useAppStore.getState().store.getProjects).mockResolvedValue([
+      {
+        ...projects[0],
+        name: 'Renamed Signs',
+        labels: [{ id: 'l1', name: 'Stop Sign Renamed', color: '#ff0000' }, projects[0].labels[1]]
+      },
+      projects[1]
+    ])
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(useAppStore.getState().store.updateProjects).toHaveBeenCalledWith([
+        {
+          id: 'p1',
+          name: 'Renamed Signs',
+          labels: [
+            { id: 'l1', name: 'Stop Sign Renamed' },
+            { id: 'l2', name: 'Yield Sign' }
+          ]
+        }
+      ])
+    })
+    expect(await screen.findByText('Renamed Signs')).toBeInTheDocument()
   })
 
   it('deletes a project after confirming', async () => {

@@ -1,5 +1,6 @@
 import { BasicListPage } from '@renderer/components/BasicListPage'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
+import { RenameModal } from '@renderer/components/RenameModal'
 import { styled } from '@linaria/react'
 import {
   Text,
@@ -18,11 +19,11 @@ import {
 import { IoMdArrowBack } from 'react-icons/io'
 import { FaFileImport } from 'react-icons/fa'
 import { CiSearch } from 'react-icons/ci'
-import { MdDeleteOutline } from 'react-icons/md'
+import { MdDeleteOutline, MdEdit } from 'react-icons/md'
 import { useContextMenu } from 'mantine-contextmenu'
 import { IProject, ITask, TrainingSplit } from '@shared/types'
 import { useSamples } from '@renderer/hooks/useSamples'
-import { useState, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { OptimisticSample } from '@renderer/types'
 import { useAppStore } from '@renderer/hooks/useAppStore'
 import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
@@ -49,6 +50,14 @@ const SPLIT_COMBO_BOX_OPTIONS: SegmentedControlItem[] = [
     label: (
       <Center style={{ gap: 10 }}>
         <span>Test</span>
+      </Center>
+    )
+  },
+  {
+    value: TrainingSplit.Valid,
+    label: (
+      <Center style={{ gap: 10 }}>
+        <span>Valid</span>
       </Center>
     )
   }
@@ -81,10 +90,12 @@ const STATUS_COMBO_BOX_OPTIONS: SegmentedControlItem[] = [
 const SampleCard = ({
   optimisticSample,
   onLabel,
+  onEdit,
   onDelete
 }: {
   optimisticSample: OptimisticSample
   onLabel: (sampleId: string) => void
+  onEdit: (sample: OptimisticSample) => void
   onDelete: (sample: OptimisticSample) => void
 }) => {
   const sample = useSyncExternalStore(
@@ -99,6 +110,12 @@ const SampleCard = ({
       shadow="sm"
       padding="md"
       onContextMenu={showContextMenu([
+        {
+          key: 'edit',
+          icon: <MdEdit size={16} />,
+          title: 'Edit',
+          onClick: () => onEdit(optimisticSample)
+        },
         {
           key: 'delete',
           icon: <MdDeleteOutline size={16} />,
@@ -191,8 +208,16 @@ export type SamplesPageProps = {
 
 export const SamplesPage = ({ project, task }: SamplesPageProps) => {
   const { items, loading, label, remove, createSamples } = useSamples(project, task)
+  const store = useAppStore((s) => s.store)
+  const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<OptimisticSample | null>(null)
+  const [pendingRename, setPendingRename] = useState<OptimisticSample | null>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
+
+  const filteredItems = useMemo(
+    () => items.filter((s) => s.resolve().name.toLowerCase().includes(search.trim().toLowerCase())),
+    [items, search]
+  )
 
   return (
     <>
@@ -205,6 +230,23 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
           if (pendingDelete !== null) {
             remove(pendingDelete.resolve().id)
           }
+        }}
+      />
+      <RenameModal
+        key={pendingRename?.resolve().id}
+        opened={pendingRename !== null}
+        entityName="sample"
+        initialName={pendingRename?.resolve().name ?? ''}
+        onCancel={() => setPendingRename(null)}
+        onConfirm={(name) => {
+          if (pendingRename !== null) {
+            const { commit, rollback } = pendingRename.update({ name })
+            store
+              .updateSamples([{ id: pendingRename.resolve().id, name }])
+              .then(() => commit())
+              .catch(() => rollback())
+          }
+          setPendingRename(null)
         }}
       />
       <ImportSamplesModal
@@ -233,7 +275,12 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
               </Button>
             </Group>
             <Group>
-              <TextInput placeholder="Search" rightSection={<CiSearch />} />
+              <TextInput
+                placeholder="Search"
+                rightSection={<CiSearch />}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </Group>
           </TopContainer>
         }
@@ -248,12 +295,18 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
               <Skeleton h={268} />
             </>
           )}
+          {!loading && items.length > 0 && filteredItems.length === 0 && (
+            <Text c="dimmed" ta="center" mt="xl">
+              No samples match your search.
+            </Text>
+          )}
 
-          {items.map((p) => (
+          {filteredItems.map((p) => (
             <SampleCard
               key={p.resolve().id}
               optimisticSample={p}
               onLabel={label}
+              onEdit={setPendingRename}
               onDelete={setPendingDelete}
             />
           ))}

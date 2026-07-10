@@ -19,7 +19,7 @@ test.describe('Samples page', () => {
     }
   })
 
-  test('toggles the train/test split for a sample', async ({ tasksPage, samplesPage }) => {
+  test('toggles the train/test/valid split for a sample', async ({ tasksPage, samplesPage }) => {
     const image = await createTestImage('sample-1')
     try {
       await tasksPage.createTask('Batch 1', [image])
@@ -31,6 +31,11 @@ test.describe('Samples page', () => {
 
       await expect(samplesPage.radio('sample-1', 'Test')).toBeChecked()
       await expect(samplesPage.radio('sample-1', 'Train')).not.toBeChecked()
+
+      await samplesPage.setSplit('sample-1', 'Valid')
+
+      await expect(samplesPage.radio('sample-1', 'Valid')).toBeChecked()
+      await expect(samplesPage.radio('sample-1', 'Test')).not.toBeChecked()
     } finally {
       cleanupTestImage(image)
     }
@@ -137,6 +142,41 @@ test.describe('Samples page', () => {
     } finally {
       cleanupTestImage(imageA)
       cleanupTestImage(imageB)
+    }
+  })
+
+  // Regression test: the search box on this page used to be wired up to nothing at all.
+  test('filters samples via the search box', async ({ tasksPage, samplesPage }) => {
+    const imageA = await createTestImage('sample-a')
+    const imageB = await createTestImage('sample-b')
+    try {
+      await tasksPage.createTask('Batch 1', [imageA, imageB])
+      await tasksPage.open('Batch 1')
+      await expect(samplesPage.card('sample-a')).toBeVisible()
+
+      await samplesPage.search('sample-b')
+
+      await expect(samplesPage.card('sample-b')).toBeVisible()
+      await expect(samplesPage.card('sample-a')).not.toBeVisible()
+    } finally {
+      cleanupTestImage(imageA)
+      cleanupTestImage(imageB)
+    }
+  })
+
+  test('renames a sample via the context menu', async ({ tasksPage, samplesPage }) => {
+    const image = await createTestImage('sample-1')
+    try {
+      await tasksPage.createTask('Batch 1', [image])
+      await tasksPage.open('Batch 1')
+      await expect(samplesPage.card('sample-1')).toBeVisible()
+
+      await samplesPage.rename('sample-1', 'renamed-sample')
+
+      await expect(samplesPage.card('renamed-sample')).toBeVisible()
+      await expect(samplesPage.card('sample-1')).not.toBeVisible()
+    } finally {
+      cleanupTestImage(image)
     }
   })
 

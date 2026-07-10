@@ -30,3 +30,8 @@ class ResizeObserverStub {
   disconnect = vi.fn()
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+
+// jsdom doesn't implement scrollIntoView; Mantine's Combobox (Select, Autocomplete, etc.)
+// calls it when navigating options, which otherwise throws from an internal timeout well
+// after the triggering test has already finished.
+Element.prototype.scrollIntoView = vi.fn()

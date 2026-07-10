@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react'
 import { Checkbox, Group, Paper, Skeleton, Text, ThemeIcon } from '@mantine/core'
 import type { FC, MouseEventHandler, ReactNode } from 'react'
-import { MdChevronRight, MdDeleteOutline } from 'react-icons/md'
+import { MdChevronRight, MdDeleteOutline, MdEdit } from 'react-icons/md'
 import { useContextMenu } from 'mantine-contextmenu'
 
 const ROW_PADDING = '14px 18px'
@@ -43,6 +43,7 @@ export type BasicListPageItemProps = {
   subtitle?: string
   tags?: ReactNode
   onClick: () => void
+  onEdit?: () => void
   onDelete?: () => void
   selected?: boolean
   onSelectedChange?: (selected: boolean) => void
@@ -54,23 +55,32 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   subtitle,
   tags,
   onClick,
+  onEdit,
   onDelete,
   selected,
   onSelectedChange
 }) => {
   const { showContextMenu } = useContextMenu()
 
-  const onContextMenu: MouseEventHandler<HTMLDivElement> = onDelete
-    ? showContextMenu([
-        {
-          key: 'delete',
-          icon: <MdDeleteOutline size={16} />,
-          title: 'Delete',
-          color: 'red',
-          onClick: onDelete
-        }
-      ])
-    : () => {}
+  const contextMenuItems = [
+    ...(onEdit
+      ? [{ key: 'edit', icon: <MdEdit size={16} />, title: 'Edit', onClick: onEdit }]
+      : []),
+    ...(onDelete
+      ? [
+          {
+            key: 'delete',
+            icon: <MdDeleteOutline size={16} />,
+            title: 'Delete',
+            color: 'red',
+            onClick: onDelete
+          }
+        ]
+      : [])
+  ]
+
+  const onContextMenu: MouseEventHandler<HTMLDivElement> =
+    contextMenuItems.length > 0 ? showContextMenu(contextMenuItems) : () => {}
 
   return (
     <Row shadow="xs" withBorder onClick={onClick} onContextMenu={onContextMenu}>

@@ -38,6 +38,10 @@ export class ProjectsPage {
     return this.page.getByText('No projects match your search.')
   }
 
+  get editDialog() {
+    return this.page.getByRole('dialog', { name: 'Edit Project' })
+  }
+
   row(name: string) {
     return this.page.getByText(name, { exact: true })
   }
@@ -76,5 +80,20 @@ export class ProjectsPage {
     await this.row(name).click({ button: 'right' })
     await this.page.getByText('Delete').click()
     await this.page.getByRole('button', { name: 'Cancel' }).click()
+  }
+
+  /** Renames a project and, in order, renames its existing labels (doesn't add/remove any). */
+  async edit(name: string, newName: string, newLabelNames: string[] = []) {
+    await this.row(name).click({ button: 'right' })
+    await this.page.getByText('Edit').click()
+    await this.editDialog.getByLabel('Name').fill(newName)
+
+    const labelInputs = this.editDialog.getByRole('textbox')
+    for (let i = 0; i < newLabelNames.length; i++) {
+      // Textbox 0 is the project Name field itself - label rows start at index 1.
+      await labelInputs.nth(i + 1).fill(newLabelNames[i])
+    }
+
+    await this.editDialog.getByRole('button', { name: 'Save' }).click()
   }
 }

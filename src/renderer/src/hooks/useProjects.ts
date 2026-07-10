@@ -1,4 +1,4 @@
-import { ILabel, IProject } from '@shared/types'
+import { ILabel, IProject, IProjectUpdate } from '@shared/types'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
 import { makeUUID } from '@shared/utils'
@@ -53,6 +53,43 @@ export const useProjects = () => {
     navigate('tasks', { project: item })
   }, [])
 
+  const { mutateAsync: updateMutateAsync } = useMutation({
+    mutationFn: (update: IProjectUpdate) => store.updateProjects([update]).then((r) => r[0]),
+    onMutate: async (update) => {
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey })
+      const previousProjects = queryClient.getQueryData<IProject[]>(projectsQueryKey) ?? []
+
+      queryClient.setQueryData<IProject[]>(projectsQueryKey, (current = []) =>
+        current.map((project) => {
+          if (project.id !== update.id) return project
+          return {
+            ...project,
+            name: update.name ?? project.name,
+            labels: project.labels.map((label) => {
+              const renamed = update.labels?.find((l) => l.id === label.id)
+              return renamed ? { ...label, name: renamed.name } : label
+            })
+          }
+        })
+      )
+
+      return { previousProjects }
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData<IProject[]>(projectsQueryKey, context?.previousProjects ?? [])
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectsQueryKey })
+    }
+  })
+
+  const update = useCallback(
+    async (id: string, name: string, labels: Pick<ILabel, 'id' | 'name'>[]) => {
+      await updateMutateAsync({ id, name, labels })
+    },
+    [updateMutateAsync]
+  )
+
   const { mutateAsync: removeMutateAsync } = useMutation({
     mutationFn: (id: string) => store.deleteProjects([id]),
     onMutate: async (id) => {
@@ -80,5 +117,5 @@ export const useProjects = () => {
     [removeMutateAsync]
   )
 
-  return { items, create, open, remove, isLoading }
+  return { items, create, open, update, remove, isLoading }
 }

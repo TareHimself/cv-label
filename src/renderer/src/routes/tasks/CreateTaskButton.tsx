@@ -12,7 +12,7 @@ import {
 } from '@mantine/core'
 import { styled } from '@linaria/react'
 import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone'
-import { FC, useCallback, useState } from 'react'
+import { FC, memo, useCallback, useState } from 'react'
 import toast from 'react-hot-toast'
 import { IoMdAdd } from 'react-icons/io'
 import { MdDeleteOutline } from 'react-icons/md'
@@ -49,10 +49,13 @@ const formatFileSize = (bytes: number) => {
   return `${value.toFixed(1)} ${units[unitIndex]}`
 }
 
-const SelectedSampleRow: FC<{ sample: INewSample; onRemove: () => void }> = ({
+const SelectedSampleRow = memo(function SelectedSampleRow({
   sample,
   onRemove
-}) => {
+}: {
+  sample: INewSample
+  onRemove: () => void
+}) {
   return (
     <FileRow>
       <Image
@@ -75,7 +78,68 @@ const SelectedSampleRow: FC<{ sample: INewSample; onRemove: () => void }> = ({
       </ActionIcon>
     </FileRow>
   )
-}
+})
+
+/** Memoized so typing in the task name field (which lives in the same parent state as
+ *  `samples`) doesn't re-render every imported sample's row - each one holds a full
+ *  base64-encoded image, so with a large import that re-render was visibly laggy. */
+const SampleList = memo(function SampleList({
+  samples,
+  onAddSamples,
+  onRemoveSample,
+  onClearSamples
+}: {
+  samples: INewSample[]
+  onAddSamples: () => void
+  onRemoveSample: (id: string) => void
+  onClearSamples: () => void
+}) {
+  return (
+    <>
+      <Flex justify={'space-between'} align={'center'}>
+        <Button variant="outline" onClick={onAddSamples}>
+          Add Samples
+        </Button>
+        {samples.length > 0 && (
+          <Group gap="xs">
+            <Text size="sm" c="dimmed">
+              {samples.length} file{samples.length === 1 ? '' : 's'}
+            </Text>
+            <Button variant="subtle" color="red" size="xs" onClick={onClearSamples}>
+              Clear all
+            </Button>
+          </Group>
+        )}
+      </Flex>
+      <Flex>
+        <ScrollArea
+          style={{
+            flexGrow: 1,
+            maxHeight: '260px'
+          }}
+          type="always"
+          scrollbars="y"
+        >
+          {samples.length === 0 ? (
+            <Text ta="center" c="dimmed" size="sm" py="md">
+              No files selected yet
+            </Text>
+          ) : (
+            <Stack gap={2}>
+              {samples.map((sample) => (
+                <SelectedSampleRow
+                  key={sample.id}
+                  sample={sample}
+                  onRemove={() => onRemoveSample(sample.id)}
+                />
+              ))}
+            </Stack>
+          )}
+        </ScrollArea>
+      </Flex>
+    </>
+  )
+})
 
 export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -90,6 +154,12 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
   const openModal = useCallback(() => {
     setTaskName(``)
     setIsModalOpen(true)
+  }, [])
+
+  const openImportModal = useCallback(() => setIsImportOpen(true), [])
+  const clearSamples = useCallback(() => setSamples([]), [])
+  const removeSample = useCallback((id: string) => {
+    setSamples((s) => s.filter((sample) => sample.id !== id))
   }, [])
 
   return (
@@ -148,47 +218,12 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
             value={taskName}
             onChange={(e) => setTaskName(e.target.value)}
           />
-          <Flex justify={'space-between'} align={'center'}>
-            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-              Add Samples
-            </Button>
-            {samples.length > 0 && (
-              <Group gap="xs">
-                <Text size="sm" c="dimmed">
-                  {samples.length} file{samples.length === 1 ? '' : 's'}
-                </Text>
-                <Button variant="subtle" color="red" size="xs" onClick={() => setSamples([])}>
-                  Clear all
-                </Button>
-              </Group>
-            )}
-          </Flex>
-          <Flex>
-            <ScrollArea
-              style={{
-                flexGrow: 1,
-                maxHeight: '260px'
-              }}
-              type="always"
-              scrollbars="y"
-            >
-              {samples.length === 0 ? (
-                <Text ta="center" c="dimmed" size="sm" py="md">
-                  No files selected yet
-                </Text>
-              ) : (
-                <Stack gap={2}>
-                  {samples.map((sample, idx) => (
-                    <SelectedSampleRow
-                      key={sample.id}
-                      sample={sample}
-                      onRemove={() => setSamples((s) => s.filter((_, i) => i !== idx))}
-                    />
-                  ))}
-                </Stack>
-              )}
-            </ScrollArea>
-          </Flex>
+          <SampleList
+            samples={samples}
+            onAddSamples={openImportModal}
+            onRemoveSample={removeSample}
+            onClearSamples={clearSamples}
+          />
           <Button
             fullWidth
             onClick={() => {

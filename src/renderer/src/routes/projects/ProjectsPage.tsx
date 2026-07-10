@@ -4,6 +4,7 @@ import {
   BasicListPageItemSkeleton
 } from '@renderer/components/BasicListPageItem'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
+import { EditProjectModal } from './EditProjectModal'
 import { styled } from '@linaria/react'
 import { Badge, Group, Stack, Text, TextInput } from '@mantine/core'
 import { CiSearch } from 'react-icons/ci'
@@ -44,9 +45,10 @@ const LabelTags = ({ labels }: { labels: ILabel[] }) => (
 )
 
 export const ProjectsPage = () => {
-  const { items, create, open, remove, isLoading } = useProjects()
+  const { items, create, open, update, remove, isLoading } = useProjects()
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<IProject | null>(null)
+  const [pendingEdit, setPendingEdit] = useState<IProject | null>(null)
 
   const filteredItems = useMemo(
     () => items.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase())),
@@ -64,6 +66,18 @@ export const ProjectsPage = () => {
           if (pendingDelete !== null) {
             remove(pendingDelete.id)
           }
+        }}
+      />
+      <EditProjectModal
+        key={pendingEdit?.id}
+        opened={pendingEdit !== null}
+        project={pendingEdit}
+        onCancel={() => setPendingEdit(null)}
+        onConfirm={(name, labels) => {
+          if (pendingEdit !== null) {
+            update(pendingEdit.id, name, labels)
+          }
+          setPendingEdit(null)
         }}
       />
       <BasicListPage
@@ -109,6 +123,7 @@ export const ProjectsPage = () => {
                 subtitle={p.labels.length === 0 ? 'No labels' : undefined}
                 tags={p.labels.length > 0 ? <LabelTags labels={p.labels} /> : undefined}
                 onClick={() => open(p)}
+                onEdit={() => setPendingEdit(p)}
                 onDelete={() => setPendingDelete(p)}
               />
             ))}

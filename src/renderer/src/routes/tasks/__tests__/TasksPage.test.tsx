@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject, ITask } from '@shared/types'
 
@@ -68,6 +68,47 @@ describe('TasksPage', () => {
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('samples', { project, task: tasks[0] })
     })
+  })
+
+  it('renames a task via the context menu', async () => {
+    vi.mocked(useAppStore.getState().store.updateTasks).mockResolvedValue([
+      { id: 't1', name: 'Batch 1 Renamed' }
+    ])
+    renderTasksPage()
+    await screen.findByText('Batch 1')
+
+    fireEvent.contextMenu(screen.getByText('Batch 1'))
+    fireEvent.click(screen.getByText('Edit'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Rename task' })
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Batch 1 Renamed' }
+    })
+    // The mutation settling triggers a refetch - point it at the post-rename state too, so
+    // it doesn't revert the optimistic update back to the stale name once it lands.
+    vi.mocked(useAppStore.getState().store.getTasksForProject).mockResolvedValue([
+      { id: 't1', name: 'Batch 1 Renamed' },
+      tasks[1]
+    ])
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(useAppStore.getState().store.updateTasks).toHaveBeenCalledWith([
+        { id: 't1', name: 'Batch 1 Renamed' }
+      ])
+    })
+    expect(await screen.findByText('Batch 1 Renamed')).toBeInTheDocument()
+  })
+
+  it('keeps a selected task visible even when it no longer matches the search', async () => {
+    renderTasksPage()
+    await screen.findByText('Batch 1')
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Batch 1' }))
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: '2' } })
+
+    expect(screen.getByText('Batch 1')).toBeInTheDocument()
+    expect(screen.getByText('Batch 2')).toBeInTheDocument()
   })
 
   it('deletes a task after confirming', async () => {

@@ -58,6 +58,43 @@ describe('BasicListPageItem', () => {
 
     expect(screen.queryByText('Delete')).not.toBeInTheDocument()
   })
+
+  it('shows an Edit option on right-click and calls onEdit when chosen', () => {
+    const onEdit = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onEdit={onEdit}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Edit'))
+
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows both Edit and Delete when both are provided, and clicking one does not trigger the other', () => {
+    const onEdit = vi.fn()
+    const onDelete = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Delete'))
+
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onEdit).not.toHaveBeenCalled()
+  })
 })
 
 describe('BasicListPageItemSkeleton', () => {

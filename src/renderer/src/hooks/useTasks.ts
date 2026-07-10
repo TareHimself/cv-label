@@ -1,5 +1,5 @@
 import { navigate } from '@renderer/router/appRouter'
-import { INewSample, IProject, ITask } from '@shared/types'
+import { INewSample, IProject, ITask, ITaskUpdate } from '@shared/types'
 import { makeUUID } from '@shared/utils'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
@@ -58,6 +58,35 @@ export const useTasks = (project: IProject) => {
     [project]
   )
 
+  const { mutateAsync: updateMutateAsync } = useMutation({
+    mutationFn: (update: ITaskUpdate) => store.updateTasks([update]).then((r) => r[0]),
+    onMutate: async (update) => {
+      await queryClient.cancelQueries({ queryKey: tasksQueryKey })
+      const previousTasks = queryClient.getQueryData<ITask[]>(tasksQueryKey) ?? []
+
+      queryClient.setQueryData<ITask[]>(tasksQueryKey, (current = []) =>
+        current.map((task) =>
+          task.id === update.id ? { ...task, name: update.name ?? task.name } : task
+        )
+      )
+
+      return { previousTasks }
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData<ITask[]>(tasksQueryKey, context?.previousTasks ?? [])
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: tasksQueryKey })
+    }
+  })
+
+  const update = useCallback(
+    async (id: string, name: string) => {
+      await updateMutateAsync({ id, name })
+    },
+    [updateMutateAsync]
+  )
+
   const { mutateAsync: removeMutateAsync } = useMutation({
     mutationFn: (ids: string[]) => store.deleteTasks(ids),
     onMutate: async (ids) => {
@@ -93,5 +122,5 @@ export const useTasks = (project: IProject) => {
     [removeMutateAsync]
   )
 
-  return { items, create, open, remove, removeMany, isLoading }
+  return { items, create, open, update, remove, removeMany, isLoading }
 }

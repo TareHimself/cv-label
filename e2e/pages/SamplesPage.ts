@@ -19,6 +19,10 @@ export class SamplesPage {
     return this.importDialog.locator('input[type=file]')
   }
 
+  get renameDialog() {
+    return this.page.getByRole('dialog', { name: 'Rename sample' })
+  }
+
   // Every stack-router page has an identically-placeholdered search box, and hidden
   // (not unmounted) pages still match placeholder-based locators, unlike getByRole -
   // scope to the visible one.
@@ -38,7 +42,7 @@ export class SamplesPage {
   }
 
   /** The underlying (visually hidden) radio input - use for state assertions like toBeChecked(). */
-  radio(sampleName: string, label: 'Train' | 'Test' | 'In Progress' | 'Completed') {
+  radio(sampleName: string, label: 'Train' | 'Test' | 'Valid' | 'In Progress' | 'Completed') {
     return this.card(sampleName).getByRole('radio', { name: label })
   }
 
@@ -51,8 +55,12 @@ export class SamplesPage {
     await this.backButton.click()
   }
 
-  /** Opens the Import Samples modal (Plain Images, the only registered importer) and
-   *  attaches the given files, which are added to the current task on completion. */
+  async search(text: string) {
+    await this.searchInput.fill(text)
+  }
+
+  /** Opens the Import Samples modal, picks the Plain Images importer, and attaches the
+   *  given files, which are added to the current task on completion. */
   async importSamples(filePaths: string[]) {
     await this.importSamplesButton.click()
     await this.importDialog.getByText('Plain Images').click()
@@ -65,7 +73,7 @@ export class SamplesPage {
     await this.card(sampleName).getByRole('button', { name: 'Label' }).click()
   }
 
-  async setSplit(sampleName: string, split: 'Train' | 'Test') {
+  async setSplit(sampleName: string, split: 'Train' | 'Test' | 'Valid') {
     await this.option(sampleName, split).click()
   }
 
@@ -83,5 +91,12 @@ export class SamplesPage {
     await this.card(sampleName).click({ button: 'right' })
     await this.page.getByText('Delete').click()
     await this.page.getByRole('button', { name: 'Cancel' }).click()
+  }
+
+  async rename(sampleName: string, newName: string) {
+    await this.card(sampleName).click({ button: 'right' })
+    await this.page.getByText('Edit').click()
+    await this.renameDialog.getByLabel('Name').fill(newName)
+    await this.renameDialog.getByRole('button', { name: 'Save' }).click()
   }
 }
