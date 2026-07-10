@@ -3,6 +3,7 @@ import { Modal, Stack, UnstyledButton, Text, ThemeIcon } from '@mantine/core'
 import { styled } from '@linaria/react'
 import toast from 'react-hot-toast'
 import type { IProject, INewSample } from '@shared/types'
+import { ZIndex } from '@renderer/zIndex'
 import { importers } from './importers/registry'
 import type { SampleImporter } from './types'
 
@@ -26,13 +27,17 @@ export type ImportSamplesModalProps = {
   project: IProject
   onClose: () => void
   onImported: (samples: INewSample[]) => Promise<void>
+  /** Defaults to the standalone action-modal layer - pass ZIndex.nestedActionModal when
+   *  this is opened from within another already-open action modal (e.g. Create Task). */
+  zIndex?: number
 }
 
 export const ImportSamplesModal = ({
   opened,
   project,
   onClose,
-  onImported
+  onImported,
+  zIndex = ZIndex.actionModal
 }: ImportSamplesModalProps) => {
   const [selectedImporter, setSelectedImporter] = useState<SampleImporter | null>(null)
   const [wasOpened, setWasOpened] = useState(opened)
@@ -67,7 +72,7 @@ export const ImportSamplesModal = ({
       title={selectedImporter ? `Import Samples: ${selectedImporter.name}` : 'Import Samples'}
       centered
       closeOnClickOutside={false}
-      zIndex={1000}
+      zIndex={zIndex}
     >
       {selectedImporter ? (
         <selectedImporter.Component

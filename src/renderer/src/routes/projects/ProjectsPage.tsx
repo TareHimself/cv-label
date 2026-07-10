@@ -6,9 +6,9 @@ import {
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { EditProjectModal } from './EditProjectModal'
 import { styled } from '@linaria/react'
-import { Badge, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Badge, Button, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { CiSearch } from 'react-icons/ci'
-import { MdFolder } from 'react-icons/md'
+import { MdDeleteOutline, MdFolder } from 'react-icons/md'
 import { CreateProjectButton } from './CreateProjectButton'
 import { useProjects } from '@renderer/hooks/useProjects'
 import { useMemo, useState } from 'react'
@@ -45,15 +45,60 @@ const LabelTags = ({ labels }: { labels: ILabel[] }) => (
 )
 
 export const ProjectsPage = () => {
-  const { items, create, open, update, remove, isLoading } = useProjects()
+  const { items, create, open, update, remove, removeMany, isLoading } = useProjects()
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<IProject | null>(null)
   const [pendingEdit, setPendingEdit] = useState<IProject | null>(null)
+  const [isSelectMode, setIsSelectMode] = useState(false)
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
+  const [isBatchDeletePending, setIsBatchDeletePending] = useState(false)
 
+  // Selected projects stay visible even if a search narrows the list below them, so
+  // batch actions never silently lose track of a selection the user can no longer see.
   const filteredItems = useMemo(
-    () => items.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase())),
-    [items, search]
+    () =>
+      items.filter(
+        (p) =>
+          selectedProjectIds.has(p.id) || p.name.toLowerCase().includes(search.trim().toLowerCase())
+      ),
+    [items, search, selectedProjectIds]
   )
+
+  const selectedProjects = items.filter((p) => selectedProjectIds.has(p.id))
+
+  const exitSelectMode = () => {
+    setIsSelectMode(false)
+    setSelectedProjectIds(new Set())
+  }
+
+  const toggleSelected = (projectId: string, selected: boolean) => {
+    setSelectedProjectIds((current) => {
+      const next = new Set(current)
+      if (selected) {
+        next.add(projectId)
+      } else {
+        next.delete(projectId)
+      }
+      return next
+    })
+  }
+
+  // Selection helpers operate on filteredItems (the currently visible/filtered list),
+  // not the full unfiltered project list, and all three enter select mode if not already.
+  const selectAll = () => {
+    setIsSelectMode(true)
+    setSelectedProjectIds(new Set(filteredItems.map((p) => p.id)))
+  }
+
+  const selectAbove = (index: number) => {
+    setIsSelectMode(true)
+    setSelectedProjectIds(new Set(filteredItems.slice(0, index + 1).map((p) => p.id)))
+  }
+
+  const selectBelow = (index: number) => {
+    setIsSelectMode(true)
+    setSelectedProjectIds(new Set(filteredItems.slice(index).map((p) => p.id)))
+  }
 
   return (
     <>
@@ -66,6 +111,20 @@ export const ProjectsPage = () => {
           if (pendingDelete !== null) {
             remove(pendingDelete.id)
           }
+        }}
+      />
+      <ConfirmDeleteModal
+        opened={isBatchDeletePending}
+        entityName="project"
+        itemName={
+          selectedProjects.length === 1
+            ? selectedProjects[0].name
+            : `${selectedProjects.length} projects`
+        }
+        onCancel={() => setIsBatchDeletePending(false)}
+        onConfirm={() => {
+          removeMany(selectedProjects.map((p) => p.id))
+          exitSelectMode()
         }}
       />
       <EditProjectModal
@@ -85,6 +144,32 @@ export const ProjectsPage = () => {
           <TopContainer>
             <Group>
               <CreateProjectButton create={create} />
+              {!isSelectMode && (
+                <Button size="xs" variant="outline" onClick={() => setIsSelectMode(true)}>
+                  Select
+                </Button>
+              )}
+              {isSelectMode && (
+                <>
+                  <Divider orientation="vertical" />
+                  <Text size="sm" fw={500}>
+                    {selectedProjectIds.size} selected
+                  </Text>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    color="red"
+                    leftSection={<MdDeleteOutline size={14} />}
+                    disabled={selectedProjectIds.size === 0}
+                    onClick={() => setIsBatchDeletePending(true)}
+                  >
+                    Delete
+                  </Button>
+                  <Button size="xs" variant="subtle" onClick={exitSelectMode}>
+                    Clear
+                  </Button>
+                </>
+              )}
             </Group>
             <Group>
               <TextInput
@@ -115,7 +200,7 @@ export const ProjectsPage = () => {
             </Text>
           )}
           {!isLoading &&
-            filteredItems.map((p) => (
+            filteredItems.map((p, index) => (
               <BasicListPageItem
                 key={p.id}
                 icon={<MdFolder size={18} />}
@@ -125,6 +210,12 @@ export const ProjectsPage = () => {
                 onClick={() => open(p)}
                 onEdit={() => setPendingEdit(p)}
                 onDelete={() => setPendingDelete(p)}
+                selectMode={isSelectMode}
+                selected={selectedProjectIds.has(p.id)}
+                onSelectedChange={(selected) => toggleSelected(p.id, selected)}
+                onSelectAll={selectAll}
+                onSelectAbove={() => selectAbove(index)}
+                onSelectBelow={() => selectBelow(index)}
               />
             ))}
         </Stack>

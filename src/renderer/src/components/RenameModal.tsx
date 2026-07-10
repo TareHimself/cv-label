@@ -1,5 +1,6 @@
 import { Button, Group, Modal, TextInput } from '@mantine/core'
 import { useState, type FC } from 'react'
+import { ZIndex } from '@renderer/zIndex'
 
 export type RenameModalProps = {
   opened: boolean
@@ -22,7 +23,13 @@ export const RenameModal: FC<RenameModalProps> = ({
   const [name, setName] = useState(initialName)
 
   return (
-    <Modal opened={opened} onClose={onCancel} title={`Rename ${entityName}`} centered>
+    <Modal
+      opened={opened}
+      onClose={onCancel}
+      title={`Rename ${entityName}`}
+      centered
+      zIndex={ZIndex.actionModal}
+    >
       <TextInput
         label="Name"
         value={name}

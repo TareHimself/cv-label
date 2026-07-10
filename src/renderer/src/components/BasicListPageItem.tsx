@@ -45,8 +45,18 @@ export type BasicListPageItemProps = {
   onClick: () => void
   onEdit?: () => void
   onDelete?: () => void
+  /** Whether the list is currently in select mode - while true, clicking the row
+   *  anywhere (not just the checkbox) toggles selection instead of firing onClick, and
+   *  the checkbox itself becomes visible. */
+  selectMode?: boolean
   selected?: boolean
   onSelectedChange?: (selected: boolean) => void
+  /** Selects every currently visible (filtered) item. */
+  onSelectAll?: () => void
+  /** Selects this item and every visible item above it. */
+  onSelectAbove?: () => void
+  /** Selects this item and every visible item below it. */
+  onSelectBelow?: () => void
 }
 
 export const BasicListPageItem: FC<BasicListPageItemProps> = ({
@@ -57,12 +67,16 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   onClick,
   onEdit,
   onDelete,
+  selectMode,
   selected,
-  onSelectedChange
+  onSelectedChange,
+  onSelectAll,
+  onSelectAbove,
+  onSelectBelow
 }) => {
   const { showContextMenu } = useContextMenu()
 
-  const contextMenuItems = [
+  const editDeleteItems = [
     ...(onEdit
       ? [{ key: 'edit', icon: <MdEdit size={16} />, title: 'Edit', onClick: onEdit }]
       : []),
@@ -78,13 +92,35 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
         ]
       : [])
   ]
+  const selectionItems = [
+    ...(onSelectAll ? [{ key: 'select-all', title: 'Select All', onClick: onSelectAll }] : []),
+    ...(onSelectAbove
+      ? [{ key: 'select-above', title: 'Select Above', onClick: onSelectAbove }]
+      : []),
+    ...(onSelectBelow
+      ? [{ key: 'select-below', title: 'Select Below', onClick: onSelectBelow }]
+      : [])
+  ]
+  const contextMenuItems = [
+    ...editDeleteItems,
+    ...(editDeleteItems.length > 0 && selectionItems.length > 0 ? [{ key: 'divider' }] : []),
+    ...selectionItems
+  ]
 
   const onContextMenu: MouseEventHandler<HTMLDivElement> =
     contextMenuItems.length > 0 ? showContextMenu(contextMenuItems) : () => {}
 
+  const handleClick = () => {
+    if (selectMode && onSelectedChange) {
+      onSelectedChange(!selected)
+    } else {
+      onClick()
+    }
+  }
+
   return (
-    <Row shadow="xs" withBorder onClick={onClick} onContextMenu={onContextMenu}>
-      {onSelectedChange && (
+    <Row shadow="xs" withBorder onClick={handleClick} onContextMenu={onContextMenu}>
+      {selectMode && onSelectedChange && (
         <Checkbox
           aria-label={`Select ${title}`}
           checked={selected ?? false}

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen, fireEvent, within } from '@testing-library/react'
+import { screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { CreateTaskButton } from '../CreateTaskButton'
 import { IProject } from '@shared/types'
@@ -29,6 +29,14 @@ const addSamplesViaImporter = async (files: File[]) => {
   fireEvent.change(input, { target: { files } })
   // The importer completes as soon as files are selected, closing the nested modal.
   await screen.findByRole('dialog', { name: 'Create Task' })
+}
+
+// The full-screen Dropzone's own hidden input goes through the same react-dropzone
+// file-selector pipeline as a real folder drag-and-drop, reading `webkitRelativePath`
+// off each File the same way a browser would when a directory is dropped.
+const dropFiles = (files: File[]) => {
+  const input = document.querySelector('input[type=file]') as HTMLInputElement
+  fireEvent.change(input, { target: { files } })
 }
 
 describe('CreateTaskButton', () => {
@@ -102,5 +110,153 @@ describe('CreateTaskButton', () => {
     expect(name).toBe('Batch 1')
     expect(samples).toHaveLength(1)
     expect(samples[0].name).toBe('photo-one')
+  })
+
+  it('prefills the task name from a dropped folder', async () => {
+    renderWithProviders(<CreateTaskButton project={project} create={vi.fn()} />)
+
+    const file = makeFile('img1.jpg', 1024)
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'MyDataset/img1.jpg' })
+
+    dropFiles([file])
+
+    expect(await screen.findByLabelText('Name')).toHaveValue('MyDataset')
+  })
+
+  it('leaves the task name blank for a flat (non-folder) file drop', async () => {
+    renderWithProviders(<CreateTaskButton project={project} create={vi.fn()} />)
+
+    dropFiles([makeFile('img1.jpg', 1024)])
+
+    expect(await screen.findByLabelText('Name')).toHaveValue('')
+  })
+
+  const makeFolderFile = (relativePath: string, sizeInBytes: number) => {
+    const file = makeFile(relativePath.split('/').pop() as string, sizeInBytes)
+    Object.defineProperty(file, 'webkitRelativePath', { value: relativePath })
+    return file
+  }
+
+  it('asks to split into separate tasks when a drop spans multiple folders', async () => {
+    renderWithProviders(<CreateTaskButton project={project} create={vi.fn()} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+
+    expect(await screen.findByText(/You dropped 2 folders/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Yes, 2 tasks' })).toBeInTheDocument()
+  })
+
+  it('steps through one Create Task modal per folder, showing an x/y indicator, and creates each on confirm', async () => {
+    const create = vi.fn().mockResolvedValue(undefined)
+    renderWithProviders(<CreateTaskButton project={project} create={create} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+    await screen.findByText(/You dropped 2 folders/)
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, 2 tasks' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Create Task (1/2)' })).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('FolderA')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Create Task (2/2)' })).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('FolderB')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Create Task/ })).not.toBeInTheDocument()
+    })
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(create.mock.calls[0][0]).toBe('FolderA')
+    expect(create.mock.calls[1][0]).toBe('FolderB')
+  })
+
+  it('skips a folder without creating a task for it, and advances to the next', async () => {
+    const create = vi.fn().mockResolvedValue(undefined)
+    renderWithProviders(<CreateTaskButton project={project} create={create} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+    await screen.findByText(/You dropped 2 folders/)
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, 2 tasks' }))
+
+    await screen.findByRole('dialog', { name: 'Create Task (1/2)' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Create Task (2/2)' })).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('FolderB')).toBeInTheDocument()
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('asks to confirm before stopping the sequence when the modal is closed mid-way, and "Keep going" cancels the stop', async () => {
+    const create = vi.fn().mockResolvedValue(undefined)
+    renderWithProviders(<CreateTaskButton project={project} create={create} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+    await screen.findByText(/You dropped 2 folders/)
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, 2 tasks' }))
+    await screen.findByRole('dialog', { name: 'Create Task (1/2)' })
+
+    fireEvent.keyDown(document.body, { key: 'Escape', code: 'Escape' })
+
+    expect(await screen.findByText(/won't be imported/)).toBeInTheDocument()
+    // Declining the stop leaves the in-progress step's modal open, untouched.
+    expect(screen.getByRole('dialog', { name: 'Create Task (1/2)' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep going' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/won't be imported/)).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('dialog', { name: 'Create Task (1/2)' })).toBeInTheDocument()
+  })
+
+  it('stops the whole sequence when the stop is confirmed, creating no further tasks', async () => {
+    const create = vi.fn().mockResolvedValue(undefined)
+    renderWithProviders(<CreateTaskButton project={project} create={create} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+    await screen.findByText(/You dropped 2 folders/)
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, 2 tasks' }))
+    await screen.findByRole('dialog', { name: 'Create Task (1/2)' })
+
+    fireEvent.keyDown(document.body, { key: 'Escape', code: 'Escape' })
+    await screen.findByText(/won't be imported/)
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Create Task/ })).not.toBeInTheDocument()
+    })
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('closes immediately with no confirmation for a single (non-queued) task', async () => {
+    renderWithProviders(<CreateTaskButton project={project} create={vi.fn()} />)
+    await openModal()
+
+    fireEvent.keyDown(document.body, { key: 'Escape', code: 'Escape' })
+
+    expect(screen.queryByText(/won't be imported/)).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Create Task' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('combines everything into one task when the user declines the split', async () => {
+    const create = vi.fn().mockResolvedValue(undefined)
+    renderWithProviders(<CreateTaskButton project={project} create={create} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+    await screen.findByText(/You dropped 2 folders/)
+    fireEvent.click(screen.getByRole('button', { name: 'No, one task' }))
+
+    const nameInput = await screen.findByLabelText('Name')
+    expect(nameInput).toHaveValue('')
+    expect(screen.getByText('2 files')).toBeInTheDocument()
+
+    fireEvent.change(nameInput, { target: { value: 'Combined Batch' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(create.mock.calls[0][0]).toBe('Combined Batch')
+    expect(create.mock.calls[0][1]).toHaveLength(2)
   })
 })

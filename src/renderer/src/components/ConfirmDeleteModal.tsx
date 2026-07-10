@@ -1,5 +1,6 @@
 import { Button, Group, Modal, Text } from '@mantine/core'
 import type { FC } from 'react'
+import { ZIndex } from '@renderer/zIndex'
 
 export type ConfirmDeleteModalProps = {
   opened: boolean
@@ -17,7 +18,13 @@ export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
   onConfirm
 }) => {
   return (
-    <Modal opened={opened} onClose={onCancel} title={`Delete ${entityName}`} centered>
+    <Modal
+      opened={opened}
+      onClose={onCancel}
+      title={`Delete ${entityName}`}
+      centered
+      zIndex={ZIndex.confirmationModal}
+    >
       <Text size="sm">
         {itemName ? (
           <>

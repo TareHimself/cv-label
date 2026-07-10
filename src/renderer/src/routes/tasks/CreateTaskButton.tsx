@@ -11,7 +11,7 @@ import {
   ScrollArea
 } from '@mantine/core'
 import { styled } from '@linaria/react'
-import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone'
+import { Dropzone, IMAGE_MIME_TYPE, type FileWithPath } from '@mantine/dropzone'
 import { FC, memo, useCallback, useState } from 'react'
 import toast from 'react-hot-toast'
 import { IoMdAdd } from 'react-icons/io'
@@ -19,11 +19,15 @@ import { MdDeleteOutline } from 'react-icons/md'
 import { INewSample, IProject } from '@shared/types'
 import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
 import { filesToSamples } from '@renderer/components/sampleIO/importers/filesToSamples'
+import { folderNameFromDroppedFiles, groupFilesByTopFolder } from '@renderer/utils'
+import { ZIndex } from '@renderer/zIndex'
 
 export type CreateTaskButtonProps = {
   project: IProject
   create: (name: string, samples: INewSample[]) => Promise<void>
 }
+
+type ImportQueueItem = { name: string; files: FileWithPath[] }
 
 const FileRow = styled.div`
   display: flex;
@@ -147,14 +151,89 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
   const [isDropProcessing, setIsDropProcessing] = useState(false)
   const [taskName, setTaskName] = useState('')
   const [samples, setSamples] = useState<INewSample[]>([])
-  const closeModal = useCallback(() => {
-    setIsModalOpen(false)
-  }, [])
 
-  const openModal = useCallback(() => {
-    setTaskName(``)
+  // When a drop spans more than one top-level folder, pendingSplit holds both the raw
+  // files (for the "one task" decline path) and the per-folder grouping (for "separate
+  // tasks"), while the confirm modal asks which the user wants.
+  const [pendingSplit, setPendingSplit] = useState<{
+    allFiles: FileWithPath[]
+    groups: ImportQueueItem[]
+  } | null>(null)
+
+  // Once a choice is made, importQueue drives the Create Task modal through one item at
+  // a time - Skip or Create both advance to the next. The close button means something
+  // stronger: abandon the rest of the queue entirely, so it's confirmed separately.
+  const [importQueue, setImportQueue] = useState<ImportQueueItem[]>([])
+  const [importQueueIndex, setImportQueueIndex] = useState(0)
+  const [isStopConfirmOpen, setIsStopConfirmOpen] = useState(false)
+
+  const openModal = useCallback((name: string = '') => {
+    setTaskName(name)
     setIsModalOpen(true)
   }, [])
+
+  const loadQueueItem = useCallback(
+    (queue: ImportQueueItem[], index: number) => {
+      const { name, files } = queue[index]
+      setIsDropProcessing(true)
+      toast
+        .promise(filesToSamples(files), {
+          loading: `Processing ${files.length} file${files.length === 1 ? '' : 's'}`,
+          success: 'Files added',
+          error: (e) => {
+            console.error(e)
+            return 'Failed to read image files'
+          }
+        })
+        .then((newSamples) => {
+          setSamples(newSamples)
+          openModal(name)
+        })
+        .catch(() => {})
+        .finally(() => setIsDropProcessing(false))
+    },
+    [openModal]
+  )
+
+  const startQueue = useCallback(
+    (queue: ImportQueueItem[]) => {
+      setImportQueue(queue)
+      setImportQueueIndex(0)
+      loadQueueItem(queue, 0)
+    },
+    [loadQueueItem]
+  )
+
+  // Shared by both Skip and Create - either one is "done with this step," so both move
+  // on to the next queued folder, or close once there isn't one.
+  const advanceQueue = () => {
+    const nextIndex = importQueueIndex + 1
+    if (nextIndex < importQueue.length) {
+      setImportQueueIndex(nextIndex)
+      loadQueueItem(importQueue, nextIndex)
+    } else {
+      setIsModalOpen(false)
+      setImportQueue([])
+      setImportQueueIndex(0)
+    }
+  }
+
+  // The close button, once confirmed: unlike Skip, this abandons every remaining queued
+  // folder (not just the current one) rather than continuing to the next.
+  const stopQueue = () => {
+    setIsStopConfirmOpen(false)
+    setIsModalOpen(false)
+    setImportQueue([])
+    setImportQueueIndex(0)
+  }
+
+  const handleModalClose = () => {
+    if (importQueue.length > 1) {
+      setIsStopConfirmOpen(true)
+    } else {
+      setIsModalOpen(false)
+    }
+  }
 
   const openImportModal = useCallback(() => setIsImportOpen(true), [])
   const clearSamples = useCallback(() => setSamples([]), [])
@@ -169,22 +248,15 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
         loading={isDropProcessing}
         accept={IMAGE_MIME_TYPE}
         onDrop={(files) => {
-          setIsDropProcessing(true)
-          toast
-            .promise(filesToSamples(files), {
-              loading: `Processing ${files.length} file${files.length === 1 ? '' : 's'}`,
-              success: 'Files added',
-              error: (e) => {
-                console.error(e)
-                return 'Failed to read image files'
-              }
+          const groups = groupFilesByTopFolder(files)
+          if (groups.size > 1) {
+            setPendingSplit({
+              allFiles: files,
+              groups: Array.from(groups, ([name, groupFiles]) => ({ name, files: groupFiles }))
             })
-            .then((newSamples) => {
-              setSamples(newSamples)
-              openModal()
-            })
-            .catch(() => {})
-            .finally(() => setIsDropProcessing(false))
+            return
+          }
+          startQueue([{ name: folderNameFromDroppedFiles(files) ?? '', files }])
         }}
       >
         <Group justify="center" gap="xl" mih={220} style={{ pointerEvents: 'none' }}>
@@ -195,6 +267,41 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
           </div>
         </Group>
       </Dropzone.FullScreen>
+      <Modal
+        opened={pendingSplit !== null}
+        onClose={() => setPendingSplit(null)}
+        title="Multiple folders detected"
+        centered
+        zIndex={ZIndex.confirmationModal}
+      >
+        <Stack gap="lg">
+          <Text size="sm">
+            You dropped {pendingSplit?.groups.length ?? 0} folders. Create a separate task for each
+            one?
+          </Text>
+          <Group justify="flex-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const files = pendingSplit?.allFiles ?? []
+                setPendingSplit(null)
+                startQueue([{ name: folderNameFromDroppedFiles(files) ?? '', files }])
+              }}
+            >
+              No, one task
+            </Button>
+            <Button
+              onClick={() => {
+                const groups = pendingSplit?.groups ?? []
+                setPendingSplit(null)
+                startQueue(groups)
+              }}
+            >
+              Yes, {pendingSplit?.groups.length ?? 0} tasks
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
       <ImportSamplesModal
         opened={isImportOpen}
         project={project}
@@ -202,13 +309,42 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
         onImported={async (newSamples) => {
           setSamples((s) => [...s, ...newSamples])
         }}
+        zIndex={ZIndex.nestedActionModal}
       />
       <Modal
+        opened={isStopConfirmOpen}
+        onClose={() => setIsStopConfirmOpen(false)}
+        title="Stop creating tasks?"
+        centered
+        zIndex={ZIndex.confirmationModal}
+      >
+        <Stack gap="lg">
+          <Text size="sm">
+            {importQueue.length - importQueueIndex} folder
+            {importQueue.length - importQueueIndex === 1 ? '' : 's'} left won&apos;t be imported.
+            This won&apos;t affect tasks already created.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="outline" onClick={() => setIsStopConfirmOpen(false)}>
+              Keep going
+            </Button>
+            <Button color="red" onClick={stopQueue}>
+              Stop
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+      <Modal
         opened={isModalOpen}
-        onClose={closeModal}
-        title="Create Task"
+        onClose={handleModalClose}
+        title={
+          importQueue.length > 1
+            ? `Create Task (${importQueueIndex + 1}/${importQueue.length})`
+            : 'Create Task'
+        }
         centered
         closeOnClickOutside={false}
+        zIndex={ZIndex.actionModal}
       >
         <Stack gap={'lg'}>
           <TextInput
@@ -224,29 +360,37 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
             onRemoveSample={removeSample}
             onClearSamples={clearSamples}
           />
-          <Button
-            fullWidth
-            onClick={() => {
-              toast.promise(create(taskName, samples), {
-                loading: 'Creating task',
-                success: 'Task created',
-                error: (e) => {
-                  console.error(e)
-                  return 'Failed to create task'
-                }
-              })
-              setIsModalOpen(false)
-            }}
-            disabled={taskName.trim().length === 0}
-          >
-            Create
-          </Button>
+          <Group grow>
+            {importQueue.length > 1 && (
+              <Button variant="outline" onClick={advanceQueue}>
+                Skip
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                toast.promise(create(taskName, samples), {
+                  loading: 'Creating task',
+                  success: 'Task created',
+                  error: (e) => {
+                    console.error(e)
+                    return 'Failed to create task'
+                  }
+                })
+                advanceQueue()
+              }}
+              disabled={taskName.trim().length === 0}
+            >
+              Create
+            </Button>
+          </Group>
         </Stack>
       </Modal>
       <Button
         leftSection={<IoMdAdd />}
         onClick={() => {
           setSamples([])
+          setImportQueue([])
+          setImportQueueIndex(0)
           openModal()
         }}
       >

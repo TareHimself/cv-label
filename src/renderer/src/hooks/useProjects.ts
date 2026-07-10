@@ -91,13 +91,14 @@ export const useProjects = () => {
   )
 
   const { mutateAsync: removeMutateAsync } = useMutation({
-    mutationFn: (id: string) => store.deleteProjects([id]),
-    onMutate: async (id) => {
+    mutationFn: (ids: string[]) => store.deleteProjects(ids),
+    onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey: projectsQueryKey })
       const previousProjects = queryClient.getQueryData<IProject[]>(projectsQueryKey) ?? []
+      const idSet = new Set(ids)
 
       queryClient.setQueryData<IProject[]>(projectsQueryKey, (current = []) =>
-        current.filter((project) => project.id !== id)
+        current.filter((project) => !idSet.has(project.id))
       )
 
       return { previousProjects }
@@ -112,10 +113,17 @@ export const useProjects = () => {
 
   const remove = useCallback(
     async (id: string) => {
-      await removeMutateAsync(id)
+      await removeMutateAsync([id])
     },
     [removeMutateAsync]
   )
 
-  return { items, create, open, update, remove, isLoading }
+  const removeMany = useCallback(
+    async (ids: string[]) => {
+      await removeMutateAsync(ids)
+    },
+    [removeMutateAsync]
+  )
+
+  return { items, create, open, update, remove, removeMany, isLoading }
 }

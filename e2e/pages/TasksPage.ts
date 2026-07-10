@@ -60,6 +60,12 @@ export class TasksPage {
     return this.page.getByRole('button', { name: 'Clear' })
   }
 
+  /** Enters select mode, showing checkboxes on every row. Hidden once already in select
+   *  mode (replaced by the batch action bar), so callers can invoke this idempotently. */
+  get selectModeButton() {
+    return this.page.getByRole('button', { name: 'Select', exact: true })
+  }
+
   get exportDialog() {
     return this.page.getByRole('dialog', { name: /Export Samples/ })
   }
@@ -122,8 +128,12 @@ export class TasksPage {
     await this.createButton.click()
   }
 
-  /** Selects the given tasks via their row checkboxes. */
+  /** Enters select mode (if not already in it) and selects the given tasks via their
+   *  row checkboxes. */
   async selectTasks(names: string[]) {
+    if (await this.selectModeButton.isVisible()) {
+      await this.selectModeButton.click()
+    }
     for (const name of names) {
       await this.taskCheckbox(name).check()
     }

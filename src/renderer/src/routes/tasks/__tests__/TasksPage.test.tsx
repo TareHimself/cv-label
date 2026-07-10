@@ -104,11 +104,98 @@ describe('TasksPage', () => {
     renderTasksPage()
     await screen.findByText('Batch 1')
 
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Batch 1' }))
     fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: '2' } })
 
     expect(screen.getByText('Batch 1')).toBeInTheDocument()
     expect(screen.getByText('Batch 2')).toBeInTheDocument()
+  })
+
+  it('only shows checkboxes and toggles select-by-click after entering select mode via the Select button', async () => {
+    renderTasksPage()
+    await screen.findByText('Batch 1')
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+
+    expect(screen.getByRole('checkbox', { name: 'Select Batch 1' })).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Batch 1'))
+
+    expect(screen.getByRole('checkbox', { name: 'Select Batch 1' })).toBeChecked()
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+  })
+
+  it('Clear exits select mode entirely, hiding checkboxes again', async () => {
+    renderTasksPage()
+    await screen.findByText('Batch 1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Batch 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
+  })
+
+  it('right-click Select All selects every currently visible (filtered) task', async () => {
+    vi.mocked(useAppStore.getState().store.getTasksForProject).mockResolvedValue([
+      ...tasks,
+      { id: 't3', name: 'Other' }
+    ])
+    renderTasksPage()
+    await screen.findByText('Batch 1')
+
+    // Filter down to only the "Batch" tasks before selecting all.
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'Batch' } })
+    fireEvent.contextMenu(screen.getByText('Batch 1'))
+    fireEvent.click(screen.getByText('Select All'))
+
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Select Batch 1' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Batch 2' })).toBeChecked()
+  })
+
+  it('right-click Select Above/Below selects a range within the currently visible list', async () => {
+    vi.mocked(useAppStore.getState().store.getTasksForProject).mockResolvedValue([
+      { id: 't1', name: 'Alpha' },
+      { id: 't2', name: 'Beta' },
+      { id: 't3', name: 'Gamma' }
+    ])
+    renderTasksPage()
+    await screen.findByText('Alpha')
+
+    fireEvent.contextMenu(screen.getByText('Beta'))
+    fireEvent.click(screen.getByText('Select Above'))
+
+    expect(screen.getByRole('checkbox', { name: 'Select Alpha' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Beta' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Gamma' })).not.toBeChecked()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    fireEvent.contextMenu(screen.getByText('Beta'))
+    fireEvent.click(screen.getByText('Select Below'))
+
+    expect(screen.getByRole('checkbox', { name: 'Select Alpha' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Beta' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Gamma' })).toBeChecked()
+  })
+
+  it('disables batch Export/Delete while nothing is selected, and enables them once something is', async () => {
+    renderTasksPage()
+    await screen.findByText('Batch 1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+
+    expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Batch 1' }))
+
+    expect(screen.getByRole('button', { name: 'Export' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled()
   })
 
   it('deletes a task after confirming', async () => {

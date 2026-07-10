@@ -3,6 +3,7 @@ import { Button, Group, Loader, Progress, ScrollArea, Select, Stack, Text } from
 import toast from 'react-hot-toast'
 import { FaFileZipper, FaFolderOpen } from 'react-icons/fa6'
 import type { SampleImporterComponentProps } from '../../types'
+import { ZIndex } from '@renderer/zIndex'
 import { findLabelIdByName } from '../matchLabel'
 import {
   virtualFilesFromFileList,
@@ -190,10 +191,10 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
                   if (!value) return
                   setLabelByClassId((current) => new Map(current).set(cocoClass.id, value))
                 }}
-                // This importer lives inside ImportSamplesModal, which raises its own
-                // zIndex to 1000 to stack above other modals - without matching that here,
-                // this dropdown renders behind the modal body and can't be clicked.
-                comboboxProps={{ zIndex: 1001 }}
+                // This importer lives inside ImportSamplesModal - without an explicit
+                // zIndex above the modal's own, this dropdown renders behind the modal
+                // body and can't be clicked.
+                comboboxProps={{ zIndex: ZIndex.actionModalContent }}
                 disabled={!hasProjectLabels}
                 allowDeselect={false}
               />

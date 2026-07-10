@@ -42,6 +42,29 @@ export class ProjectsPage {
     return this.page.getByRole('dialog', { name: 'Edit Project' })
   }
 
+  /** Enters select mode, showing checkboxes on every row. Hidden once already in select
+   *  mode (replaced by the batch action bar), so callers can invoke this idempotently. */
+  get selectModeButton() {
+    return this.page.getByRole('button', { name: 'Select', exact: true })
+  }
+
+  /** The batch action bar's "Delete" button, visible once select mode is active. */
+  get deleteSelectedButton() {
+    return this.page.getByRole('button', { name: 'Delete', exact: true })
+  }
+
+  get clearSelectionButton() {
+    return this.page.getByRole('button', { name: 'Clear' })
+  }
+
+  get confirmDeleteDialog() {
+    return this.page.getByRole('dialog', { name: 'Delete project' })
+  }
+
+  projectCheckbox(name: string) {
+    return this.page.getByRole('checkbox', { name: `Select ${name}` })
+  }
+
   row(name: string) {
     return this.page.getByText(name, { exact: true })
   }
@@ -95,5 +118,23 @@ export class ProjectsPage {
     }
 
     await this.editDialog.getByRole('button', { name: 'Save' }).click()
+  }
+
+  /** Enters select mode (if not already in it) and selects the given projects via
+   *  their row checkboxes. */
+  async selectProjects(names: string[]) {
+    if (await this.selectModeButton.isVisible()) {
+      await this.selectModeButton.click()
+    }
+    for (const name of names) {
+      await this.projectCheckbox(name).check()
+    }
+  }
+
+  /** Selects the given projects and deletes them all via the batch action bar. */
+  async deleteSelectedProjects(names: string[]) {
+    await this.selectProjects(names)
+    await this.deleteSelectedButton.click()
+    await this.confirmDeleteDialog.getByRole('button', { name: 'Delete', exact: true }).click()
   }
 }

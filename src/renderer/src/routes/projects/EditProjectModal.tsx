@@ -2,6 +2,7 @@ import { Badge, Button, Group, Modal, Stack, TextInput } from '@mantine/core'
 import type { IProject } from '@shared/types'
 import { useState, type FC } from 'react'
 import tinycolor from 'tinycolor2'
+import { ZIndex } from '@renderer/zIndex'
 
 export type EditProjectModalProps = {
   opened: boolean
@@ -37,7 +38,13 @@ export const EditProjectModal: FC<EditProjectModalProps> = ({
   }
 
   return (
-    <Modal opened={opened} onClose={onCancel} title="Edit Project" centered>
+    <Modal
+      opened={opened}
+      onClose={onCancel}
+      title="Edit Project"
+      centered
+      zIndex={ZIndex.actionModal}
+    >
       <Stack gap="lg">
         <TextInput
           label="Name"

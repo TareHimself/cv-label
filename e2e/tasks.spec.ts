@@ -163,7 +163,7 @@ test.describe('Tasks page', () => {
       await tasksPage.createTask('Batch 1', [imageA])
       await tasksPage.createTask('Batch 2', [imageB])
 
-      await tasksPage.taskCheckbox('Batch 1').check()
+      await tasksPage.selectTasks(['Batch 1'])
       await tasksPage.search('2')
 
       await expect(tasksPage.row('Batch 2')).toBeVisible()

@@ -147,4 +147,73 @@ describe('ProjectsPage', () => {
       expect(useAppStore.getState().store.deleteProjects).toHaveBeenCalledWith(['p1'])
     })
   })
+
+  it('only shows checkboxes and toggles select-by-click after entering select mode via the Select button', async () => {
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+
+    expect(screen.getByRole('checkbox', { name: 'Select Street Signs' })).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Street Signs'))
+
+    expect(screen.getByRole('checkbox', { name: 'Select Street Signs' })).toBeChecked()
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+  })
+
+  it('Clear exits select mode entirely, hiding checkboxes again', async () => {
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Street Signs' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
+  })
+
+  it('right-click Select All selects every currently visible (filtered) project', async () => {
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Select All'))
+
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Select Street Signs' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Wildlife Cams' })).toBeChecked()
+  })
+
+  it('right-click Select Above/Below selects a range within the currently visible list', async () => {
+    vi.mocked(useAppStore.getState().store.getProjects).mockResolvedValue([
+      ...projects,
+      { id: 'p3', name: 'Gamma', labels: [] }
+    ])
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    fireEvent.contextMenu(screen.getByText('Wildlife Cams'))
+    fireEvent.click(screen.getByText('Select Above'))
+
+    expect(screen.getByRole('checkbox', { name: 'Select Street Signs' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Wildlife Cams' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Gamma' })).not.toBeChecked()
+  })
+
+  it('disables batch Delete while nothing is selected, and enables it once something is', async () => {
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Street Signs' }))
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled()
+  })
 })
