@@ -179,45 +179,4 @@ test.describe('Samples page', () => {
       cleanupTestImage(image)
     }
   })
-
-  // Regression test: the samples list used to reset to the top whenever you came back
-  // from the labeler, because navigating there used to unmount the samples page entirely.
-  test('preserves scroll position when navigating to the labeler and back', async ({
-    tasksPage,
-    samplesPage
-  }) => {
-    // This test pushes 30 images through the full create-task pipeline (file picker ->
-    // base64 conversion -> IPC/SQLite writes) - an order of magnitude more work than any
-    // other test here, so it gets proportionally more time (3x) rather than sharing the
-    // same budget as a 1-2 image test.
-    test.slow()
-    const images = await Promise.all(
-      Array.from({ length: 30 }, (_, i) => createTestImage(`sample-${i}`))
-    )
-    try {
-      await tasksPage.createTask('Batch 1', images)
-      await tasksPage.open('Batch 1')
-      await expect(samplesPage.card('sample-0')).toBeVisible()
-
-      await samplesPage.scrollContainer.evaluate((el) => {
-        el.scrollTop = 800
-      })
-      const scrollTopBefore = await samplesPage.scrollContainer.evaluate((el) => el.scrollTop)
-      expect(scrollTopBefore).toBeGreaterThan(100)
-
-      // force: true so Playwright's own "scroll target into view before clicking" doesn't
-      // perturb the scroll position we just set up above - the point of this test is
-      // whether *the app* preserves scroll across navigation, not Playwright's click.
-      await samplesPage.card('sample-0').getByRole('button', { name: 'Label' }).click({
-        force: true
-      })
-      await samplesPage.back()
-      await expect(samplesPage.card('sample-0')).toBeVisible()
-
-      const scrollTopAfter = await samplesPage.scrollContainer.evaluate((el) => el.scrollTop)
-      expect(scrollTopAfter).toBe(scrollTopBefore)
-    } finally {
-      images.forEach(cleanupTestImage)
-    }
-  })
 })

@@ -30,12 +30,6 @@ export class SamplesPage {
     return this.page.getByPlaceholder('Search').and(this.page.locator(':visible'))
   }
 
-  /** Multiple stack-router screens stay mounted at once (see router/makeRouter.tsx), so
-   *  more than one of these can exist in the DOM at a time - scope to the visible one. */
-  get scrollContainer() {
-    return this.page.getByTestId('basic-list-scroll-container').and(this.page.locator(':visible'))
-  }
-
   /** Scopes queries to a specific sample's card, since split/status controls repeat per card. */
   card(sampleName: string) {
     return this.page.locator('.mantine-Card-root').filter({ hasText: sampleName })
