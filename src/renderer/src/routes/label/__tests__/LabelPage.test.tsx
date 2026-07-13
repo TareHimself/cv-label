@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject, ITask } from '@shared/types'
 import { LabelerMode, OptimisticSample } from '@renderer/types'
@@ -8,6 +8,8 @@ import { create } from 'zustand'
 const setSample = vi.fn()
 const setMode = vi.fn()
 const setLabelId = vi.fn()
+const selectAnnotation = vi.fn()
+const deleteAnnotation = vi.fn()
 
 vi.mock('@renderer/components/Labeler', () => ({
   Labeler: () => <div data-testid="labeler-stub" />
@@ -19,11 +21,19 @@ vi.mock('@renderer/hooks/useLabeler', () => ({
       mode: LabelerMode.Select,
       selectedLabelId: labels[0]?.id ?? '',
       sample: {
-        resolve: () => ({ id: 'sample-1', completedAt: null })
+        resolve: () => ({
+          id: 'sample-1',
+          completedAt: null,
+          annotations: { resolve: () => ({}) }
+        })
       },
+      selectedAnnotation: null,
+      labelsMap: {},
       setSample,
       setMode,
-      setLabelId
+      setLabelId,
+      selectAnnotation,
+      deleteAnnotation
     }))
   })
 }))
@@ -99,5 +109,15 @@ describe('LabelPage', () => {
 
     expect(screen.getByText('In Progress')).toBeInTheDocument()
     expect(screen.getByText('Completed')).toBeInTheDocument()
+  })
+
+  it('opens the annotations drawer when the toggle button is clicked', async () => {
+    renderLabelPage()
+
+    expect(screen.queryByText('No annotations yet')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annotations' }))
+
+    expect(await screen.findByText('No annotations yet')).toBeInTheDocument()
   })
 })

@@ -16,10 +16,12 @@ import { useCallback, useLayoutEffect, useState } from 'react'
 import { IoMdArrowBack } from 'react-icons/io'
 import { PiHandPalmBold, PiPolygonLight } from 'react-icons/pi'
 import { BsBoundingBoxCircles } from 'react-icons/bs'
+import { MdFormatListBulleted } from 'react-icons/md'
 import { ILabel, IProject, ITask, OmitV2 } from '@shared/types'
 import { mod } from '@shared/utils'
 import { useAppStore } from '@renderer/hooks/useAppStore'
 import { back } from '@renderer/router/appRouter'
+import { AnnotationsDrawer } from './AnnotationsDrawer'
 
 const Container = styled.div`
   position: relative;
@@ -222,6 +224,7 @@ export type LabelPageProps = {
 
 export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
   const [index, setIndex] = useState(initial)
+  const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState(false)
   const { store } = useLabeler(project.labels)
   const mode = store((s) => s.mode)
   const selecteLabelId = store((s) => s.selectedLabelId)
@@ -274,6 +277,19 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
       >
         Back
       </Button>
+      <Button
+        leftSection={<MdFormatListBulleted />}
+        variant="outline"
+        style={{ position: 'absolute', top: 20, right: 20 }}
+        onClick={() => setIsAnnotationsDrawerOpen(true)}
+      >
+        Annotations
+      </Button>
+      <AnnotationsDrawer
+        store={store}
+        opened={isAnnotationsDrawerOpen}
+        onClose={() => setIsAnnotationsDrawerOpen(false)}
+      />
       <Flex
         style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translate(-50%,0)' }}
         gap={'md'}
