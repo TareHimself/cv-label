@@ -3,13 +3,14 @@ import { IPCKeys } from '../shared/types'
 import url from 'node:url'
 // import path from 'path'
 import { importWorkerModule } from './worker'
-import { getAppPath } from './utils'
+import { getAppPath, getMigrationsPath } from './utils'
 import databaseWorkerPath from './database?modulePath'
 import { handleIpc } from './ipc'
 const database = await importWorkerModule<typeof import('./database')>(
   url.pathToFileURL(databaseWorkerPath),
   {
-    APP_PATH: getAppPath()
+    APP_PATH: getAppPath(),
+    MIGRATIONS_PATH: getMigrationsPath()
   }
 )
 

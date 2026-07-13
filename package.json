@@ -17,6 +17,7 @@
     "dev": "electron-vite dev",
     "build": "pnpm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps && electron-rebuild -f -w better-sqlite3",
+    "db:generate": "drizzle-kit generate",
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win": "pnpm run build && electron-builder --win",
     "test": "vitest",
@@ -38,6 +39,7 @@
     "adm-zip": "^0.5.17",
     "better-sqlite3": "^12.6.2",
     "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.2",
     "i18next": "^26.0.6",
     "jszip": "^3.10.1",
     "mantine-contextmenu": "^8.3.13",
@@ -70,6 +72,7 @@
     "@types/tinycolor2": "^1.4.6",
     "@vitejs/plugin-react": "^5.1.1",
     "@wyw-in-js/vite": "^1.0.6",
+    "drizzle-kit": "^0.31.10",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
@@ -95,6 +98,12 @@
     "files": [
       "out/**",
       "resources/**"
+    ],
+    "extraResources": [
+      {
+        "from": "drizzle",
+        "to": "drizzle"
+      }
     ]
   }
 }

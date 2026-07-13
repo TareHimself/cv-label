@@ -1,58 +1,38 @@
 // Will be loaded in a worker thread, cant use any electron API's
 import {
+  AnnotationType,
   IAnnotation,
   IAnnotator,
   IDataStore,
-  ILabel,
   INewAnnotation,
   INewAnnotator,
   INewSample,
   IPoint,
-  IPointReplacement,
   IProject,
-  IProjectUpdate,
   ISample,
-  ISampleUpdate,
   ITask,
-  ITaskUpdate,
-  OmitV2
+  TrainingSplit
 } from '../shared/types'
 import Database from 'better-sqlite3'
+import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import path from 'path'
 import fs from 'fs/promises'
 import sharp from 'sharp'
 import { makeUUID } from '../shared/utils'
 import assert from 'assert'
 import { sha512 } from './utils_no_electron'
+import * as schema from './schema'
 
 console.log('Database loaded into worker', APP_PATH)
 declare global {
   const APP_PATH: string
+  const MIGRATIONS_PATH: string
 }
 
 assert(APP_PATH !== undefined, 'APP_PATH global was not defined')
-
-interface IStoredAnnotation extends OmitV2<INewAnnotation, 'points'> {
-  sampleId: string
-}
-
-interface IStoredAnnotator extends OmitV2<INewAnnotator, 'headers'> {
-  headers: string
-  projectId: string
-}
-
-interface IStoredSample extends OmitV2<INewSample, 'base64Image' | 'annotations'> {
-  taskId: string
-  imageId: string
-  completedAt?: string
-}
-
-type DatabasePoint = {
-  id: string
-  x: number
-  y: number
-  sequence: number
-}
+assert(MIGRATIONS_PATH !== undefined, 'MIGRATIONS_PATH global was not defined')
 
 const storePath = path.join(APP_PATH, 'store')
 const databasePath = path.join(storePath, 'database', 'data.db')
@@ -61,451 +41,16 @@ const imagesPath = path.join(storePath, 'images')
 await fs.mkdir(imagesPath, { recursive: true })
 await fs.mkdir(path.dirname(databasePath), { recursive: true })
 
-const db = new Database(databasePath, { fileMustExist: false })
+const sqlite = new Database(databasePath, { fileMustExist: false })
 
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+sqlite.pragma('journal_mode = WAL')
+sqlite.pragma('foreign_keys = ON')
 
-db.exec(`
-    CREATE TABLE IF NOT EXISTS projects(
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL
-    ) WITHOUT ROWID;
-    CREATE TABLE IF NOT EXISTS annotators(
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        url TEXT NOT NULL,
-        headers TEXT NOT NULL,
-        projectId TEXT NOT NULL,
-        FOREIGN KEY(projectId) REFERENCES projects(id)
-            ON DELETE CASCADE
-            ON UPDATE RESTRICT
-    ) WITHOUT ROWID;
-    CREATE TABLE IF NOT EXISTS tasks(
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        projectId TEXT NOT NULL,
-        FOREIGN KEY(projectId) REFERENCES projects(id)
-            ON DELETE CASCADE
-            ON UPDATE RESTRICT
-    ) WITHOUT ROWID;
-    CREATE TABLE IF NOT EXISTS labels(
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        color TEXT NOT NULL,
-        projectId TEXT NOT NULL,
-        FOREIGN KEY(projectId) REFERENCES projects(id)
-            ON DELETE CASCADE
-            ON UPDATE RESTRICT
-    ) WITHOUT ROWID;
-    CREATE TABLE IF NOT EXISTS images(
-        id TEXT PRIMARY KEY,
-        hash TEXT NOT NULL,
-        extension TEXT NOT NULL
-    ) WITHOUT ROWID;
-    CREATE TABLE IF NOT EXISTS samples(
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        split TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        completedAt TEXT,
-        imageId TEXT NOT NULL,
-        taskId TEXT NOT NULL,
-        FOREIGN KEY(imageId) REFERENCES images(id),
-        FOREIGN KEY(taskId) REFERENCES tasks(id)
-            ON DELETE CASCADE
-            ON UPDATE RESTRICT
-    ) WITHOUT ROWID;
-    CREATE TABLE IF NOT EXISTS annotations(
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        labelId TEXT NOT NULL,
-        sampleId TEXT NOT NULL,
-        FOREIGN KEY(labelId) REFERENCES labels(id)
-            ON DELETE RESTRICT
-            ON UPDATE RESTRICT,
-        FOREIGN KEY(sampleId) REFERENCES samples(id)
-            ON DELETE CASCADE
-            ON UPDATE RESTRICT
-    ) WITHOUT ROWID;
-    CREATE TABLE IF NOT EXISTS points(
-        id TEXT PRIMARY KEY,
-        x REAL NOT NULL,
-        y REAL NOT NULL,
-        sequence INTEGER NOT NULL,
-        annotationId TEXT NOT NULL,
-        FOREIGN KEY(annotationId) REFERENCES annotations(id)
-            ON DELETE CASCADE
-            ON UPDATE RESTRICT
-    ) WITHOUT ROWID;
-    CREATE INDEX IF NOT EXISTS idx_annotators_projectId ON annotators(projectId);
-    CREATE INDEX IF NOT EXISTS idx_tasks_projectId ON tasks(projectId);
-    CREATE INDEX IF NOT EXISTS idx_labels_projectId ON labels(projectId);
-    CREATE INDEX IF NOT EXISTS idx_samples_taskId ON samples(taskId);
-    CREATE INDEX IF NOT EXISTS idx_samples_imageId ON samples(imageId);
-    CREATE INDEX IF NOT EXISTS idx_annotations_sampleId ON annotations(sampleId);
-    CREATE INDEX IF NOT EXISTS idx_annotations_labelId ON annotations(labelId);
-    CREATE INDEX IF NOT EXISTS idx_points_annotationId ON points(annotationId);
-`)
+const db = drizzle(sqlite, { schema })
 
-const GetProjectsStatement = db.prepare<[], Pick<IProject, 'id' | 'name'>>(
-  `SELECT * FROM projects ORDER BY id ASC`
-)
+migrate(db, { migrationsFolder: MIGRATIONS_PATH })
 
-const CreateProjectStatement = db.prepare<Pick<IProject, 'id' | 'name'>>(
-  `INSERT INTO projects (id,name) VALUES (@id,@name)`
-)
-
-const CreateProjectTransaction = db.transaction(
-  (id: IProject['id'], name: IProject['name'], labels: ILabel[]): IProject => {
-    CreateProjectStatement.run({ id: id, name: name })
-    for (const label of labels) {
-      CreateLabelStatement.run({ ...label, projectId: id })
-    }
-
-    return { id, name, labels }
-  }
-)
-
-const DeleteProjectStatement = db.prepare<{
-  id: IProject['id']
-}>('DELETE FROM projects WHERE id = @id')
-
-const DeleteProjectsTransaction = db.transaction((ids: string[]) => {
-  for (const id of ids) {
-    DeleteProjectStatement.run({ id: id })
-  }
-})
-
-const GetProjectByIdStatement = db.prepare<{ id: IProject['id'] }, Pick<IProject, 'id' | 'name'>>(
-  `SELECT * FROM projects WHERE id = @id`
-)
-
-const UpdateProjectStatement = db.prepare<{ id: IProject['id']; name: IProject['name'] }>(
-  `UPDATE projects SET name = @name WHERE id = @id`
-)
-
-// Scoped to projectId as a defensive check - the renderer only ever sends a project's own
-// labels back, but this keeps a bad id from silently renaming a label in another project.
-const UpdateLabelNameStatement = db.prepare<{
-  id: ILabel['id']
-  name: ILabel['name']
-  projectId: IProject['id']
-}>(`UPDATE labels SET name = @name WHERE id = @id AND projectId = @projectId`)
-
-const UpdateProjectsTransaction = db.transaction((updates: IProjectUpdate[]): IProject[] => {
-  return updates.map((update) => {
-    if (update.name !== undefined) {
-      UpdateProjectStatement.run({ id: update.id, name: update.name })
-    }
-
-    for (const label of update.labels ?? []) {
-      UpdateLabelNameStatement.run({ id: label.id, name: label.name, projectId: update.id })
-    }
-
-    const project = GetProjectByIdStatement.get({ id: update.id })
-    if (project === undefined) {
-      throw new Error(`project not found: ${update.id}`)
-    }
-
-    return { ...project, labels: GetLabelsStatement.all({ projectId: update.id }) }
-  })
-})
-
-const CreateImageStatement = db.prepare<DatabaseImage>(
-  `INSERT INTO images (id,hash,extension) VALUES (@id,@hash,@extension)`
-)
-
-const GetLabelsStatement = db.prepare<{ projectId: IProject['id'] }, ILabel>(
-  `SELECT id,name,color FROM labels WHERE projectId = @projectId ORDER BY id ASC`
-)
-
-const GetTasksStatement = db.prepare<{ projectId: IProject['id'] }, ITask>(
-  `SELECT id,name FROM tasks WHERE projectId = @projectId ORDER BY id ASC`
-)
-
-type DatabaseImage = {
-  id: string
-  hash: string
-  extension: string
-}
-
-const GetImageByIdStatement = db.prepare<[id: string], DatabaseImage>(
-  `SELECT * FROM images WHERE id = ?`
-)
-
-const GetImageByHashStatement = db.prepare<[hash: string], DatabaseImage>(
-  `SELECT * FROM images WHERE hash = ?`
-)
-
-const CreateLabelStatement = db.prepare<ILabel & { projectId: string }>(
-  `INSERT INTO labels (id,name,color,projectId) VALUES (@id,@name,@color,@projectId)`
-)
-
-const CreateTaskStatement = db.prepare<ITask & { projectId: string }>(
-  `INSERT INTO tasks (id,name,projectId) VALUES (@id,@name,@projectId)`
-)
-
-const GetTaskByIdStatement = db.prepare<{ id: ITask['id'] }, ITask>(
-  `SELECT id, name FROM tasks WHERE id = @id`
-)
-
-const UpdateTaskStatement = db.prepare<{ id: ITask['id']; name: ITask['name'] }>(
-  `UPDATE tasks SET name = @name WHERE id = @id`
-)
-
-const UpdateTasksTransaction = db.transaction((updates: ITaskUpdate[]): ITask[] => {
-  return updates.map((update) => {
-    if (update.name !== undefined) {
-      UpdateTaskStatement.run({ id: update.id, name: update.name })
-    }
-
-    const task = GetTaskByIdStatement.get({ id: update.id })
-    if (task === undefined) {
-      throw new Error(`task not found: ${update.id}`)
-    }
-
-    return task
-  })
-})
-
-const GetAnnotationsStatement = db.prepare<[sampleId: string], IStoredAnnotation>(
-  `SELECT id, type, labelId, sampleId FROM annotations WHERE sampleId = ? ORDER BY id ASC`
-)
-
-const CreateAnnotationStatement = db.prepare<IStoredAnnotation>(
-  `INSERT INTO annotations (id,type,labelId,sampleId) VALUES (@id,@type,@labelId,@sampleId)`
-)
-
-const GetAnnotationByIdStatement = db.prepare<[id: string], IStoredAnnotation>(
-  `SELECT id, type, labelId, sampleId FROM annotations WHERE id = ?`
-)
-
-const UpdateAnnotationStatement = db.prepare<Pick<IStoredAnnotation, 'id' | 'type' | 'labelId'>>(
-  `UPDATE annotations SET type = @type, labelId = @labelId WHERE id = @id`
-)
-
-const CreatePointStatement = db.prepare<{
-  id: string
-  x: number
-  y: number
-  sequence: number
-  annotationId: string
-}>(`INSERT INTO points (id,x,y,sequence,annotationId) VALUES (@id,@x,@y,@sequence,@annotationId)`)
-
-const GetPointsStatement = db.prepare<[annotationId: string], DatabasePoint>(
-  `SELECT id, x, y, sequence FROM points WHERE annotationId = ? ORDER BY sequence ASC`
-)
-
-const GetPointsWithoutSequenceStatement = db.prepare<[annotationId: string], IPoint>(
-  `SELECT id, x, y FROM points WHERE annotationId = ? ORDER BY sequence ASC`
-)
-
-const UpdatePointStatement = db.prepare<{
-  id: string
-  x: number
-  y: number
-  sequence: number
-}>(`UPDATE points SET x = @x, y = @y, sequence = @sequence WHERE id = @id`)
-
-const DeletePointStatement = db.prepare<[id: string]>('DELETE FROM points WHERE id = ?')
-
-const GetSampleStatement = db.prepare<[taskId: string], IStoredSample>(
-  `SELECT * FROM samples WHERE taskId = ? ORDER BY id ASC`
-)
-
-const GetSampleByIdStatement = db.prepare<[sampleId: string], IStoredSample>(
-  `SELECT * FROM samples WHERE id = ?`
-)
-
-const CreateSampleStatement = db.prepare<IStoredSample>(
-  `INSERT INTO samples (id,name,split,createdAt,imageId,taskId) VALUES (@id,@name,@split,@createdAt,@imageId,@taskId)`
-)
-
-const UpdateSampleStatement = db.prepare<ISampleUpdate>(
-  `UPDATE samples SET name = @name, split = @split, createdAt = @createdAt, completedAt = @completedAt WHERE id = @id`
-)
-
-const CreateAnnotatorStatement = db.prepare<IStoredAnnotator>(
-  `INSERT INTO annotators (id,name,url,headers,projectId) VALUES (@id,@name,@url,@headers,@projectId)`
-)
-
-const GetAnnotatorsStatement = db.prepare<[projectId: string], IStoredAnnotator>(
-  `SELECT id,name,url,headers FROM annotators WHERE projectId = ? ORDER BY id ASC`
-)
-
-const DeleteAnnotatorStatement = db.prepare<[annotatorId: string]>(
-  `DELETE FROM annotators WHERE id = ?`
-)
-
-const DeleteAnnotatorsTransaction = db.transaction((annotatorIds: string[]) => {
-  for (const annotatorId of annotatorIds) {
-    DeleteAnnotatorStatement.run(annotatorId)
-  }
-})
-
-// const DeleteLabelStatement = db.prepare<INewLabel & { projectId: string }>(
-//   `INSERT INTO labels (id,name) VALUES (@id,@name,@color,@createdAt,@projectId)`
-// )
-
-const DeleteTaskStatement = db.prepare<{
-  id: ITask['id']
-}>('DELETE FROM tasks WHERE id = @id')
-
-const DeleteSampleStatement = db.prepare<{
-  id: ISample['id']
-}>('DELETE FROM samples WHERE id = @id')
-
-const DeleteAnnotationStatement = db.prepare<{
-  id: IAnnotation['id']
-}>('DELETE FROM annotations WHERE id = @id')
-
-const CreateAnnotationsTransaction = db.transaction(
-  (sampleId: string, annotations: INewAnnotation[]): IAnnotation[] => {
-    const result: IAnnotation[] = []
-
-    annotations.forEach((annotation) => {
-      CreateAnnotationStatement.run({
-        id: annotation.id,
-        type: annotation.type,
-        labelId: annotation.labelId,
-        sampleId: sampleId
-      })
-
-      // Insert points into the points table
-      annotation.points.forEach((point, sequence) => {
-        CreatePointStatement.run({
-          id: point.id,
-          x: point.x,
-          y: point.y,
-          sequence: sequence,
-          annotationId: annotation.id
-        })
-      })
-
-      result.push(annotation)
-    })
-
-    return result
-  }
-)
-
-const CreateImagesTransaction = db.transaction((hashes: string[], extensions: string[]) => {
-  const ids: string[] = []
-  const inserted: Set<number> = new Set()
-
-  for (let i = 0; i < hashes.length; i++) {
-    const hash = hashes[i]
-    const extension = extensions[i]
-    const existing = GetImageByHashStatement.get(hash)
-    if (existing !== undefined) {
-      ids.push(existing.id)
-    } else {
-      inserted.add(i)
-      const id = makeUUID()
-      ids.push(id)
-      CreateImageStatement.run({ id, hash, extension })
-    }
-  }
-
-  return { ids, inserted }
-})
-
-const DeleteTasksTransaction = db.transaction((ids: string[]) => {
-  for (const id of ids) {
-    DeleteTaskStatement.run({ id: id })
-  }
-})
-
-const DeleteSamplesTransaction = db.transaction((ids: string[]) => {
-  for (const id of ids) {
-    DeleteSampleStatement.run({ id: id })
-  }
-})
-
-const DeleteAnnotationsTransaction = db.transaction((ids: string[]) => {
-  for (const id of ids) {
-    DeleteAnnotationStatement.run({ id: id })
-  }
-})
-
-const ReplacePointsTransaction = db.transaction(
-  (annotationId: string, points: IPointReplacement[]): IPoint[] => {
-    // Get current points for the annotation
-    const currentPoints = GetPointsStatement.all(annotationId)
-
-    // Create a map of current points by id
-    const currentPointsMap = new Map(currentPoints.map((p) => [p.id, p]))
-
-    // Categorize operations
-    const toInsert: DatabasePoint[] = []
-    const toUpdate: DatabasePoint[] = []
-    const toDelete: string[] = []
-
-    // Process each input point
-    for (let sequence = 0; sequence < points.length; sequence++) {
-      const pointInput = points[sequence]
-      const id = pointInput.id
-
-      if (currentPointsMap.has(id)) {
-        // Update existing point
-        const existing = currentPointsMap.get(id)!
-        toUpdate.push({
-          id: id,
-          x: pointInput.x ?? existing.x,
-          y: pointInput.y ?? existing.y,
-          sequence: sequence
-        })
-      } else {
-        // Insert new point - must have x and y
-        if (pointInput.x === undefined || pointInput.y === undefined) {
-          throw new Error(`New point with id ${id} missing x or y coordinate`)
-        }
-        toInsert.push({
-          id: id,
-          x: pointInput.x,
-          y: pointInput.y,
-          sequence: sequence
-        })
-      }
-    }
-
-    // Points to delete: current points not in input
-    for (const current of currentPoints) {
-      const isInInput = points.some((p) => p.id === current.id)
-      if (!isInInput) {
-        toDelete.push(current.id)
-      }
-    }
-
-    // Perform operations in order: delete, insert, update
-    for (const id of toDelete) {
-      DeletePointStatement.run(id)
-    }
-
-    for (const point of toInsert) {
-      CreatePointStatement.run({
-        id: point.id,
-        x: point.x,
-        y: point.y,
-        sequence: point.sequence,
-        annotationId: annotationId
-      })
-    }
-
-    for (const point of toUpdate) {
-      UpdatePointStatement.run({
-        id: point.id,
-        x: point.x,
-        y: point.y,
-        sequence: point.sequence
-      })
-    }
-
-    // Return the full list of points ordered by sequence
-    return GetPointsWithoutSequenceStatement.all(annotationId) as IPoint[]
-  }
-)
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export const IMAGES_PROTOCOL_URL = 'images'
 
@@ -517,7 +62,7 @@ export const getImagePathFromUrl = async (url: string) => {
   const imageKey = url.slice(IMAGES_PROTOCOL_URL.length + 3)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [id, _] = imageKey.split('.') as [string, string]
-  const imageInfo = GetImageByIdStatement.get(id)
+  const imageInfo = db.select().from(schema.images).where(eq(schema.images.id, id)).get()
 
   if (imageInfo === undefined) {
     return undefined
@@ -526,145 +71,134 @@ export const getImagePathFromUrl = async (url: string) => {
   return path.join(imagesPath, `${imageInfo.hash}.${imageInfo.extension}`)
 }
 
-const materializeSample = (s: IStoredSample): ISample => {
-  const imageInfo = GetImageByIdStatement.get(s.imageId)
-  if (imageInfo === undefined) throw new Error('Sample image does not exist')
-
-  const annotations = GetAnnotationsStatement.all(s.id)
-
-  return {
-    id: s.id,
-    name: s.name,
-    annotations: annotations.map<IAnnotation>((a) => {
-      const pointRows = GetPointsWithoutSequenceStatement.all(a.id)
-      return {
-        id: a.id,
-        type: a.type,
-        labelId: a.labelId,
-        points: pointRows
+function fetchSampleWithRelations(id: string) {
+  return db.query.samples.findFirst({
+    where: eq(schema.samples.id, id),
+    with: {
+      image: true,
+      annotations: {
+        orderBy: (annotations, { asc }) => [asc(annotations.id)],
+        with: {
+          points: {
+            orderBy: (points, { asc }) => [asc(points.sequence)]
+          }
+        }
       }
-    }),
-    createdAt: s.createdAt,
-    split: s.split,
-    imageUri: makeImageUri(imageInfo.id, imageInfo.extension),
-    completedAt: s.completedAt ?? null
-  }
-}
-
-const GetSamplesForTaskTransaction = db.transaction((taskId: string): ISample[] => {
-  const samples = GetSampleStatement.all(taskId)
-  return samples.map(materializeSample)
-})
-
-const GetSamplesByIdsTransaction = db.transaction((sampleIds: string[]): ISample[] => {
-  const samples: ISample[] = []
-  for (const sampleId of sampleIds) {
-    const sample = GetSampleByIdStatement.get(sampleId)
-    if (sample !== undefined) {
-      samples.push(materializeSample(sample))
-    }
-  }
-  return samples
-})
-
-const GetAnnotationsForSampleTransaction = db.transaction((sampleId: string): IAnnotation[] => {
-  const annotations = GetAnnotationsStatement.all(sampleId)
-
-  return annotations.map<IAnnotation>((annotation) => {
-    const pointRows = GetPointsWithoutSequenceStatement.all(annotation.id)
-    return {
-      id: annotation.id,
-      type: annotation.type,
-      labelId: annotation.labelId,
-      points: pointRows
     }
   })
+}
+
+// Row shape returned by the sample relational query above (id/image/annotations/points).
+type SampleWithRelationsRow = NonNullable<Awaited<ReturnType<typeof fetchSampleWithRelations>>>
+
+const mapSampleRow = (row: SampleWithRelationsRow): ISample => ({
+  id: row.id,
+  name: row.name,
+  split: row.split as TrainingSplit,
+  createdAt: row.createdAt,
+  completedAt: row.completedAt,
+  imageUri: makeImageUri(row.image.id, row.image.extension),
+  annotations: row.annotations.map<IAnnotation>((a) => ({
+    id: a.id,
+    type: a.type as AnnotationType,
+    labelId: a.labelId,
+    points: a.points
+  }))
 })
 
-const CreateSamplesTransaction = db.transaction(
-  (taskId: string, samples: INewSample[], hashes: string[], extensions: string[]) => {
-    const { ids: imageIds, inserted: insertedImagesIndex } = CreateImagesTransaction.immediate(
-      hashes,
-      extensions
-    )
+const dedupeImages = (
+  tx: Tx,
+  hashes: string[],
+  extensions: string[]
+): { ids: string[]; inserted: Set<number> } => {
+  const ids: string[] = []
+  const inserted: Set<number> = new Set()
 
-    const newSamples: ISample[] = []
+  for (let i = 0; i < hashes.length; i++) {
+    const hash = hashes[i]
+    const extension = extensions[i]
+    const existing = tx.select().from(schema.images).where(eq(schema.images.hash, hash)).get()
+    if (existing !== undefined) {
+      ids.push(existing.id)
+    } else {
+      inserted.add(i)
+      const id = makeUUID()
+      ids.push(id)
+      tx.insert(schema.images).values({ id, hash, extension }).run()
+    }
+  }
 
-    for (let i = 0; i < samples.length; i++) {
-      const sample = samples[i]
-      const imageId = imageIds[i]
-      const imageExtension = extensions[i]
-      CreateSampleStatement.run({ ...sample, taskId, imageId })
+  return { ids, inserted }
+}
 
-      newSamples.push({
+const insertAnnotations = (
+  tx: Tx,
+  sampleId: string,
+  annotations: INewAnnotation[]
+): IAnnotation[] => {
+  for (const annotation of annotations) {
+    tx.insert(schema.annotations)
+      .values({ id: annotation.id, type: annotation.type, labelId: annotation.labelId, sampleId })
+      .run()
+
+    if (annotation.points.length > 0) {
+      tx.insert(schema.points)
+        .values(
+          annotation.points.map((point, sequence) => ({
+            id: point.id,
+            x: point.x,
+            y: point.y,
+            sequence,
+            annotationId: annotation.id
+          }))
+        )
+        .run()
+    }
+  }
+
+  return annotations
+}
+
+const insertSamplesWithImages = (
+  tx: Tx,
+  taskId: string,
+  samples: INewSample[],
+  hashes: string[],
+  extensions: string[]
+): { insertedImagesIndex: Set<number>; newSamples: ISample[] } => {
+  const { ids: imageIds, inserted: insertedImagesIndex } = dedupeImages(tx, hashes, extensions)
+
+  const newSamples: ISample[] = []
+
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i]
+    const imageId = imageIds[i]
+    const imageExtension = extensions[i]
+
+    tx.insert(schema.samples)
+      .values({
         id: sample.id,
         name: sample.name,
-        imageUri: makeImageUri(imageId, imageExtension),
-        createdAt: sample.createdAt,
-        annotations: CreateAnnotationsTransaction.immediate(sample.id, sample.annotations),
         split: sample.split,
-        completedAt: null
+        createdAt: sample.createdAt,
+        imageId,
+        taskId
       })
-    }
+      .run()
 
-    return { insertedImagesIndex, newSamples }
-  }
-)
-
-const UpdateSamplesTransaction = db.transaction((updates: ISampleUpdate[]): ISample[] => {
-  const updatedSamples: ISample[] = []
-
-  for (const update of updates) {
-    const existing = GetSampleByIdStatement.get(update.id)
-    if (existing === undefined) {
-      throw new Error(`sample not found: ${update.id}`)
-    }
-
-    // Materialize once
-    const existingSample = materializeSample(existing)
-
-    UpdateSampleStatement.run({
-      id: update.id,
-      name: update.name ?? existing.name,
-      split: update.split ?? existing.split,
-      createdAt: update.createdAt ?? existing.createdAt,
-      completedAt: update.completedAt ?? existing.completedAt
+    newSamples.push({
+      id: sample.id,
+      name: sample.name,
+      imageUri: makeImageUri(imageId, imageExtension),
+      createdAt: sample.createdAt,
+      annotations: insertAnnotations(tx, sample.id, sample.annotations),
+      split: sample.split,
+      completedAt: null
     })
-
-    // Construct updated sample from existing materialized sample
-    const updatedSample: ISample = {
-      ...existingSample,
-      name: update.name ?? existingSample.name,
-      split: update.split ?? existingSample.split,
-      createdAt: update.createdAt ?? existingSample.createdAt,
-      completedAt: update.completedAt ?? existingSample.completedAt
-    }
-
-    updatedSamples.push(updatedSample)
   }
 
-  return updatedSamples
-})
-
-const CreateTaskTransaction = db.transaction(
-  (
-    projectId: string,
-    id: string,
-    name: string,
-    newSamples: INewSample[],
-    hashes: string[],
-    extensions: string[]
-  ): ITask => {
-    const task = { id, name }
-    CreateTaskStatement.run({ ...task, projectId })
-
-    if (newSamples.length > 0) {
-      CreateSamplesTransaction.immediate(task.id, newSamples, hashes, extensions)
-    }
-
-    return task
-  }
-)
+  return { insertedImagesIndex, newSamples }
+}
 
 const localStore: IDataStore = {
   connect: async () => {},
@@ -672,37 +206,123 @@ const localStore: IDataStore = {
   disconnect: async () => {},
 
   getProjects: async () => {
-    const projects = GetProjectsStatement.all().map<IProject>((c) => ({
-      ...c,
-      labels: GetLabelsStatement.all({ projectId: c.id })
+    const projects = await db.query.projects.findMany({
+      orderBy: (projects, { asc }) => [asc(projects.id)],
+      with: {
+        labels: {
+          orderBy: (labels, { asc }) => [asc(labels.id)]
+        }
+      }
+    })
+
+    return projects.map<IProject>((p) => ({
+      id: p.id,
+      name: p.name,
+      labels: p.labels
     }))
-    return projects
   },
 
   createProject: async (id, name, labels) => {
-    return CreateProjectTransaction.immediate(id, name, labels)
+    return db.transaction((tx) => {
+      tx.insert(schema.projects).values({ id, name }).run()
+
+      if (labels.length > 0) {
+        tx.insert(schema.labels)
+          .values(labels.map((label) => ({ ...label, projectId: id })))
+          .run()
+      }
+
+      return { id, name, labels }
+    })
   },
 
   updateProjects: async (updates) => {
-    return UpdateProjectsTransaction.immediate(updates)
+    return db.transaction((tx) => {
+      return updates.map((update) => {
+        if (update.name !== undefined) {
+          tx.update(schema.projects)
+            .set({ name: update.name })
+            .where(eq(schema.projects.id, update.id))
+            .run()
+        }
+
+        for (const label of update.labels ?? []) {
+          // Scoped to projectId as a defensive check - the renderer only ever sends a project's
+          // own labels back, but this keeps a bad id from silently renaming a label in another project.
+          tx.update(schema.labels)
+            .set({ name: label.name })
+            .where(and(eq(schema.labels.id, label.id), eq(schema.labels.projectId, update.id)))
+            .run()
+        }
+
+        const project = tx.query.projects
+          .findFirst({
+            where: eq(schema.projects.id, update.id),
+            with: { labels: { orderBy: (labels, { asc }) => [asc(labels.id)] } }
+          })
+          .sync()
+
+        if (project === undefined) {
+          throw new Error(`project not found: ${update.id}`)
+        }
+
+        return project
+      })
+    })
   },
 
   deleteProjects: async (projectIds) => {
-    DeleteProjectsTransaction.immediate(projectIds)
+    db.transaction((tx) => {
+      for (const id of projectIds) {
+        tx.delete(schema.projects).where(eq(schema.projects.id, id)).run()
+      }
+    })
     return projectIds.map(() => true)
   },
 
   getTasksForProject: async (projectId) => {
-    return GetTasksStatement.all({ projectId })
+    return db
+      .select({ id: schema.tasks.id, name: schema.tasks.name })
+      .from(schema.tasks)
+      .where(eq(schema.tasks.projectId, projectId))
+      .orderBy(asc(schema.tasks.id))
   },
 
   updateTasks: async (updates) => {
-    return UpdateTasksTransaction.immediate(updates)
+    return db.transaction((tx) => {
+      return updates.map((update) => {
+        if (update.name !== undefined) {
+          tx.update(schema.tasks)
+            .set({ name: update.name })
+            .where(eq(schema.tasks.id, update.id))
+            .run()
+        }
+
+        const task = tx
+          .select({ id: schema.tasks.id, name: schema.tasks.name })
+          .from(schema.tasks)
+          .where(eq(schema.tasks.id, update.id))
+          .get()
+
+        if (task === undefined) {
+          throw new Error(`task not found: ${update.id}`)
+        }
+
+        return task
+      })
+    })
   },
 
   createTask: async (projectId, id, name, newSamples = []) => {
+    const task: ITask = { id, name }
+
     if (newSamples.length === 0) {
-      return CreateTaskTransaction.immediate(projectId, id, name, [], [], [])
+      db.transaction((tx) => {
+        tx.insert(schema.tasks)
+          .values({ ...task, projectId })
+          .run()
+      })
+      return task
     }
 
     const b64Images = newSamples.map((c) => c.base64Image)
@@ -723,19 +343,56 @@ const localStore: IDataStore = {
       )
     )
 
-    return CreateTaskTransaction.immediate(projectId, id, name, newSamples, hashes, extensions)
+    db.transaction((tx) => {
+      tx.insert(schema.tasks)
+        .values({ ...task, projectId })
+        .run()
+      insertSamplesWithImages(tx, task.id, newSamples, hashes, extensions as string[])
+    })
+
+    return task
   },
 
   deleteTasks: async (taskIds) => {
-    DeleteTasksTransaction.immediate(taskIds)
+    db.transaction((tx) => {
+      for (const id of taskIds) {
+        tx.delete(schema.tasks).where(eq(schema.tasks.id, id)).run()
+      }
+    })
     return taskIds.map(() => true)
   },
+
   getSamplesForTask: async (taskId) => {
-    return GetSamplesForTaskTransaction.deferred(taskId)
+    const samples = await db.query.samples.findMany({
+      where: eq(schema.samples.taskId, taskId),
+      orderBy: (samples, { asc }) => [asc(samples.id)],
+      with: {
+        image: true,
+        annotations: {
+          orderBy: (annotations, { asc }) => [asc(annotations.id)],
+          with: {
+            points: {
+              orderBy: (points, { asc }) => [asc(points.sequence)]
+            }
+          }
+        }
+      }
+    })
+
+    return samples.map(mapSampleRow)
   },
+
   getSamples: async (sampleIds) => {
-    return GetSamplesByIdsTransaction.deferred(sampleIds)
+    const samples: ISample[] = []
+    for (const sampleId of sampleIds) {
+      const sample = await fetchSampleWithRelations(sampleId)
+      if (sample !== undefined) {
+        samples.push(mapSampleRow(sample))
+      }
+    }
+    return samples
   },
+
   createSamples: async (taskId, samples) => {
     const b64Images = samples.map((c) => c.base64Image)
     const hashes = sha512(b64Images)
@@ -748,11 +405,8 @@ const localStore: IDataStore = {
       )
     )
 
-    const { insertedImagesIndex, newSamples } = CreateSamplesTransaction.immediate(
-      taskId,
-      samples,
-      hashes,
-      extensions
+    const { insertedImagesIndex, newSamples } = db.transaction((tx) =>
+      insertSamplesWithImages(tx, taskId, samples, hashes, extensions as string[])
     )
 
     // Write images to disk
@@ -766,46 +420,117 @@ const localStore: IDataStore = {
   },
 
   updateSamples: async (updates) => {
-    return UpdateSamplesTransaction.immediate(updates)
+    return db.transaction((tx) => {
+      const updatedSamples: ISample[] = []
+
+      for (const update of updates) {
+        const existingRow = tx.query.samples
+          .findFirst({
+            where: eq(schema.samples.id, update.id),
+            with: {
+              image: true,
+              annotations: {
+                orderBy: (annotations, { asc }) => [asc(annotations.id)],
+                with: {
+                  points: {
+                    orderBy: (points, { asc }) => [asc(points.sequence)]
+                  }
+                }
+              }
+            }
+          })
+          .sync()
+
+        if (existingRow === undefined) {
+          throw new Error(`sample not found: ${update.id}`)
+        }
+
+        const existingSample = mapSampleRow(existingRow)
+
+        tx.update(schema.samples)
+          .set({
+            name: update.name ?? existingRow.name,
+            split: update.split ?? existingRow.split,
+            createdAt: update.createdAt ?? existingRow.createdAt,
+            completedAt: update.completedAt ?? existingRow.completedAt
+          })
+          .where(eq(schema.samples.id, update.id))
+          .run()
+
+        updatedSamples.push({
+          ...existingSample,
+          name: update.name ?? existingSample.name,
+          split: update.split ?? existingSample.split,
+          createdAt: update.createdAt ?? existingSample.createdAt,
+          completedAt: update.completedAt ?? existingSample.completedAt
+        })
+      }
+
+      return updatedSamples
+    })
   },
 
   deleteSamples: async (sampleIds) => {
-    DeleteSamplesTransaction.immediate(sampleIds)
+    db.transaction((tx) => {
+      for (const id of sampleIds) {
+        tx.delete(schema.samples).where(eq(schema.samples.id, id)).run()
+      }
+    })
     return sampleIds.map(() => true)
   },
 
   getAnnotationsForSample: async (sampleId) => {
-    return GetAnnotationsForSampleTransaction.deferred(sampleId)
+    const annotations = await db.query.annotations.findMany({
+      where: eq(schema.annotations.sampleId, sampleId),
+      orderBy: (annotations, { asc }) => [asc(annotations.id)],
+      with: {
+        points: {
+          orderBy: (points, { asc }) => [asc(points.sequence)]
+        }
+      }
+    })
+
+    return annotations.map<IAnnotation>((annotation) => ({
+      id: annotation.id,
+      type: annotation.type as AnnotationType,
+      labelId: annotation.labelId,
+      points: annotation.points
+    }))
   },
 
   createAnnotations: async (sampleId, annotations) => {
-    return CreateAnnotationsTransaction.immediate(sampleId, annotations)
+    return db.transaction((tx) => insertAnnotations(tx, sampleId, annotations))
   },
 
   updateAnnotations: async (updates) => {
-    const updatedAnnotations = db.transaction((annotationUpdates): IAnnotation[] => {
+    return db.transaction((tx) => {
       const results: IAnnotation[] = []
 
-      for (const update of annotationUpdates) {
-        const existing = GetAnnotationByIdStatement.get(update.id)
+      for (const update of updates) {
+        const existing = tx
+          .select()
+          .from(schema.annotations)
+          .where(eq(schema.annotations.id, update.id))
+          .get()
+
         if (existing === undefined) {
           throw new Error(`annotation not found: ${update.id}`)
         }
 
-        const nextType = update.type ?? existing.type
+        const nextType = update.type ?? (existing.type as AnnotationType)
         const nextLabelId = update.labelId ?? existing.labelId
 
-        UpdateAnnotationStatement.run({
-          id: existing.id,
-          type: nextType,
-          labelId: nextLabelId
-        })
+        tx.update(schema.annotations)
+          .set({ type: nextType, labelId: nextLabelId })
+          .where(eq(schema.annotations.id, existing.id))
+          .run()
 
-        const points = GetPointsStatement.all(existing.id).map((point) => ({
-          id: point.id,
-          x: point.x,
-          y: point.y
-        }))
+        const points = tx
+          .select({ id: schema.points.id, x: schema.points.x, y: schema.points.y })
+          .from(schema.points)
+          .where(eq(schema.points.annotationId, existing.id))
+          .orderBy(asc(schema.points.sequence))
+          .all()
 
         results.push({
           id: existing.id,
@@ -817,41 +542,137 @@ const localStore: IDataStore = {
 
       return results
     })
-
-    return updatedAnnotations.immediate(updates)
   },
 
   deleteAnnotations: async (annotationsIds) => {
-    DeleteAnnotationsTransaction.immediate(annotationsIds)
+    db.transaction((tx) => {
+      for (const id of annotationsIds) {
+        tx.delete(schema.annotations).where(eq(schema.annotations.id, id)).run()
+      }
+    })
     return annotationsIds.map(() => true)
   },
 
   getAnnotators: async (projectId) => {
-    return GetAnnotatorsStatement.all(projectId).map<IAnnotator>((c) => ({
-      ...c,
-      headers: JSON.parse(c.headers)
+    const annotators = await db
+      .select({
+        id: schema.annotators.id,
+        name: schema.annotators.name,
+        url: schema.annotators.url,
+        headers: schema.annotators.headers
+      })
+      .from(schema.annotators)
+      .where(eq(schema.annotators.projectId, projectId))
+      .orderBy(asc(schema.annotators.id))
+
+    return annotators.map<IAnnotator>((a) => ({
+      ...a,
+      headers: JSON.parse(a.headers)
     }))
   },
 
   createAnnotator: async (projectId, id, name, url, headers) => {
-    const newAnnotator = { id, name, url, headers }
-    CreateAnnotatorStatement.run({
-      ...newAnnotator,
-      headers: JSON.stringify(newAnnotator.headers),
-      projectId
-    })
-    return {
-      ...newAnnotator
-    }
+    const newAnnotator: INewAnnotator = { id, name, url, headers }
+    db.insert(schema.annotators)
+      .values({ ...newAnnotator, headers: JSON.stringify(newAnnotator.headers), projectId })
+      .run()
+    return { ...newAnnotator }
   },
 
   deleteAnnotators: async (annotatorIds) => {
-    DeleteAnnotatorsTransaction.immediate(annotatorIds)
+    db.transaction((tx) => {
+      for (const id of annotatorIds) {
+        tx.delete(schema.annotators).where(eq(schema.annotators.id, id)).run()
+      }
+    })
     return annotatorIds.map(() => true)
   },
 
   replacePoints: async (annotationId, points) => {
-    return ReplacePointsTransaction.immediate(annotationId, points)
+    return db.transaction((tx) => {
+      // Get current points for the annotation
+      const currentPoints = tx
+        .select({
+          id: schema.points.id,
+          x: schema.points.x,
+          y: schema.points.y,
+          sequence: schema.points.sequence
+        })
+        .from(schema.points)
+        .where(eq(schema.points.annotationId, annotationId))
+        .orderBy(asc(schema.points.sequence))
+        .all()
+
+      // Create a map of current points by id
+      const currentPointsMap = new Map(currentPoints.map((p) => [p.id, p]))
+
+      // Categorize operations
+      const toInsert: { id: string; x: number; y: number; sequence: number }[] = []
+      const toUpdate: { id: string; x: number; y: number; sequence: number }[] = []
+      const toDelete: string[] = []
+
+      // Process each input point
+      for (let sequence = 0; sequence < points.length; sequence++) {
+        const pointInput = points[sequence]
+        const id = pointInput.id
+
+        if (currentPointsMap.has(id)) {
+          // Update existing point
+          const existing = currentPointsMap.get(id)!
+          toUpdate.push({
+            id: id,
+            x: pointInput.x ?? existing.x,
+            y: pointInput.y ?? existing.y,
+            sequence: sequence
+          })
+        } else {
+          // Insert new point - must have x and y
+          if (pointInput.x === undefined || pointInput.y === undefined) {
+            throw new Error(`New point with id ${id} missing x or y coordinate`)
+          }
+          toInsert.push({
+            id: id,
+            x: pointInput.x,
+            y: pointInput.y,
+            sequence: sequence
+          })
+        }
+      }
+
+      // Points to delete: current points not in input
+      for (const current of currentPoints) {
+        const isInInput = points.some((p) => p.id === current.id)
+        if (!isInInput) {
+          toDelete.push(current.id)
+        }
+      }
+
+      // Perform operations in order: delete, insert, update
+      if (toDelete.length > 0) {
+        tx.delete(schema.points).where(inArray(schema.points.id, toDelete)).run()
+      }
+
+      if (toInsert.length > 0) {
+        tx.insert(schema.points)
+          .values(toInsert.map((point) => ({ ...point, annotationId })))
+          .run()
+      }
+
+      for (const point of toUpdate) {
+        tx.update(schema.points)
+          .set({ x: point.x, y: point.y, sequence: point.sequence })
+          .where(eq(schema.points.id, point.id))
+          .run()
+      }
+
+      // Return the full list of points ordered by sequence
+      return tx
+        .select({ id: schema.points.id, x: schema.points.x, y: schema.points.y })
+        .from(schema.points)
+        .where(eq(schema.points.annotationId, annotationId))
+        .orderBy(asc(schema.points.sequence))
+        .all() as IPoint[]
+    })
   }
 }
 
