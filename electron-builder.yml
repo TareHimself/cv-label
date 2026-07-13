@@ -11,6 +11,11 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+fileAssociations:
+  - ext: cvlabel
+    name: cv-label File
+    description: cv-label sample export
+    role: Editor
 win:
   executableName: cv-label
 nsis:

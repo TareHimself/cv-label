@@ -1,4 +1,4 @@
-import { ILabel, IProject } from '@shared/types'
+import { ILabel, IProject, IProjectUpdate } from '@shared/types'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
 import { makeUUID } from '@shared/utils'
@@ -53,14 +53,52 @@ export const useProjects = () => {
     navigate('tasks', { project: item })
   }, [])
 
-  const { mutateAsync: removeMutateAsync } = useMutation({
-    mutationFn: (id: string) => store.deleteProjects([id]),
-    onMutate: async (id) => {
+  const { mutateAsync: updateMutateAsync } = useMutation({
+    mutationFn: (update: IProjectUpdate) => store.updateProjects([update]).then((r) => r[0]),
+    onMutate: async (update) => {
       await queryClient.cancelQueries({ queryKey: projectsQueryKey })
       const previousProjects = queryClient.getQueryData<IProject[]>(projectsQueryKey) ?? []
 
       queryClient.setQueryData<IProject[]>(projectsQueryKey, (current = []) =>
-        current.filter((project) => project.id !== id)
+        current.map((project) => {
+          if (project.id !== update.id) return project
+          return {
+            ...project,
+            name: update.name ?? project.name,
+            labels: project.labels.map((label) => {
+              const renamed = update.labels?.find((l) => l.id === label.id)
+              return renamed ? { ...label, name: renamed.name } : label
+            })
+          }
+        })
+      )
+
+      return { previousProjects }
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData<IProject[]>(projectsQueryKey, context?.previousProjects ?? [])
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectsQueryKey })
+    }
+  })
+
+  const update = useCallback(
+    async (id: string, name: string, labels: Pick<ILabel, 'id' | 'name'>[]) => {
+      await updateMutateAsync({ id, name, labels })
+    },
+    [updateMutateAsync]
+  )
+
+  const { mutateAsync: removeMutateAsync } = useMutation({
+    mutationFn: (ids: string[]) => store.deleteProjects(ids),
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey })
+      const previousProjects = queryClient.getQueryData<IProject[]>(projectsQueryKey) ?? []
+      const idSet = new Set(ids)
+
+      queryClient.setQueryData<IProject[]>(projectsQueryKey, (current = []) =>
+        current.filter((project) => !idSet.has(project.id))
       )
 
       return { previousProjects }
@@ -75,10 +113,17 @@ export const useProjects = () => {
 
   const remove = useCallback(
     async (id: string) => {
-      await removeMutateAsync(id)
+      await removeMutateAsync([id])
     },
     [removeMutateAsync]
   )
 
-  return { items, create, open, remove, isLoading }
+  const removeMany = useCallback(
+    async (ids: string[]) => {
+      await removeMutateAsync(ids)
+    },
+    [removeMutateAsync]
+  )
+
+  return { items, create, open, update, remove, removeMany, isLoading }
 }

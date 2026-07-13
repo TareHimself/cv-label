@@ -3,6 +3,7 @@ import { Modal, Stack, UnstyledButton, Text, ThemeIcon } from '@mantine/core'
 import { styled } from '@linaria/react'
 import type { IProject, ITask } from '@shared/types'
 import { useAppStore } from '@renderer/hooks/useAppStore'
+import { ZIndex } from '@renderer/zIndex'
 import { exporters } from './exporters/registry'
 import type { SampleExporter } from './types'
 
@@ -56,7 +57,7 @@ export const ExportSamplesModal = ({
       title={title}
       centered
       closeOnClickOutside={false}
-      zIndex={1000}
+      zIndex={ZIndex.actionModal}
     >
       {selectedExporter ? (
         <selectedExporter.Component

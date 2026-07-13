@@ -7,10 +7,12 @@ export const createMockDataStore = (): IDataStore => ({
 
   getProjects: vi.fn().mockResolvedValue([]),
   createProject: vi.fn(),
+  updateProjects: vi.fn().mockResolvedValue([]),
   deleteProjects: vi.fn().mockResolvedValue([]),
 
   getTasksForProject: vi.fn().mockResolvedValue([]),
   createTask: vi.fn(),
+  updateTasks: vi.fn().mockResolvedValue([]),
   deleteTasks: vi.fn().mockResolvedValue([]),
 
   getSamplesForTask: vi.fn().mockResolvedValue([]),

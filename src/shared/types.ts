@@ -30,14 +30,28 @@ export interface IProject {
   labels: ILabel[]
 }
 
+/** Renames the project and/or existing labels - does not add or remove labels, since
+ *  removing one that's already used by an annotation would violate a foreign key. */
+export interface IProjectUpdate {
+  id: IProject['id']
+  name?: string
+  labels?: Pick<ILabel, 'id' | 'name'>[]
+}
+
 export interface ITask {
   id: string
   name: string
 }
 
+export interface ITaskUpdate {
+  id: ITask['id']
+  name?: string
+}
+
 export enum TrainingSplit {
   Train = 'train',
-  Test = 'test'
+  Test = 'test',
+  Valid = 'valid'
 }
 
 export interface INewSample {
@@ -99,10 +113,12 @@ export interface IDataStore {
 
   getProjects(): Promise<IProject[]>
   createProject(id: string, name: string, labels: ILabel[]): Promise<IProject>
+  updateProjects(updates: IProjectUpdate[]): Promise<IProject[]>
   deleteProjects(projectIds: string[]): Promise<boolean[]>
 
   getTasksForProject(projectId: string): Promise<ITask[]>
   createTask(projectId: string, id: string, name: string, newSamples?: INewSample[]): Promise<ITask>
+  updateTasks(updates: ITaskUpdate[]): Promise<ITask[]>
   deleteTasks(taskIds: string[]): Promise<boolean[]>
 
   getSamplesForTask(taskId: string): Promise<ISample[]>
@@ -157,9 +173,11 @@ export enum IPCKeys {
   LocalStore_Disconnect = 'localStore-disconnect',
   LocalStore_GetProjects = 'localStore-getProjects',
   LocalStore_CreateProject = 'localStore-createProject',
+  LocalStore_UpdateProjects = 'localStore-updateProjects',
   LocalStore_DeleteProjects = 'localStore-deleteProjects',
   LocalStore_GetTasks = 'localStore-getTasks',
   LocalStore_CreateTask = 'localStore-createTask',
+  LocalStore_UpdateTasks = 'localStore-updateTasks',
   LocalStore_DeleteTasks = 'localStore-deleteTasks',
   LocalStore_GetSamplesForTask = 'localStore-getSamplesForTask',
   LocalStore_GetSamples = 'localStore-getSamples',
@@ -191,9 +209,11 @@ export type IPCEvents = {
   [IPCKeys.LocalStore_Disconnect]: IDataStore['disconnect']
   [IPCKeys.LocalStore_GetProjects]: IDataStore['getProjects']
   [IPCKeys.LocalStore_CreateProject]: IDataStore['createProject']
+  [IPCKeys.LocalStore_UpdateProjects]: IDataStore['updateProjects']
   [IPCKeys.LocalStore_DeleteProjects]: IDataStore['deleteProjects']
   [IPCKeys.LocalStore_GetTasks]: IDataStore['getTasksForProject']
   [IPCKeys.LocalStore_CreateTask]: IDataStore['createTask']
+  [IPCKeys.LocalStore_UpdateTasks]: IDataStore['updateTasks']
   [IPCKeys.LocalStore_DeleteTasks]: IDataStore['deleteTasks']
   [IPCKeys.LocalStore_GetSamplesForTask]: IDataStore['getSamplesForTask']
   [IPCKeys.LocalStore_GetSamples]: IDataStore['getSamples']

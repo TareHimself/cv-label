@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject, ISample, ITask, TrainingSplit } from '@shared/types'
 
@@ -58,6 +58,49 @@ describe('SamplesPage', () => {
 
     expect(await screen.findByText('photo-one')).toBeInTheDocument()
     expect(screen.getByText('photo-two')).toBeInTheDocument()
+  })
+
+  it('filters samples via the search box', async () => {
+    renderSamplesPage()
+    await screen.findByText('photo-one')
+
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'two' } })
+
+    expect(screen.queryByText('photo-one')).not.toBeInTheDocument()
+    expect(screen.getByText('photo-two')).toBeInTheDocument()
+  })
+
+  it('shows a no-matches message when the search finds nothing', async () => {
+    renderSamplesPage()
+    await screen.findByText('photo-one')
+
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'nomatch' } })
+
+    expect(screen.getByText('No samples match your search.')).toBeInTheDocument()
+  })
+
+  it('renames a sample via the context menu', async () => {
+    vi.mocked(useAppStore.getState().store.updateSamples).mockResolvedValue([
+      { ...samples[0], name: 'photo-one-renamed' }
+    ])
+    renderSamplesPage()
+    await screen.findByText('photo-one')
+
+    fireEvent.contextMenu(screen.getByText('photo-one'))
+    fireEvent.click(screen.getByText('Edit'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Rename sample' })
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'photo-one-renamed' }
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(useAppStore.getState().store.updateSamples).toHaveBeenCalledWith([
+        { id: 's1', name: 'photo-one-renamed' }
+      ])
+    })
+    expect(await screen.findByText('photo-one-renamed')).toBeInTheDocument()
   })
 
   it('navigates to the labeler when Label is clicked', async () => {

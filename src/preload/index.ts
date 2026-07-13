@@ -13,10 +13,12 @@ const localStoreApi: IDataStore = {
 
   getProjects: wrap(IPCKeys.LocalStore_GetProjects),
   createProject: wrap(IPCKeys.LocalStore_CreateProject),
+  updateProjects: wrap(IPCKeys.LocalStore_UpdateProjects),
   deleteProjects: wrap(IPCKeys.LocalStore_DeleteProjects),
 
   getTasksForProject: wrap(IPCKeys.LocalStore_GetTasks),
   createTask: wrap(IPCKeys.LocalStore_CreateTask),
+  updateTasks: wrap(IPCKeys.LocalStore_UpdateTasks),
   deleteTasks: wrap(IPCKeys.LocalStore_DeleteTasks),
 
   getSamplesForTask: wrap(IPCKeys.LocalStore_GetSamplesForTask),

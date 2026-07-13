@@ -60,4 +60,44 @@ test.describe('Projects page', () => {
     await expect(projectsPage.row('Street Signs')).not.toBeVisible()
     await expect(projectsPage.row('Wildlife Cams')).toBeVisible()
   })
+
+  test('edits a project name and its label names via the context menu', async ({
+    projectsPage,
+    window
+  }) => {
+    await projectsPage.createProject('Street Signs', ['Stop Sign', 'Yield Sign'])
+
+    await projectsPage.edit('Street Signs', 'Renamed Signs', ['Stop Sign Renamed'])
+
+    await expect(projectsPage.row('Renamed Signs')).toBeVisible()
+    await expect(projectsPage.row('Street Signs')).not.toBeVisible()
+    await expect(window.getByText('Stop Sign Renamed')).toBeVisible()
+    // Only the first label was renamed - the second keeps its original name.
+    await expect(window.getByText('Yield Sign', { exact: true })).toBeVisible()
+  })
+
+  test('checkboxes only appear after entering select mode, and clicking a row selects it instead of navigating', async ({
+    projectsPage
+  }) => {
+    await projectsPage.createProject('Street Signs', ['Stop Sign'])
+
+    await expect(projectsPage.projectCheckbox('Street Signs')).not.toBeVisible()
+
+    await projectsPage.selectModeButton.click()
+    await projectsPage.row('Street Signs').click()
+
+    await expect(projectsPage.projectCheckbox('Street Signs')).toBeChecked()
+  })
+
+  test('deletes multiple selected projects via the batch action bar', async ({ projectsPage }) => {
+    await projectsPage.createProject('Street Signs', ['Stop Sign'])
+    await projectsPage.createProject('Wildlife Cams', ['Deer'])
+    await projectsPage.createProject('Other Project', ['Label'])
+
+    await projectsPage.deleteSelectedProjects(['Street Signs', 'Wildlife Cams'])
+
+    await expect(projectsPage.row('Street Signs')).not.toBeVisible()
+    await expect(projectsPage.row('Wildlife Cams')).not.toBeVisible()
+    await expect(projectsPage.row('Other Project')).toBeVisible()
+  })
 })

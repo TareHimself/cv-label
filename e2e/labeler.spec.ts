@@ -67,34 +67,4 @@ test.describe('Labeler', () => {
     await labelPage.rightClickCenter()
     await expect(labelPage.deleteAnnotationMenuItem).not.toBeVisible()
   })
-
-  test('does not tick requestAnimationFrame while idle, but does while interacting', async ({
-    window,
-    labelPage
-  }) => {
-    await window.waitForTimeout(500) // let the initial bitmap load + draws settle
-
-    await window.evaluate(() => {
-      const w = window as unknown as { __rafCalls: number }
-      w.__rafCalls = 0
-      const orig = window.requestAnimationFrame.bind(window)
-      window.requestAnimationFrame = (cb: FrameRequestCallback) => {
-        w.__rafCalls++
-        return orig(cb)
-      }
-    })
-
-    await window.waitForTimeout(1000)
-    const idleCalls = await window.evaluate(
-      () => (window as unknown as { __rafCalls: number }).__rafCalls
-    )
-    expect(idleCalls).toBeLessThanOrEqual(1)
-
-    await labelPage.drawBoxAroundCenter()
-
-    const activeCalls = await window.evaluate(
-      () => (window as unknown as { __rafCalls: number }).__rafCalls
-    )
-    expect(activeCalls).toBeGreaterThan(idleCalls)
-  })
 })

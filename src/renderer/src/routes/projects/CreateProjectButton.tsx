@@ -8,6 +8,7 @@ import { makeUUID } from '@shared/utils'
 import { FC, useCallback, useState } from 'react'
 import { IoMdAdd } from 'react-icons/io'
 import { MdDeleteOutline } from 'react-icons/md'
+import { ZIndex } from '@renderer/zIndex'
 
 const ColorPickerContainer = styled.div`
   width: 100%;
@@ -48,6 +49,7 @@ export const CreateProjectButton: FC<CreateProjectButtonProps> = ({ create }) =>
         title="Create Project"
         centered
         closeOnClickOutside={false}
+        zIndex={ZIndex.actionModal}
       >
         <Stack gap={'lg'}>
           <TextInput

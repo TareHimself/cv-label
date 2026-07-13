@@ -31,6 +31,10 @@ export class TasksPage {
     return this.importDialog.locator('input[type=file]')
   }
 
+  get yoloZipInput() {
+    return this.importDialog.getByTestId('yolo-zip-input')
+  }
+
   get createButton() {
     return this.page.getByRole('button', { name: 'Create', exact: true })
   }
@@ -56,12 +60,22 @@ export class TasksPage {
     return this.page.getByRole('button', { name: 'Clear' })
   }
 
+  /** Enters select mode, showing checkboxes on every row. Hidden once already in select
+   *  mode (replaced by the batch action bar), so callers can invoke this idempotently. */
+  get selectModeButton() {
+    return this.page.getByRole('button', { name: 'Select', exact: true })
+  }
+
   get exportDialog() {
     return this.page.getByRole('dialog', { name: /Export Samples/ })
   }
 
   get confirmDeleteDialog() {
     return this.page.getByRole('dialog', { name: 'Delete task' })
+  }
+
+  get renameDialog() {
+    return this.page.getByRole('dialog', { name: 'Rename task' })
   }
 
   taskCheckbox(name: string) {
@@ -99,8 +113,27 @@ export class TasksPage {
     await this.createButton.click()
   }
 
-  /** Selects the given tasks via their row checkboxes. */
+  /** Opens the create-task modal, names it, and imports samples from a YOLO dataset zip via
+   *  the YOLO Dataset importer, accepting the default class-to-label mapping (each class
+   *  defaults to the project's first label). */
+  async createTaskFromYoloZip(name: string, zipPath: string) {
+    await this.createTaskButton.click()
+    await this.nameInput.waitFor()
+    await this.nameInput.fill(name)
+    await this.addSamplesButton.click()
+    await this.importDialog.getByText('YOLO Dataset').click()
+    await this.yoloZipInput.setInputFiles(zipPath)
+    await this.importDialog.getByRole('button', { name: 'Import' }).click()
+    await this.importDialog.waitFor({ state: 'hidden' })
+    await this.createButton.click()
+  }
+
+  /** Enters select mode (if not already in it) and selects the given tasks via their
+   *  row checkboxes. */
   async selectTasks(names: string[]) {
+    if (await this.selectModeButton.isVisible()) {
+      await this.selectModeButton.click()
+    }
     for (const name of names) {
       await this.taskCheckbox(name).check()
     }
@@ -115,7 +148,7 @@ export class TasksPage {
     await this.selectTasks(names)
     await this.exportSelectedButton.click()
     await this.exportDialog.waitFor()
-    await this.exportDialog.getByText('cv-label JSON').click()
+    await this.exportDialog.getByText('cv-label File').click()
     await this.confirmExportButton.click()
     await this.exportDialog.waitFor({ state: 'hidden' })
   }
@@ -149,5 +182,12 @@ export class TasksPage {
     await this.row(name).click({ button: 'right' })
     await this.page.getByText('Delete').click()
     await this.page.getByRole('button', { name: 'Cancel' }).click()
+  }
+
+  async rename(name: string, newName: string) {
+    await this.row(name).click({ button: 'right' })
+    await this.page.getByText('Edit').click()
+    await this.renameDialog.getByLabel('Name').fill(newName)
+    await this.renameDialog.getByRole('button', { name: 'Save' }).click()
   }
 }

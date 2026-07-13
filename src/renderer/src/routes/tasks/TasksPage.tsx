@@ -4,6 +4,7 @@ import {
   BasicListPageItemSkeleton
 } from '@renderer/components/BasicListPageItem'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
+import { RenameModal } from '@renderer/components/RenameModal'
 import { styled } from '@linaria/react'
 import { Button, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { IoMdArrowBack } from 'react-icons/io'
@@ -29,19 +30,32 @@ export type TasksPageProps = {
 }
 
 export const TasksPage = ({ project }: TasksPageProps) => {
-  const { items, create, open, remove, removeMany, isLoading } = useTasks(project)
+  const { items, create, open, update, remove, removeMany, isLoading } = useTasks(project)
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<ITask | null>(null)
+  const [pendingRename, setPendingRename] = useState<ITask | null>(null)
+  const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [isBatchExportOpen, setIsBatchExportOpen] = useState(false)
   const [isBatchDeletePending, setIsBatchDeletePending] = useState(false)
 
+  // Selected tasks stay visible even if a search narrows the list below them, so batch
+  // actions never silently lose track of a selection the user can no longer see.
   const filteredItems = useMemo(
-    () => items.filter((t) => t.name.toLowerCase().includes(search.trim().toLowerCase())),
-    [items, search]
+    () =>
+      items.filter(
+        (t) =>
+          selectedTaskIds.has(t.id) || t.name.toLowerCase().includes(search.trim().toLowerCase())
+      ),
+    [items, search, selectedTaskIds]
   )
 
   const selectedTasks = items.filter((t) => selectedTaskIds.has(t.id))
+
+  const exitSelectMode = () => {
+    setIsSelectMode(false)
+    setSelectedTaskIds(new Set())
+  }
 
   const toggleSelected = (taskId: string, selected: boolean) => {
     setSelectedTaskIds((current) => {
@@ -53,6 +67,23 @@ export const TasksPage = ({ project }: TasksPageProps) => {
       }
       return next
     })
+  }
+
+  // Selection helpers operate on filteredItems (the currently visible/filtered list),
+  // not the full unfiltered task list, and all three enter select mode if not already in it.
+  const selectAll = () => {
+    setIsSelectMode(true)
+    setSelectedTaskIds(new Set(filteredItems.map((t) => t.id)))
+  }
+
+  const selectAbove = (index: number) => {
+    setIsSelectMode(true)
+    setSelectedTaskIds(new Set(filteredItems.slice(0, index + 1).map((t) => t.id)))
+  }
+
+  const selectBelow = (index: number) => {
+    setIsSelectMode(true)
+    setSelectedTaskIds(new Set(filteredItems.slice(index).map((t) => t.id)))
   }
 
   return (
@@ -68,6 +99,19 @@ export const TasksPage = ({ project }: TasksPageProps) => {
           }
         }}
       />
+      <RenameModal
+        key={pendingRename?.id}
+        opened={pendingRename !== null}
+        entityName="task"
+        initialName={pendingRename?.name ?? ''}
+        onCancel={() => setPendingRename(null)}
+        onConfirm={(name) => {
+          if (pendingRename !== null) {
+            update(pendingRename.id, name)
+          }
+          setPendingRename(null)
+        }}
+      />
       <ConfirmDeleteModal
         opened={isBatchDeletePending}
         entityName="task"
@@ -77,7 +121,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
         onCancel={() => setIsBatchDeletePending(false)}
         onConfirm={() => {
           removeMany(selectedTasks.map((t) => t.id))
-          setSelectedTaskIds(new Set())
+          exitSelectMode()
         }}
       />
       <ExportSamplesModal
@@ -100,7 +144,12 @@ export const TasksPage = ({ project }: TasksPageProps) => {
                 Back
               </Button>
               <CreateTaskButton project={project} create={create} />
-              {selectedTaskIds.size > 0 && (
+              {!isSelectMode && (
+                <Button size="xs" variant="outline" onClick={() => setIsSelectMode(true)}>
+                  Select
+                </Button>
+              )}
+              {isSelectMode && (
                 <>
                   <Divider orientation="vertical" />
                   <Text size="sm" fw={500}>
@@ -110,6 +159,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
                     size="xs"
                     variant="outline"
                     leftSection={<FaFileExport size={14} />}
+                    disabled={selectedTaskIds.size === 0}
                     onClick={() => setIsBatchExportOpen(true)}
                   >
                     Export
@@ -119,11 +169,12 @@ export const TasksPage = ({ project }: TasksPageProps) => {
                     variant="outline"
                     color="red"
                     leftSection={<MdDeleteOutline size={14} />}
+                    disabled={selectedTaskIds.size === 0}
                     onClick={() => setIsBatchDeletePending(true)}
                   >
                     Delete
                   </Button>
-                  <Button size="xs" variant="subtle" onClick={() => setSelectedTaskIds(new Set())}>
+                  <Button size="xs" variant="subtle" onClick={exitSelectMode}>
                     Clear
                   </Button>
                 </>
@@ -158,15 +209,20 @@ export const TasksPage = ({ project }: TasksPageProps) => {
             </Text>
           )}
           {!isLoading &&
-            filteredItems.map((t) => (
+            filteredItems.map((t, index) => (
               <BasicListPageItem
                 key={t.id}
                 icon={<MdOutlineAssignment size={18} />}
                 title={t.name}
                 onClick={() => open(t)}
+                onEdit={() => setPendingRename(t)}
                 onDelete={() => setPendingDelete(t)}
+                selectMode={isSelectMode}
                 selected={selectedTaskIds.has(t.id)}
                 onSelectedChange={(selected) => toggleSelected(t.id, selected)}
+                onSelectAll={selectAll}
+                onSelectAbove={() => selectAbove(index)}
+                onSelectBelow={() => selectBelow(index)}
               />
             ))}
         </Stack>

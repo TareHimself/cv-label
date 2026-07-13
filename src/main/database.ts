@@ -10,9 +10,11 @@ import {
   IPoint,
   IPointReplacement,
   IProject,
+  IProjectUpdate,
   ISample,
   ISampleUpdate,
   ITask,
+  ITaskUpdate,
   OmitV2
 } from '../shared/types'
 import Database from 'better-sqlite3'
@@ -175,6 +177,41 @@ const DeleteProjectsTransaction = db.transaction((ids: string[]) => {
   }
 })
 
+const GetProjectByIdStatement = db.prepare<{ id: IProject['id'] }, Pick<IProject, 'id' | 'name'>>(
+  `SELECT * FROM projects WHERE id = @id`
+)
+
+const UpdateProjectStatement = db.prepare<{ id: IProject['id']; name: IProject['name'] }>(
+  `UPDATE projects SET name = @name WHERE id = @id`
+)
+
+// Scoped to projectId as a defensive check - the renderer only ever sends a project's own
+// labels back, but this keeps a bad id from silently renaming a label in another project.
+const UpdateLabelNameStatement = db.prepare<{
+  id: ILabel['id']
+  name: ILabel['name']
+  projectId: IProject['id']
+}>(`UPDATE labels SET name = @name WHERE id = @id AND projectId = @projectId`)
+
+const UpdateProjectsTransaction = db.transaction((updates: IProjectUpdate[]): IProject[] => {
+  return updates.map((update) => {
+    if (update.name !== undefined) {
+      UpdateProjectStatement.run({ id: update.id, name: update.name })
+    }
+
+    for (const label of update.labels ?? []) {
+      UpdateLabelNameStatement.run({ id: label.id, name: label.name, projectId: update.id })
+    }
+
+    const project = GetProjectByIdStatement.get({ id: update.id })
+    if (project === undefined) {
+      throw new Error(`project not found: ${update.id}`)
+    }
+
+    return { ...project, labels: GetLabelsStatement.all({ projectId: update.id }) }
+  })
+})
+
 const CreateImageStatement = db.prepare<DatabaseImage>(
   `INSERT INTO images (id,hash,extension) VALUES (@id,@hash,@extension)`
 )
@@ -208,6 +245,29 @@ const CreateLabelStatement = db.prepare<ILabel & { projectId: string }>(
 const CreateTaskStatement = db.prepare<ITask & { projectId: string }>(
   `INSERT INTO tasks (id,name,projectId) VALUES (@id,@name,@projectId)`
 )
+
+const GetTaskByIdStatement = db.prepare<{ id: ITask['id'] }, ITask>(
+  `SELECT id, name FROM tasks WHERE id = @id`
+)
+
+const UpdateTaskStatement = db.prepare<{ id: ITask['id']; name: ITask['name'] }>(
+  `UPDATE tasks SET name = @name WHERE id = @id`
+)
+
+const UpdateTasksTransaction = db.transaction((updates: ITaskUpdate[]): ITask[] => {
+  return updates.map((update) => {
+    if (update.name !== undefined) {
+      UpdateTaskStatement.run({ id: update.id, name: update.name })
+    }
+
+    const task = GetTaskByIdStatement.get({ id: update.id })
+    if (task === undefined) {
+      throw new Error(`task not found: ${update.id}`)
+    }
+
+    return task
+  })
+})
 
 const GetAnnotationsStatement = db.prepare<[sampleId: string], IStoredAnnotation>(
   `SELECT id, type, labelId, sampleId FROM annotations WHERE sampleId = ? ORDER BY id ASC`
@@ -623,6 +683,10 @@ const localStore: IDataStore = {
     return CreateProjectTransaction.immediate(id, name, labels)
   },
 
+  updateProjects: async (updates) => {
+    return UpdateProjectsTransaction.immediate(updates)
+  },
+
   deleteProjects: async (projectIds) => {
     DeleteProjectsTransaction.immediate(projectIds)
     return projectIds.map(() => true)
@@ -630,6 +694,10 @@ const localStore: IDataStore = {
 
   getTasksForProject: async (projectId) => {
     return GetTasksStatement.all({ projectId })
+  },
+
+  updateTasks: async (updates) => {
+    return UpdateTasksTransaction.immediate(updates)
   },
 
   createTask: async (projectId, id, name, newSamples = []) => {
@@ -793,9 +861,11 @@ export const {
   disconnect,
   getProjects,
   createProject,
+  updateProjects,
   deleteProjects,
   getTasksForProject: getTasks,
   createTask,
+  updateTasks,
   deleteTasks,
   getSamplesForTask,
   getSamples,

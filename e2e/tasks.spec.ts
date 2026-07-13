@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures'
 import { createTestImage, cleanupTestImage } from './testImage'
+import { createYoloDatasetZip, cleanupYoloDatasetZip } from './testYoloDataset'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -23,6 +24,23 @@ test.describe('Tasks page', () => {
       await expect(tasksPage.emptyState).not.toBeVisible()
     } finally {
       cleanupTestImage(image)
+    }
+  })
+
+  test('imports a YOLO dataset zip via the YOLO Dataset importer', async ({
+    tasksPage,
+    samplesPage
+  }) => {
+    const zipPath = await createYoloDatasetZip()
+    try {
+      await tasksPage.createTaskFromYoloZip('Yolo Batch', zipPath)
+
+      await expect(tasksPage.row('Yolo Batch')).toBeVisible()
+
+      await tasksPage.open('Yolo Batch')
+      await expect(samplesPage.card('sign-1')).toBeVisible()
+    } finally {
+      cleanupYoloDatasetZip(zipPath)
     }
   })
 
@@ -119,6 +137,40 @@ test.describe('Tasks page', () => {
       expect(existsSync(savePath)).toBe(true)
     } finally {
       cleanupTestImage(image)
+    }
+  })
+
+  test('renames a task via the context menu', async ({ tasksPage }) => {
+    const image = await createTestImage('sample-1')
+    try {
+      await tasksPage.createTask('Batch 1', [image])
+
+      await tasksPage.rename('Batch 1', 'Renamed Batch')
+
+      await expect(tasksPage.row('Renamed Batch')).toBeVisible()
+      await expect(tasksPage.row('Batch 1')).not.toBeVisible()
+    } finally {
+      cleanupTestImage(image)
+    }
+  })
+
+  test('keeps a selected task visible even when it no longer matches the search', async ({
+    tasksPage
+  }) => {
+    const imageA = await createTestImage('sample-a')
+    const imageB = await createTestImage('sample-b')
+    try {
+      await tasksPage.createTask('Batch 1', [imageA])
+      await tasksPage.createTask('Batch 2', [imageB])
+
+      await tasksPage.selectTasks(['Batch 1'])
+      await tasksPage.search('2')
+
+      await expect(tasksPage.row('Batch 2')).toBeVisible()
+      await expect(tasksPage.row('Batch 1')).toBeVisible()
+    } finally {
+      cleanupTestImage(imageA)
+      cleanupTestImage(imageB)
     }
   })
 

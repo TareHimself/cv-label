@@ -4,8 +4,8 @@ import { CvLabelJsonExporterComponent } from './CvLabelJsonExporterComponent'
 
 export const cvLabelJsonExporter: SampleExporter = {
   id: 'cv-label-json',
-  name: 'cv-label JSON',
-  description: 'A native zip export with a JSON manifest and all sample images.',
+  name: 'cv-label File',
+  description: 'A .cvlabel file: a flat sample list plus labels, importable into any project.',
   icon: <FaFileExport size={20} />,
   Component: CvLabelJsonExporterComponent
 }

@@ -58,6 +58,173 @@ describe('BasicListPageItem', () => {
 
     expect(screen.queryByText('Delete')).not.toBeInTheDocument()
   })
+
+  it('shows an Edit option on right-click and calls onEdit when chosen', () => {
+    const onEdit = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onEdit={onEdit}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Edit'))
+
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows both Edit and Delete when both are provided, and clicking one does not trigger the other', () => {
+    const onEdit = vi.fn()
+    const onDelete = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Delete'))
+
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onEdit).not.toHaveBeenCalled()
+  })
+
+  it('does not show a checkbox outside select mode, even when selection props are provided', () => {
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        selected={false}
+        onSelectedChange={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('shows a checkbox in select mode', () => {
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        selectMode
+        selected={false}
+        onSelectedChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByRole('checkbox', { name: 'Select Street Signs' })).toBeInTheDocument()
+  })
+
+  it('outside select mode, clicking the row still fires onClick', () => {
+    const onClick = vi.fn()
+    const onSelectedChange = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={onClick}
+        selected={false}
+        onSelectedChange={onSelectedChange}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Street Signs'))
+
+    expect(onClick).toHaveBeenCalledTimes(1)
+    expect(onSelectedChange).not.toHaveBeenCalled()
+  })
+
+  it('in select mode, clicking anywhere on the row toggles selection instead of firing onClick', () => {
+    const onClick = vi.fn()
+    const onSelectedChange = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={onClick}
+        selectMode
+        selected={false}
+        onSelectedChange={onSelectedChange}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Street Signs'))
+
+    expect(onSelectedChange).toHaveBeenCalledWith(true)
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
+  it('in select mode, clicking the checkbox toggles selection without firing onClick', () => {
+    const onClick = vi.fn()
+    const onSelectedChange = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={onClick}
+        selectMode
+        selected={false}
+        onSelectedChange={onSelectedChange}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Street Signs' }))
+
+    expect(onSelectedChange).toHaveBeenCalledWith(true)
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
+  it('shows Select All/Above/Below on right-click when provided, and calls the right one', () => {
+    const onSelectAll = vi.fn()
+    const onSelectAbove = vi.fn()
+    const onSelectBelow = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onSelectAll={onSelectAll}
+        onSelectAbove={onSelectAbove}
+        onSelectBelow={onSelectBelow}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Select Above'))
+
+    expect(onSelectAbove).toHaveBeenCalledTimes(1)
+    expect(onSelectAll).not.toHaveBeenCalled()
+    expect(onSelectBelow).not.toHaveBeenCalled()
+  })
+
+  it('shows both edit/delete and select-helper items together in the context menu', () => {
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onSelectAll={vi.fn()}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+
+    expect(screen.getByText('Edit')).toBeInTheDocument()
+    expect(screen.getByText('Delete')).toBeInTheDocument()
+    expect(screen.getByText('Select All')).toBeInTheDocument()
+  })
 })
 
 describe('BasicListPageItemSkeleton', () => {

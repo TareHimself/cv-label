@@ -9,9 +9,11 @@ import {
   IPoint,
   IPointReplacement,
   IProject,
+  IProjectUpdate,
   ISample,
   ISampleUpdate,
-  ITask
+  ITask,
+  ITaskUpdate
 } from '@shared/types'
 
 export class LocalDataStore implements IDataStore {
@@ -30,6 +32,10 @@ export class LocalDataStore implements IDataStore {
     return window.localStore.createProject(id, name, labels)
   }
 
+  updateProjects(updates: IProjectUpdate[]): Promise<IProject[]> {
+    return window.localStore.updateProjects(updates)
+  }
+
   deleteProjects(projectIds: string[]): Promise<boolean[]> {
     return window.localStore.deleteProjects(projectIds)
   }
@@ -45,6 +51,10 @@ export class LocalDataStore implements IDataStore {
     newSamples?: INewSample[]
   ): Promise<ITask> {
     return window.localStore.createTask(projectId, id, name, newSamples)
+  }
+
+  updateTasks(updates: ITaskUpdate[]): Promise<ITask[]> {
+    return window.localStore.updateTasks(updates)
   }
 
   deleteTasks(taskIds: string[]): Promise<boolean[]> {

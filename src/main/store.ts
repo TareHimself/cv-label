@@ -51,10 +51,12 @@ handleIpc(IPCKeys.LocalStore_Disconnect, database.disconnect)
 
 handleIpc(IPCKeys.LocalStore_GetProjects, database.getProjects)
 handleIpc(IPCKeys.LocalStore_CreateProject, database.createProject)
+handleIpc(IPCKeys.LocalStore_UpdateProjects, database.updateProjects)
 handleIpc(IPCKeys.LocalStore_DeleteProjects, database.deleteProjects)
 
 handleIpc(IPCKeys.LocalStore_GetTasks, database.getTasks)
 handleIpc(IPCKeys.LocalStore_CreateTask, database.createTask)
+handleIpc(IPCKeys.LocalStore_UpdateTasks, database.updateTasks)
 handleIpc(IPCKeys.LocalStore_DeleteTasks, database.deleteTasks)
 
 handleIpc(IPCKeys.LocalStore_GetSamplesForTask, database.getSamplesForTask)
