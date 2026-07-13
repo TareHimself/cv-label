@@ -112,6 +112,29 @@ describe('CreateTaskButton', () => {
     expect(samples[0].name).toBe('photo-one')
   })
 
+  it('ignores a second rapid click on Create while the first create call is still pending', async () => {
+    let resolveCreate: (() => void) | undefined
+    const create = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCreate = resolve
+        })
+    )
+    renderWithProviders(<CreateTaskButton project={project} create={create} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+    await screen.findByText(/You dropped 2 folders/)
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, 2 tasks' }))
+    await screen.findByRole('dialog', { name: 'Create Task (1/2)' })
+
+    const createButton = screen.getByRole('button', { name: 'Create' })
+    fireEvent.click(createButton)
+    fireEvent.click(createButton)
+
+    expect(create).toHaveBeenCalledTimes(1)
+    resolveCreate?.()
+  })
+
   it('prefills the task name from a dropped folder', async () => {
     renderWithProviders(<CreateTaskButton project={project} create={vi.fn()} />)
 
@@ -168,6 +191,35 @@ describe('CreateTaskButton', () => {
     expect(create).toHaveBeenCalledTimes(2)
     expect(create.mock.calls[0][0]).toBe('FolderA')
     expect(create.mock.calls[1][0]).toBe('FolderB')
+  })
+
+  it('disables the Create button immediately after the last queue item, so a click during the modal close transition cannot resubmit it', async () => {
+    const create = vi.fn().mockResolvedValue(undefined)
+    renderWithProviders(<CreateTaskButton project={project} create={create} />)
+
+    dropFiles([makeFolderFile('FolderA/img1.jpg', 1024), makeFolderFile('FolderB/img1.jpg', 1024)])
+    await screen.findByText(/You dropped 2 folders/)
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, 2 tasks' }))
+
+    await screen.findByRole('dialog', { name: 'Create Task (1/2)' })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await screen.findByRole('dialog', { name: 'Create Task (2/2)' })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    // Wait for the second (last) create() to resolve and advanceQueue() to run, same as the
+    // "steps through" test, but instead of waiting for the dialog to fully unmount, grab the
+    // Create button as soon as it's disabled - Mantine keeps the modal content mounted and
+    // interactive during its close transition, so this window is real and clickable.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Create Task/ })).not.toBeInTheDocument()
+    })
+    expect(create).toHaveBeenCalledTimes(2)
   })
 
   it('skips a folder without creating a task for it, and advances to the next', async () => {

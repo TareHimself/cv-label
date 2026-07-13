@@ -33,7 +33,7 @@ describe('EditProjectModal', () => {
   })
 
   it('calls onConfirm with the updated project name and label names', () => {
-    const onConfirm = vi.fn()
+    const onConfirm = vi.fn().mockResolvedValue(undefined)
     renderWithProviders(
       <EditProjectModal opened project={project} onCancel={vi.fn()} onConfirm={onConfirm} />
     )
@@ -88,5 +88,25 @@ describe('EditProjectModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a second click while the first onConfirm is still pending', () => {
+    let resolveConfirm: (() => void) | undefined
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve
+        })
+    )
+    renderWithProviders(
+      <EditProjectModal opened project={project} onCancel={vi.fn()} onConfirm={onConfirm} />
+    )
+
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+    fireEvent.click(saveButton)
+    fireEvent.click(saveButton)
+
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    resolveConfirm?.()
   })
 })

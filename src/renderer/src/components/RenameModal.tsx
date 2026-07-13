@@ -1,13 +1,14 @@
 import { Button, Group, Modal, TextInput } from '@mantine/core'
 import { useState, type FC } from 'react'
 import { ZIndex } from '@renderer/zIndex'
+import { AsyncButton } from './AsyncButton'
 
 export type RenameModalProps = {
   opened: boolean
   entityName: string
   initialName: string
   onCancel: () => void
-  onConfirm: (name: string) => void
+  onConfirm: (name: string) => Promise<unknown>
 }
 
 /** Controlled by mounting with a `key` tied to the item being renamed (e.g. `key={item?.id}`)
@@ -45,9 +46,9 @@ export const RenameModal: FC<RenameModalProps> = ({
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button disabled={name.trim().length === 0} onClick={() => onConfirm(name.trim())}>
+        <AsyncButton disabled={name.trim().length === 0} onClick={() => onConfirm(name.trim())}>
           Save
-        </Button>
+        </AsyncButton>
       </Group>
     </Modal>
   )

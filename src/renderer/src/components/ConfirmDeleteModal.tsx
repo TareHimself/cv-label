@@ -1,13 +1,14 @@
 import { Button, Group, Modal, Text } from '@mantine/core'
 import type { FC } from 'react'
 import { ZIndex } from '@renderer/zIndex'
+import { AsyncButton } from './AsyncButton'
 
 export type ConfirmDeleteModalProps = {
   opened: boolean
   entityName: string
   itemName?: string
   onCancel: () => void
-  onConfirm: () => void
+  onConfirm: () => Promise<unknown>
 }
 
 export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
@@ -38,15 +39,16 @@ export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
+        <AsyncButton
           color="red"
           onClick={() => {
-            onConfirm()
+            const result = onConfirm()
             onCancel()
+            return result
           }}
         >
           Delete
-        </Button>
+        </AsyncButton>
       </Group>
     </Modal>
   )

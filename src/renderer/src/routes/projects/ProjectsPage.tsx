@@ -107,11 +107,7 @@ export const ProjectsPage = () => {
         entityName="project"
         itemName={pendingDelete?.name}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          if (pendingDelete !== null) {
-            remove(pendingDelete.id)
-          }
-        }}
+        onConfirm={() => (pendingDelete !== null ? remove(pendingDelete.id) : Promise.resolve())}
       />
       <ConfirmDeleteModal
         opened={isBatchDeletePending}
@@ -123,8 +119,9 @@ export const ProjectsPage = () => {
         }
         onCancel={() => setIsBatchDeletePending(false)}
         onConfirm={() => {
-          removeMany(selectedProjects.map((p) => p.id))
+          const result = removeMany(selectedProjects.map((p) => p.id))
           exitSelectMode()
+          return result
         }}
       />
       <EditProjectModal
@@ -133,10 +130,10 @@ export const ProjectsPage = () => {
         project={pendingEdit}
         onCancel={() => setPendingEdit(null)}
         onConfirm={(name, labels) => {
-          if (pendingEdit !== null) {
-            update(pendingEdit.id, name, labels)
-          }
+          const result =
+            pendingEdit !== null ? update(pendingEdit.id, name, labels) : Promise.resolve()
           setPendingEdit(null)
+          return result
         }}
       />
       <BasicListPage

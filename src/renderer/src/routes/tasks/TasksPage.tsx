@@ -93,11 +93,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
         entityName="task"
         itemName={pendingDelete?.name}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          if (pendingDelete !== null) {
-            remove(pendingDelete.id)
-          }
-        }}
+        onConfirm={() => (pendingDelete !== null ? remove(pendingDelete.id) : Promise.resolve())}
       />
       <RenameModal
         key={pendingRename?.id}
@@ -106,10 +102,9 @@ export const TasksPage = ({ project }: TasksPageProps) => {
         initialName={pendingRename?.name ?? ''}
         onCancel={() => setPendingRename(null)}
         onConfirm={(name) => {
-          if (pendingRename !== null) {
-            update(pendingRename.id, name)
-          }
+          const result = pendingRename !== null ? update(pendingRename.id, name) : Promise.resolve()
           setPendingRename(null)
+          return result
         }}
       />
       <ConfirmDeleteModal
@@ -120,8 +115,9 @@ export const TasksPage = ({ project }: TasksPageProps) => {
         }
         onCancel={() => setIsBatchDeletePending(false)}
         onConfirm={() => {
-          removeMany(selectedTasks.map((t) => t.id))
+          const result = removeMany(selectedTasks.map((t) => t.id))
           exitSelectMode()
+          return result
         }}
       />
       <ExportSamplesModal

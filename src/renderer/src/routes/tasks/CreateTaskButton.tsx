@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import { IoMdAdd } from 'react-icons/io'
 import { MdDeleteOutline } from 'react-icons/md'
 import { INewSample, IProject } from '@shared/types'
+import { AsyncButton } from '@renderer/components/AsyncButton'
 import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
 import { filesToSamples } from '@renderer/components/sampleIO/importers/filesToSamples'
 import { folderNameFromDroppedFiles, groupFilesByTopFolder } from '@renderer/utils'
@@ -179,7 +180,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
       toast
         .promise(filesToSamples(files), {
           loading: `Processing ${files.length} file${files.length === 1 ? '' : 's'}`,
-          success: 'Files added',
+          success: 'Files loaded',
           error: (e) => {
             console.error(e)
             return 'Failed to read image files'
@@ -215,6 +216,13 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
       setIsModalOpen(false)
       setImportQueue([])
       setImportQueueIndex(0)
+      // Mantine's Modal keeps its content mounted and interactive during its close
+      // transition, so the Create button (still bound to the just-submitted item) stays
+      // clickable for a moment after this. Clearing samples/taskName here disables it
+      // immediately (empty name), rather than leaving a window to resubmit the same
+      // already-created samples and hit a UNIQUE constraint on their ids.
+      setSamples([])
+      setTaskName('')
     }
   }
 
@@ -362,13 +370,14 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
           />
           <Group grow>
             {importQueue.length > 1 && (
-              <Button variant="outline" onClick={advanceQueue}>
+              <Button variant="outline" onClick={advanceQueue} disabled={isDropProcessing}>
                 Skip
               </Button>
             )}
-            <Button
-              onClick={() => {
-                toast.promise(create(taskName, samples), {
+            <AsyncButton
+              onClick={async () => {
+                const result = create(taskName, samples)
+                await toast.promise(result, {
                   loading: 'Creating task',
                   success: 'Task created',
                   error: (e) => {
@@ -377,11 +386,12 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
                   }
                 })
                 advanceQueue()
+                return result
               }}
-              disabled={taskName.trim().length === 0}
+              disabled={taskName.trim().length === 0 || isDropProcessing}
             >
               Create
-            </Button>
+            </AsyncButton>
           </Group>
         </Stack>
       </Modal>

@@ -65,7 +65,10 @@ describe('ConfirmDeleteModal', () => {
   it('calls onConfirm then onCancel when Delete is clicked', () => {
     const calls: string[] = []
     const onCancel = vi.fn(() => calls.push('cancel'))
-    const onConfirm = vi.fn(() => calls.push('confirm'))
+    const onConfirm = vi.fn(() => {
+      calls.push('confirm')
+      return Promise.resolve()
+    })
     renderWithProviders(
       <ConfirmDeleteModal
         opened
@@ -79,5 +82,31 @@ describe('ConfirmDeleteModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     expect(calls).toEqual(['confirm', 'cancel'])
+  })
+
+  it('ignores a second click while the first onConfirm is still pending', () => {
+    let resolveConfirm: (() => void) | undefined
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve
+        })
+    )
+    renderWithProviders(
+      <ConfirmDeleteModal
+        opened
+        entityName="project"
+        itemName="Street Signs"
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />
+    )
+
+    const deleteButton = screen.getByRole('button', { name: 'Delete' })
+    fireEvent.click(deleteButton)
+    fireEvent.click(deleteButton)
+
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    resolveConfirm?.()
   })
 })
