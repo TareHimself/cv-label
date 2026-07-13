@@ -1,5 +1,6 @@
 import { styled } from '@linaria/react'
 import { Modal, Stack, TextInput, Flex, Button, ScrollArea } from '@mantine/core'
+import { AsyncButton } from '@renderer/components/AsyncButton'
 import { ColorPicker } from '@renderer/components/ColorPicker'
 import { useArray } from '@renderer/hooks/useArray'
 import { randomHexColor } from '@shared/color'
@@ -132,18 +133,19 @@ export const CreateProjectButton: FC<CreateProjectButtonProps> = ({ create }) =>
             </ScrollArea>
           </Flex>
 
-          <Button
+          <AsyncButton
             fullWidth
             onClick={() => {
-              create(projectName, labels.resolve())
+              const result = create(projectName, labels.resolve())
               setIsModalOpen(false)
+              return result
             }}
             disabled={
               projectName.trim().length === 0 || labels.some((c) => c.name.trim().length === 0)
             }
           >
             Create
-          </Button>
+          </AsyncButton>
         </Stack>
       </Modal>
       <Button

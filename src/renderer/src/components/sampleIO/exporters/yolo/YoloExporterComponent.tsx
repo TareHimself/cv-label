@@ -3,6 +3,7 @@ import { Button, Group, Progress, SegmentedControlItem, Stack, Text } from '@man
 import { FaFileExport } from 'react-icons/fa'
 import toast from 'react-hot-toast'
 import JSZip from 'jszip'
+import { AsyncButton } from '@renderer/components/AsyncButton'
 import type { SampleExporterComponentProps } from '../../types'
 import { imageExtensionFromUri } from '../imageExtensionFromUri'
 import { ExportShape } from '../annotationShape'
@@ -26,7 +27,6 @@ export const YoloExporterComponent = ({
   const [shape, setShape] = useState<ExportShape>(ExportShape.Box)
 
   const runExport = async () => {
-    setIsExporting(true)
     try {
       const zip = new JSZip()
       const labelIdToClassId = new Map(project.labels.map((label, id) => [label.id, id]))
@@ -71,8 +71,6 @@ export const YoloExporterComponent = ({
     } catch (error) {
       console.error(error)
       toast.error('Failed to export samples')
-    } finally {
-      setIsExporting(false)
     }
   }
 
@@ -95,9 +93,13 @@ export const YoloExporterComponent = ({
         <Button variant="subtle" onClick={onCancel} disabled={isExporting}>
           Cancel
         </Button>
-        <Button leftSection={<FaFileExport />} loading={isExporting} onClick={runExport}>
+        <AsyncButton
+          leftSection={<FaFileExport />}
+          onClick={runExport}
+          onPendingChange={setIsExporting}
+        >
           Export
-        </Button>
+        </AsyncButton>
       </Group>
     </Stack>
   )

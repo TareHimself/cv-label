@@ -3,12 +3,13 @@ import type { IProject } from '@shared/types'
 import { useState, type FC } from 'react'
 import tinycolor from 'tinycolor2'
 import { ZIndex } from '@renderer/zIndex'
+import { AsyncButton } from '@renderer/components/AsyncButton'
 
 export type EditProjectModalProps = {
   opened: boolean
   project: IProject | null
   onCancel: () => void
-  onConfirm: (name: string, labels: { id: string; name: string }[]) => void
+  onConfirm: (name: string, labels: { id: string; name: string }[]) => Promise<unknown>
 }
 
 /** Only renames the project and its existing labels - adding/removing labels isn't
@@ -30,8 +31,8 @@ export const EditProjectModal: FC<EditProjectModalProps> = ({
     name.trim().length > 0 && labels.every((l) => (labelNames[l.id] ?? '').trim().length > 0)
 
   const confirm = () => {
-    if (!canSave) return
-    onConfirm(
+    if (!canSave) return Promise.resolve()
+    return onConfirm(
       name.trim(),
       labels.map((l) => ({ id: l.id, name: (labelNames[l.id] ?? l.name).trim() }))
     )
@@ -79,9 +80,9 @@ export const EditProjectModal: FC<EditProjectModalProps> = ({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button disabled={!canSave} onClick={confirm}>
+          <AsyncButton disabled={!canSave} onClick={confirm}>
             Save
-          </Button>
+          </AsyncButton>
         </Group>
       </Stack>
     </Modal>

@@ -3,6 +3,7 @@ import { Button, Group, Progress, Stack, Text } from '@mantine/core'
 import { FaFileExport } from 'react-icons/fa'
 import toast from 'react-hot-toast'
 import JSZip from 'jszip'
+import { AsyncButton } from '@renderer/components/AsyncButton'
 import type { SampleExporterComponentProps } from '../../types'
 import { imageExtensionFromUri } from '../imageExtensionFromUri'
 import { buildCvLabelManifest, cvLabelImagePath, type CvLabelManifestSample } from './buildCvLabel'
@@ -18,7 +19,6 @@ export const CvLabelJsonExporterComponent = ({
   const [progress, setProgress] = useState(0)
 
   const runExport = async () => {
-    setIsExporting(true)
     try {
       const zip = new JSZip()
       const samplesByTask = await Promise.all(tasks.map((task) => getSamplesForTask(task.id)))
@@ -58,8 +58,6 @@ export const CvLabelJsonExporterComponent = ({
     } catch (error) {
       console.error(error)
       toast.error('Failed to export samples')
-    } finally {
-      setIsExporting(false)
     }
   }
 
@@ -75,9 +73,13 @@ export const CvLabelJsonExporterComponent = ({
         <Button variant="subtle" onClick={onCancel} disabled={isExporting}>
           Cancel
         </Button>
-        <Button leftSection={<FaFileExport />} loading={isExporting} onClick={runExport}>
+        <AsyncButton
+          leftSection={<FaFileExport />}
+          onClick={runExport}
+          onPendingChange={setIsExporting}
+        >
           Export
-        </Button>
+        </AsyncButton>
       </Group>
     </Stack>
   )

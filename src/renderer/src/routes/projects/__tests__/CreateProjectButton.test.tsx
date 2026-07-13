@@ -33,7 +33,7 @@ describe('CreateProjectButton', () => {
   })
 
   it('calls create with the project name and labels, then closes the modal', async () => {
-    const create = vi.fn()
+    const create = vi.fn().mockResolvedValue(undefined)
     renderWithProviders(<CreateProjectButton create={create} />)
     fireEvent.click(screen.getByRole('button', { name: 'Create Project' }))
     await screen.findByLabelText('Name')

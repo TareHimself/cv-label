@@ -226,11 +226,9 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
         entityName="sample"
         itemName={pendingDelete?.resolve().name}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          if (pendingDelete !== null) {
-            remove(pendingDelete.resolve().id)
-          }
-        }}
+        onConfirm={() =>
+          pendingDelete !== null ? remove(pendingDelete.resolve().id) : Promise.resolve()
+        }
       />
       <RenameModal
         key={pendingRename?.resolve().id}
@@ -239,14 +237,16 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
         initialName={pendingRename?.resolve().name ?? ''}
         onCancel={() => setPendingRename(null)}
         onConfirm={(name) => {
+          let result: Promise<unknown> = Promise.resolve()
           if (pendingRename !== null) {
             const { commit, rollback } = pendingRename.update({ name })
-            store
+            result = store
               .updateSamples([{ id: pendingRename.resolve().id, name }])
               .then(() => commit())
               .catch(() => rollback())
           }
           setPendingRename(null)
+          return result
         }}
       />
       <ImportSamplesModal

@@ -19,7 +19,7 @@ describe('RenameModal', () => {
   })
 
   it('calls onConfirm with the trimmed new name when Save is clicked', () => {
-    const onConfirm = vi.fn()
+    const onConfirm = vi.fn().mockResolvedValue(undefined)
     renderWithProviders(
       <RenameModal
         opened
@@ -37,7 +37,7 @@ describe('RenameModal', () => {
   })
 
   it('submits on Enter', () => {
-    const onConfirm = vi.fn()
+    const onConfirm = vi.fn().mockResolvedValue(undefined)
     renderWithProviders(
       <RenameModal
         opened
@@ -85,5 +85,31 @@ describe('RenameModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a second click while the first onConfirm is still pending', () => {
+    let resolveConfirm: (() => void) | undefined
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve
+        })
+    )
+    renderWithProviders(
+      <RenameModal
+        opened
+        entityName="task"
+        initialName="Batch 1"
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />
+    )
+
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+    fireEvent.click(saveButton)
+    fireEvent.click(saveButton)
+
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    resolveConfirm?.()
   })
 })
