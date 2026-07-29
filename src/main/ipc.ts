@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { BoundaryResult, IPCEvents, IPCKeys } from '../shared/types'
+import { BoundaryResult, IPCEvents } from '../shared/types'
 import { errorToString } from '../shared/utils'
 
 // type IpcMainFunc<TResult = unknown, TArgs extends unknown[] = unknown[]> = (
@@ -54,7 +54,7 @@ import { errorToString } from '../shared/utils'
 //   }
 // }
 
-export const handleIpc = <TChannel extends IPCKeys>(
+export const handleIpc = <TChannel extends keyof IPCEvents>(
   channel: TChannel,
   callback: IPCEvents[TChannel]
 ) => {

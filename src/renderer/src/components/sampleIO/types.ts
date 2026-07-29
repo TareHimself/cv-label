@@ -3,7 +3,10 @@ import type { INewSample, IProject, ISample, ITask } from '@shared/types'
 
 export interface SampleImporterComponentProps {
   project: IProject
-  onComplete: (samples: INewSample[]) => void
+  /** scratchDir is the directory the importer wrote every sample's imagePath into -
+   *  the caller owns deleting it once it's done with the samples (immediately if they're
+   *  persisted right away, or later if they're only staged for review first). */
+  onComplete: (samples: INewSample[], scratchDir: string) => void
   onCancel: () => void
 }
 

@@ -17,10 +17,11 @@ export const PlainImagesImporterComponent = ({
     setIsImporting(true)
     setProgress(0)
     try {
-      const samples = await filesToSamples(files, (completed, total) =>
+      const scratchDir = await window.system.createTemporaryDirectory()
+      const samples = await filesToSamples(files, scratchDir, (completed, total) =>
         setProgress(Math.round((completed / total) * 100))
       )
-      onComplete(samples)
+      onComplete(samples, scratchDir)
     } catch (error) {
       console.error(error)
       toast.error('Failed to read image files')

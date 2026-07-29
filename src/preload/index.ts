@@ -1,53 +1,88 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { IDataStore, ISystem, IPCKeys, IZip } from '../shared/types'
+import {
+  IDataStore,
+  IStoreManager,
+  ISystem,
+  IPCKeys,
+  IZip,
+  IExportApi,
+  IFileUtils,
+  ExportProgressEvent
+} from '../shared/types'
 import { checkBoundaryResult } from '../shared/utils'
 const wrap =
   <T, TArgs extends unknown[]>(key: IPCKeys) =>
   (...args: TArgs) =>
     checkBoundaryResult<T>(ipcRenderer.invoke(key, ...args))
 // Custom APIs for renderer
-const localStoreApi: IDataStore = {
-  connect: wrap(IPCKeys.LocalStore_Connect),
-  disconnect: wrap(IPCKeys.LocalStore_Disconnect),
+const storeApi: IDataStore = {
+  connect: wrap(IPCKeys.Store_Connect),
+  disconnect: wrap(IPCKeys.Store_Disconnect),
 
-  getProjects: wrap(IPCKeys.LocalStore_GetProjects),
-  createProject: wrap(IPCKeys.LocalStore_CreateProject),
-  updateProjects: wrap(IPCKeys.LocalStore_UpdateProjects),
-  deleteProjects: wrap(IPCKeys.LocalStore_DeleteProjects),
+  getProjects: wrap(IPCKeys.Store_GetProjects),
+  createProject: wrap(IPCKeys.Store_CreateProject),
+  updateProjects: wrap(IPCKeys.Store_UpdateProjects),
+  deleteProjects: wrap(IPCKeys.Store_DeleteProjects),
 
-  getTasksForProject: wrap(IPCKeys.LocalStore_GetTasks),
-  createTask: wrap(IPCKeys.LocalStore_CreateTask),
-  updateTasks: wrap(IPCKeys.LocalStore_UpdateTasks),
-  deleteTasks: wrap(IPCKeys.LocalStore_DeleteTasks),
+  getTasksForProject: wrap(IPCKeys.Store_GetTasks),
+  createTask: wrap(IPCKeys.Store_CreateTask),
+  updateTasks: wrap(IPCKeys.Store_UpdateTasks),
+  deleteTasks: wrap(IPCKeys.Store_DeleteTasks),
 
-  getSamplesForTask: wrap(IPCKeys.LocalStore_GetSamplesForTask),
-  getSamples: wrap(IPCKeys.LocalStore_GetSamples),
-  createSamples: wrap(IPCKeys.LocalStore_CreateSamples),
-  updateSamples: wrap(IPCKeys.LocalStore_UpdateSamples),
-  deleteSamples: wrap(IPCKeys.LocalStore_DeleteSamples),
+  getSamplesForTask: wrap(IPCKeys.Store_GetSamplesForTask),
+  getSamples: wrap(IPCKeys.Store_GetSamples),
+  createSamples: wrap(IPCKeys.Store_CreateSamples),
+  updateSamples: wrap(IPCKeys.Store_UpdateSamples),
+  deleteSamples: wrap(IPCKeys.Store_DeleteSamples),
 
-  getAnnotationsForSample: wrap(IPCKeys.LocalStore_GetAnnotationsForSample),
-  createAnnotations: wrap(IPCKeys.LocalStore_CreateAnnotations),
-  updateAnnotations: wrap(IPCKeys.LocalStore_UpdateAnnotations),
-  deleteAnnotations: wrap(IPCKeys.LocalStore_DeleteAnnotations),
+  getAnnotationsForSample: wrap(IPCKeys.Store_GetAnnotationsForSample),
+  createAnnotations: wrap(IPCKeys.Store_CreateAnnotations),
+  updateAnnotations: wrap(IPCKeys.Store_UpdateAnnotations),
+  deleteAnnotations: wrap(IPCKeys.Store_DeleteAnnotations),
 
-  getAnnotators: wrap(IPCKeys.LocalStore_GetAnnotators),
-  createAnnotator: wrap(IPCKeys.LocalStore_CreateAnnotator),
-  deleteAnnotators: wrap(IPCKeys.LocalStore_DeleteAnnotators),
+  getAnnotators: wrap(IPCKeys.Store_GetAnnotators),
+  createAnnotator: wrap(IPCKeys.Store_CreateAnnotator),
+  deleteAnnotators: wrap(IPCKeys.Store_DeleteAnnotators),
 
-  replacePoints: wrap(IPCKeys.LocalStore_ReplacePoints)
+  replacePoints: wrap(IPCKeys.Store_ReplacePoints)
+}
+
+const storeManagerApi: IStoreManager = {
+  listStores: wrap(IPCKeys.Store_List),
+  useStore: wrap(IPCKeys.Store_UseStore)
 }
 
 const systemApi: ISystem = {
   createTemporaryDirectory: wrap(IPCKeys.System_CreateTemporaryDirectory),
   deleteFile: wrap(IPCKeys.System_DeleteFile),
   deleteDirectory: wrap(IPCKeys.System_DeleteDirectory),
-  saveFile: wrap(IPCKeys.System_SaveFile)
+  saveFile: wrap(IPCKeys.System_SaveFile),
+  writeFile: wrap(IPCKeys.System_WriteFile),
+  readTextFile: wrap(IPCKeys.System_ReadTextFile),
+  listFilesRecursive: wrap(IPCKeys.System_ListFilesRecursive),
+  getFileSize: wrap(IPCKeys.System_GetFileSize),
+  getImageDimensions: wrap(IPCKeys.System_GetImageDimensions),
+  getScratchPreviewUri: wrap(IPCKeys.System_GetScratchPreviewUri)
 }
 
 const zipApi: IZip = {
   extractTo: wrap(IPCKeys.Zip_ExtractTo)
+}
+
+// Synchronous and preload-only, unlike everything else here - never crosses IPC, so it
+// doesn't go through wrap()/ipcRenderer.invoke.
+const fileUtilsApi: IFileUtils = {
+  getPathForFile: (file) => webUtils.getPathForFile(file)
+}
+
+const exportApi: IExportApi = {
+  runExport: wrap(IPCKeys.Export_Run),
+  onProgress: (callback) => {
+    const listener = (_: unknown, event: ExportProgressEvent) => callback(event)
+    ipcRenderer.on(IPCKeys.Export_Progress, listener)
+    return () => ipcRenderer.removeListener(IPCKeys.Export_Progress, listener)
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
@@ -56,9 +91,12 @@ const zipApi: IZip = {
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('localStore', localStoreApi)
+    contextBridge.exposeInMainWorld('store', storeApi)
+    contextBridge.exposeInMainWorld('storeManager', storeManagerApi)
     contextBridge.exposeInMainWorld('system', systemApi)
     contextBridge.exposeInMainWorld('zip', zipApi)
+    contextBridge.exposeInMainWorld('exportApi', exportApi)
+    contextBridge.exposeInMainWorld('fileUtils', fileUtilsApi)
   } catch (error) {
     console.error(error)
   }
@@ -66,9 +104,15 @@ if (process.contextIsolated) {
   // @ts-ignore (define in dts)
   window.electron = electronAPI
   // @ts-ignore (define in dts)
-  window.localStore = localStoreApi
+  window.store = storeApi
+  // @ts-ignore (define in dts)
+  window.storeManager = storeManagerApi
   // @ts-ignore (define in dts)
   window.system = systemApi
   // @ts-ignore (define in dts)
   window.zip = zipApi
+  // @ts-ignore (define in dts)
+  window.exportApi = exportApi
+  // @ts-ignore (define in dts)
+  window.fileUtils = fileUtilsApi
 }

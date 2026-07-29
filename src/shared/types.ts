@@ -1,3 +1,27 @@
+/** Privileged protocol scheme main registers to serve arbitrary local scratch files (e.g.
+ *  a not-yet-imported sample's thumbnail) straight to the renderer, the same way the
+ *  images:// protocol serves persisted ones - see main/scratchProtocol.ts.
+ *
+ *  A raw file path can't be embedded in the URL itself (`scratch:///C%3A%5Cfoo` etc.) -
+ *  for a custom "standard" scheme, Chromium's URL parser treats everything between `//`
+ *  and the next `/` as the host/authority, subject to host-validity rules that reject or
+ *  mangle drive letters, colons and backslashes, same as images:// already avoids by using
+ *  an opaque id instead of a raw path. So this is request/response (main mints an id for a
+ *  path and hands back `scratch://<id>`), not a pure client-side string builder. */
+export const SCRATCH_PROTOCOL_URL = 'scratch'
+
+/** Privileged protocol scheme main registers to serve persisted sample images. A URL is
+ *  `image://<storeId>/<imageId>.<ext>` - `storeId` is the host/authority segment (same
+ *  custom-scheme parsing behavior SCRATCH_PROTOCOL_URL relies on), so the single
+ *  `protocol.handle` registered in main/store.ts can dispatch to whichever registered
+ *  IDataStore produced the image, regardless of which store is currently active. */
+export const IMAGE_PROTOCOL_URL = 'image'
+
+/** The id the always-registered local/worker-backed store is known by to the orchestrator
+ *  and stamps onto every image:// URL it mints - see main/localStore.ts,
+ *  main/storeOrchestrator.ts. */
+export const LOCAL_STORE_ID = 'local'
+
 export type BoundaryResult<T> =
   | {
       ok: true
@@ -57,14 +81,20 @@ export enum TrainingSplit {
 export interface INewSample {
   id: string
   name: string
-  base64Image: string
+  /** Absolute path to a scratch file on local disk, written by whichever importer built
+   *  this sample. The active IDataStore implementation decides how to ingest it -
+   *  localStore moves it into its own image store; a future remote store would stream-
+   *  upload from the same local path. Always a reference, never held bytes. */
+  imagePath: string
   split: TrainingSplit
   annotations: IAnnotation[]
   createdAt: string
 }
 
-export interface ISample extends OmitV2<INewSample, 'base64Image'> {
+export interface ISample extends OmitV2<INewSample, 'imagePath'> {
   imageUri: string
+  width: number
+  height: number
   completedAt: string | null
 }
 
@@ -145,6 +175,16 @@ export interface IDataStore {
   replacePoints(annotationId: string, points: IPointReplacement[]): Promise<IPoint[]>
 }
 
+export type StoreDescriptor = { id: string; name: string }
+
+/** Lets the renderer list/switch which registered IDataStore main is currently routing
+ *  Store_* IPC calls to - separate from IDataStore itself since these are orchestration
+ *  operations, not data operations. See main/storeOrchestrator.ts. */
+export interface IStoreManager {
+  listStores(): Promise<StoreDescriptor[]>
+  useStore(id: string): Promise<void>
+}
+
 export interface ISystem {
   createTemporaryDirectory(): Promise<string>
   deleteFile(filePath: string): Promise<void>
@@ -152,11 +192,49 @@ export interface ISystem {
   /** Shows a native save dialog defaulted to suggestedName; writes data to the chosen
    *  path. Returns false if the user cancelled the dialog. */
   saveFile(suggestedName: string, data: ArrayBuffer): Promise<boolean>
+  /** Writes data to an explicit local path - no dialog, unlike saveFile. */
+  writeFile(filePath: string, data: ArrayBuffer): Promise<void>
+  readTextFile(filePath: string): Promise<string>
+  /** Relative, forward-slash paths of every file under dirPath (recursive). */
+  listFilesRecursive(dirPath: string): Promise<string[]>
+  getFileSize(filePath: string): Promise<number>
+  /** Reads just enough of the file to determine its dimensions - never loads the full
+   *  image into memory, unlike decoding it renderer-side via createImageBitmap. */
+  getImageDimensions(filePath: string): Promise<{ width: number; height: number }>
+  /** Mints a scratch://<id> URI that resolves back to filePath - see SCRATCH_PROTOCOL_URL
+   *  for why this can't just be built client-side from the path. */
+  getScratchPreviewUri(filePath: string): Promise<string>
 }
 
 export interface IZip {
   // getKeys(filePath: string): Promise<string[]>
   extractTo(filePath: string, destination: string): Promise<void>
+}
+
+export interface IFileUtils {
+  /** The real absolute path of a File picked via <input type="file"> - Electron's
+   *  webUtils.getPathForFile, the documented replacement for the removed File.path
+   *  property. Synchronous and never touches the file's bytes, unlike reading it via
+   *  arrayBuffer()/stream() - use this instead of copying a picked file's contents
+   *  through IPC just to hand main process code a path to it. Returns '' for a File that
+   *  has no real on-disk path (e.g. one constructed in memory rather than picked). */
+  getPathForFile(file: File): string
+}
+
+export type ArchiveTextEntry = { path: string; content: string }
+export type ArchiveImageEntry = { path: string; imageUri: string }
+export type ArchiveManifest = { textEntries: ArchiveTextEntry[]; imageEntries: ArchiveImageEntry[] }
+export type ExportProgressEvent = { completed: number; total: number }
+
+export interface IExportApi {
+  /** Shows a native save dialog defaulted to suggestedName, then streams manifest's
+   *  entries straight into a zip archive at the chosen path - image entries are read
+   *  from the store and never fully buffered in the renderer. Returns false if the user
+   *  cancelled the dialog. */
+  runExport(suggestedName: string, manifest: ArchiveManifest): Promise<boolean>
+  /** Subscribes to progress updates for the currently in-flight export. Returns an
+   *  unsubscribe function. */
+  onProgress(callback: (event: ExportProgressEvent) => void): () => void
 }
 
 export type WrapMethodsWithBoundary<T> = {
@@ -168,73 +246,98 @@ export type WrapMethodsWithBoundary<T> = {
 export type OmitV2<T, K extends keyof T> = Omit<T, K>
 
 export enum IPCKeys {
-  // LocalStore
-  LocalStore_Connect = 'localStore-connect',
-  LocalStore_Disconnect = 'localStore-disconnect',
-  LocalStore_GetProjects = 'localStore-getProjects',
-  LocalStore_CreateProject = 'localStore-createProject',
-  LocalStore_UpdateProjects = 'localStore-updateProjects',
-  LocalStore_DeleteProjects = 'localStore-deleteProjects',
-  LocalStore_GetTasks = 'localStore-getTasks',
-  LocalStore_CreateTask = 'localStore-createTask',
-  LocalStore_UpdateTasks = 'localStore-updateTasks',
-  LocalStore_DeleteTasks = 'localStore-deleteTasks',
-  LocalStore_GetSamplesForTask = 'localStore-getSamplesForTask',
-  LocalStore_GetSamples = 'localStore-getSamples',
-  LocalStore_CreateSamples = 'localStore-createSamples',
-  LocalStore_UpdateSamples = 'localStore-updateSamples',
-  LocalStore_DeleteSamples = 'localStore-deleteSamples',
-  LocalStore_GetAnnotationsForSample = 'localStore-getAnnotationsForSample',
-  LocalStore_CreateAnnotations = 'localStore-createAnnotations',
-  LocalStore_UpdateAnnotations = 'localStore-updateAnnotations',
-  LocalStore_DeleteAnnotations = 'localStore-deleteAnnotations',
-  LocalStore_GetAnnotators = 'localStore-getAnnotators',
-  LocalStore_CreateAnnotator = 'localStore-createAnnotator',
-  LocalStore_DeleteAnnotators = 'localStore-deleteAnnotators',
-  LocalStore_ReplacePoints = 'localStore-replacePoints',
+  // Store
+  Store_Connect = 'store-connect',
+  Store_Disconnect = 'store-disconnect',
+  Store_GetProjects = 'store-getProjects',
+  Store_CreateProject = 'store-createProject',
+  Store_UpdateProjects = 'store-updateProjects',
+  Store_DeleteProjects = 'store-deleteProjects',
+  Store_GetTasks = 'store-getTasks',
+  Store_CreateTask = 'store-createTask',
+  Store_UpdateTasks = 'store-updateTasks',
+  Store_DeleteTasks = 'store-deleteTasks',
+  Store_GetSamplesForTask = 'store-getSamplesForTask',
+  Store_GetSamples = 'store-getSamples',
+  Store_CreateSamples = 'store-createSamples',
+  Store_UpdateSamples = 'store-updateSamples',
+  Store_DeleteSamples = 'store-deleteSamples',
+  Store_GetAnnotationsForSample = 'store-getAnnotationsForSample',
+  Store_CreateAnnotations = 'store-createAnnotations',
+  Store_UpdateAnnotations = 'store-updateAnnotations',
+  Store_DeleteAnnotations = 'store-deleteAnnotations',
+  Store_GetAnnotators = 'store-getAnnotators',
+  Store_CreateAnnotator = 'store-createAnnotator',
+  Store_DeleteAnnotators = 'store-deleteAnnotators',
+  Store_ReplacePoints = 'store-replacePoints',
+  Store_List = 'store-list',
+  Store_UseStore = 'store-useStore',
 
   // System
   System_CreateTemporaryDirectory = 'system-createTemporaryDirectory',
   System_DeleteFile = 'system-deleteFile',
   System_DeleteDirectory = 'system-deleteDirectory',
   System_SaveFile = 'system-saveFile',
+  System_WriteFile = 'system-writeFile',
+  System_ReadTextFile = 'system-readTextFile',
+  System_ListFilesRecursive = 'system-listFilesRecursive',
+  System_GetFileSize = 'system-getFileSize',
+  System_GetImageDimensions = 'system-getImageDimensions',
+  System_GetScratchPreviewUri = 'system-getScratchPreviewUri',
 
   // Zip
-  Zip_ExtractTo = 'zip-extractTo'
+  Zip_ExtractTo = 'zip-extractTo',
+
+  // Export
+  Export_Run = 'export-run',
+  /** Main -> renderer push channel (not part of IPCEvents' request/response shape) -
+   *  carries ExportProgressEvent payloads while an export triggered by Export_Run runs. */
+  Export_Progress = 'export-progress'
 }
 
 export type IPCEvents = {
-  // LocalStore
-  [IPCKeys.LocalStore_Connect]: IDataStore['connect']
-  [IPCKeys.LocalStore_Disconnect]: IDataStore['disconnect']
-  [IPCKeys.LocalStore_GetProjects]: IDataStore['getProjects']
-  [IPCKeys.LocalStore_CreateProject]: IDataStore['createProject']
-  [IPCKeys.LocalStore_UpdateProjects]: IDataStore['updateProjects']
-  [IPCKeys.LocalStore_DeleteProjects]: IDataStore['deleteProjects']
-  [IPCKeys.LocalStore_GetTasks]: IDataStore['getTasksForProject']
-  [IPCKeys.LocalStore_CreateTask]: IDataStore['createTask']
-  [IPCKeys.LocalStore_UpdateTasks]: IDataStore['updateTasks']
-  [IPCKeys.LocalStore_DeleteTasks]: IDataStore['deleteTasks']
-  [IPCKeys.LocalStore_GetSamplesForTask]: IDataStore['getSamplesForTask']
-  [IPCKeys.LocalStore_GetSamples]: IDataStore['getSamples']
-  [IPCKeys.LocalStore_CreateSamples]: IDataStore['createSamples']
-  [IPCKeys.LocalStore_UpdateSamples]: IDataStore['updateSamples']
-  [IPCKeys.LocalStore_DeleteSamples]: IDataStore['deleteSamples']
-  [IPCKeys.LocalStore_GetAnnotationsForSample]: IDataStore['getAnnotationsForSample']
-  [IPCKeys.LocalStore_CreateAnnotations]: IDataStore['createAnnotations']
-  [IPCKeys.LocalStore_UpdateAnnotations]: IDataStore['updateAnnotations']
-  [IPCKeys.LocalStore_DeleteAnnotations]: IDataStore['deleteAnnotations']
-  [IPCKeys.LocalStore_GetAnnotators]: IDataStore['getAnnotators']
-  [IPCKeys.LocalStore_CreateAnnotator]: IDataStore['createAnnotator']
-  [IPCKeys.LocalStore_DeleteAnnotators]: IDataStore['deleteAnnotators']
-  [IPCKeys.LocalStore_ReplacePoints]: IDataStore['replacePoints']
+  // Store
+  [IPCKeys.Store_Connect]: IDataStore['connect']
+  [IPCKeys.Store_Disconnect]: IDataStore['disconnect']
+  [IPCKeys.Store_GetProjects]: IDataStore['getProjects']
+  [IPCKeys.Store_CreateProject]: IDataStore['createProject']
+  [IPCKeys.Store_UpdateProjects]: IDataStore['updateProjects']
+  [IPCKeys.Store_DeleteProjects]: IDataStore['deleteProjects']
+  [IPCKeys.Store_GetTasks]: IDataStore['getTasksForProject']
+  [IPCKeys.Store_CreateTask]: IDataStore['createTask']
+  [IPCKeys.Store_UpdateTasks]: IDataStore['updateTasks']
+  [IPCKeys.Store_DeleteTasks]: IDataStore['deleteTasks']
+  [IPCKeys.Store_GetSamplesForTask]: IDataStore['getSamplesForTask']
+  [IPCKeys.Store_GetSamples]: IDataStore['getSamples']
+  [IPCKeys.Store_CreateSamples]: IDataStore['createSamples']
+  [IPCKeys.Store_UpdateSamples]: IDataStore['updateSamples']
+  [IPCKeys.Store_DeleteSamples]: IDataStore['deleteSamples']
+  [IPCKeys.Store_GetAnnotationsForSample]: IDataStore['getAnnotationsForSample']
+  [IPCKeys.Store_CreateAnnotations]: IDataStore['createAnnotations']
+  [IPCKeys.Store_UpdateAnnotations]: IDataStore['updateAnnotations']
+  [IPCKeys.Store_DeleteAnnotations]: IDataStore['deleteAnnotations']
+  [IPCKeys.Store_GetAnnotators]: IDataStore['getAnnotators']
+  [IPCKeys.Store_CreateAnnotator]: IDataStore['createAnnotator']
+  [IPCKeys.Store_DeleteAnnotators]: IDataStore['deleteAnnotators']
+  [IPCKeys.Store_ReplacePoints]: IDataStore['replacePoints']
+  [IPCKeys.Store_List]: IStoreManager['listStores']
+  [IPCKeys.Store_UseStore]: IStoreManager['useStore']
 
   // System
   [IPCKeys.System_CreateTemporaryDirectory]: ISystem['createTemporaryDirectory']
   [IPCKeys.System_DeleteFile]: ISystem['deleteFile']
   [IPCKeys.System_DeleteDirectory]: ISystem['deleteDirectory']
   [IPCKeys.System_SaveFile]: ISystem['saveFile']
+  [IPCKeys.System_WriteFile]: ISystem['writeFile']
+  [IPCKeys.System_ReadTextFile]: ISystem['readTextFile']
+  [IPCKeys.System_ListFilesRecursive]: ISystem['listFilesRecursive']
+  [IPCKeys.System_GetFileSize]: ISystem['getFileSize']
+  [IPCKeys.System_GetImageDimensions]: ISystem['getImageDimensions']
+  [IPCKeys.System_GetScratchPreviewUri]: ISystem['getScratchPreviewUri']
 
   // Zip
   [IPCKeys.Zip_ExtractTo]: IZip['extractTo']
+
+  // Export
+  [IPCKeys.Export_Run]: IExportApi['runExport']
 }

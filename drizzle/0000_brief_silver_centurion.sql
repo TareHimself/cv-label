@@ -22,7 +22,9 @@ CREATE INDEX `idx_annotators_projectId` ON `annotators` (`projectId`);--> statem
 CREATE TABLE `images` (
 	`id` text PRIMARY KEY NOT NULL,
 	`hash` text NOT NULL,
-	`extension` text NOT NULL
+	`extension` text NOT NULL,
+	`width` integer,
+	`height` integer
 );
 --> statement-breakpoint
 CREATE TABLE `labels` (

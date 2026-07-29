@@ -4,6 +4,7 @@ import {
   Flex,
   MantineSize,
   NumberInput,
+  ScrollArea,
   SegmentedControl,
   SegmentedControlProps,
   Tooltip,
@@ -108,16 +109,26 @@ const LabelerModeControl = ({ value, onChange, size = 'md' }: LabelerModeControl
   />
 )
 
-const TextSegmentedControl = (props: OmitV2<SegmentedControlProps, 'styles'>) => {
-  return (
+// Labels grow unbounded (a project can have dozens), so this row needs to size to its
+// natural content width and scroll rather than stretch every item to fill the bar -
+// the fixed cap keeps the bottom bar's other controls from getting pushed off-screen.
+const LABEL_LIST_MAX_WIDTH = 'min(420px, 40vw)'
+
+const TextSegmentedControl = ({
+  scrollable,
+  ...props
+}: OmitV2<SegmentedControlProps, 'styles'> & { scrollable?: boolean }) => {
+  const control = (
     <SegmentedControl
       size="sm"
       styles={{
+        root: scrollable ? { display: 'inline-flex', width: 'max-content' } : undefined,
         label: {
           display: 'flex',
-          flex: 1,
+          flex: scrollable ? undefined : 1,
           justifyContent: 'center',
-          alignItems: 'center'
+          alignItems: 'center',
+          whiteSpace: 'nowrap'
         },
         innerLabel: {
           display: 'flex'
@@ -130,6 +141,19 @@ const TextSegmentedControl = (props: OmitV2<SegmentedControlProps, 'styles'>) =>
       {...props}
     />
   )
+
+  if (!scrollable) return control
+
+  return (
+    <ScrollArea
+      type="auto"
+      scrollbars="x"
+      style={{ maxWidth: LABEL_LIST_MAX_WIDTH }}
+      data-testid="label-scroll-area"
+    >
+      {control}
+    </ScrollArea>
+  )
 }
 
 type SelectedLabelControlProps = {
@@ -140,6 +164,7 @@ type SelectedLabelControlProps = {
 
 const SelectedLabelControl = ({ labels, selectedLabelId, onChange }: SelectedLabelControlProps) => (
   <TextSegmentedControl
+    scrollable
     value={selectedLabelId}
     onChange={onChange}
     data={labels.map((c) => ({
@@ -290,12 +315,16 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
         opened={isAnnotationsDrawerOpen}
         onClose={() => setIsAnnotationsDrawerOpen(false)}
       />
-      <Flex
-        style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translate(-50%,0)' }}
-        gap={'md'}
-      >
+      <Flex style={{ position: 'absolute', bottom: 20, left: 20 }} gap={'md'}>
         <LabelerModeControl value={mode} onChange={(e) => store.getState().setMode(e)} />
 
+        {currentSampleId && (
+          <SampleCompletedControl
+            value={sampleCompletedAt}
+            onChange={(newCompletedAt) => onSampleCompletedChanged(currentSampleId, newCompletedAt)}
+          />
+        )}
+        <SampleSelect value={index} onChange={setIndex} maxIndex={samples.length - 1} />
         {project.labels.length > 1 && (
           <Tooltip label="Select Label">
             <SelectedLabelControl
@@ -305,13 +334,6 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
             />
           </Tooltip>
         )}
-        {currentSampleId && (
-          <SampleCompletedControl
-            value={sampleCompletedAt}
-            onChange={(newCompletedAt) => onSampleCompletedChanged(currentSampleId, newCompletedAt)}
-          />
-        )}
-        <SampleSelect value={index} onChange={setIndex} maxIndex={samples.length - 1} />
       </Flex>
     </Container>
   )

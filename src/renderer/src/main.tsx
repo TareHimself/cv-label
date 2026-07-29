@@ -21,7 +21,7 @@ createRoot(document.getElementById('root')!).render(
       <MantineProvider defaultColorScheme="dark">
         <ContextMenuProvider submenuDelay={0}>
           <App />
-          <Toaster position="bottom-left" />
+          <Toaster position="bottom-right" />
         </ContextMenuProvider>
       </MantineProvider>
     </QueryClientProvider>

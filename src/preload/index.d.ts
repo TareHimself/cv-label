@@ -1,11 +1,14 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { IDataStore, ISystem, IZip } from '@shared/types'
+import { IDataStore, IExportApi, IFileUtils, IStoreManager, ISystem, IZip } from '@shared/types'
 
 declare global {
   interface Window {
     electron: ElectronAPI
-    localStore: IDataStore
+    store: IDataStore
+    storeManager: IStoreManager
     system: ISystem
     zip: IZip
+    exportApi: IExportApi
+    fileUtils: IFileUtils
   }
 }

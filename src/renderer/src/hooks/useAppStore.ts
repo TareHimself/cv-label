@@ -1,4 +1,4 @@
-import { LocalDataStore } from '@renderer/data/LocalDataStore'
+import { IpcDataStore } from '@renderer/data/IpcDataStore'
 import { IDataStore } from '@shared/types'
 import { create } from 'zustand'
 
@@ -15,7 +15,7 @@ type AppStoreActions = object
 
 export const useAppStore = create<AppStoreState & AppStoreActions>(() => {
   return {
-    store: new LocalDataStore()
+    store: new IpcDataStore()
     // projects: [],
     // tasks: [],
     // samples: [],

@@ -2,6 +2,7 @@ import { isMainThread, parentPort, workerData } from 'worker_threads'
 import {
   WorkerResponse,
   WorkerMessage,
+  WorkerProgressMessage,
   ModuleWorkerMessage,
   InitResult
 } from './module_worker_utils'
@@ -62,8 +63,15 @@ if (isEntryFile(import.meta.url)) {
 
       if (data.type === ModuleWorkerMessage.Call) {
         const func = methods[data.methodId]
+        // Every call gets a progress reporter as its final argument - unused by methods
+        // that don't declare a trailing progress parameter, but requires no per-method
+        // plumbing for the ones that do (see WorkerProgressMessage).
+        const reportProgress = (...args: unknown[]) => {
+          const message: WorkerProgressMessage = { type: 'progress', callRef: data.callRef, args }
+          parentPort?.postMessage(message)
+        }
         try {
-          const result = await func(...data.args)
+          const result = await func(...data.args, reportProgress)
           respond(data.callRef, result)
         } catch (error) {
           console.error(error)

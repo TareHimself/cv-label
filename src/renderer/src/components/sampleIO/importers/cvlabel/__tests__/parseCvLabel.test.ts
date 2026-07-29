@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AnnotationType, TrainingSplit } from '@shared/types'
 import type { VirtualFile } from '../../virtualFileSystem'
 import { cvLabelDatasetToSamples, findCvLabelManifest, findCvLabelPairs } from '../parseCvLabel'
@@ -87,6 +87,13 @@ describe('findCvLabelPairs', () => {
 })
 
 describe('cvLabelDatasetToSamples', () => {
+  const writeFile = vi.fn()
+
+  beforeEach(() => {
+    writeFile.mockReset().mockResolvedValue(undefined)
+    window.system = { writeFile } as unknown as typeof window.system
+  })
+
   it('remaps each annotation labelId via the given mapping, and regenerates every id', async () => {
     const pairs = [
       {
@@ -110,9 +117,10 @@ describe('cvLabelDatasetToSamples', () => {
     ]
     const labelIdToProjectLabelId = new Map([['source-l1', 'target-l1']])
 
-    const samples = await cvLabelDatasetToSamples(pairs, labelIdToProjectLabelId)
+    const samples = await cvLabelDatasetToSamples(pairs, labelIdToProjectLabelId, '/scratch')
 
     expect(samples).toHaveLength(1)
+    expect(samples[0].imagePath).toMatch(/^\/scratch\/.+\.jpg$/)
     expect(samples[0].id).not.toBe('s1')
     expect(samples[0].name).toBe('photo')
     expect(samples[0].annotations).toHaveLength(1)
@@ -137,7 +145,7 @@ describe('cvLabelDatasetToSamples', () => {
       }
     ]
 
-    const samples = await cvLabelDatasetToSamples(pairs, new Map())
+    const samples = await cvLabelDatasetToSamples(pairs, new Map(), '/scratch')
 
     expect(samples[0].annotations).toHaveLength(0)
   })
@@ -157,7 +165,7 @@ describe('cvLabelDatasetToSamples', () => {
       }
     ]
 
-    expect(await cvLabelDatasetToSamples(pairs, new Map())).toHaveLength(0)
+    expect(await cvLabelDatasetToSamples(pairs, new Map(), '/scratch')).toHaveLength(0)
   })
 
   it('reports progress per pair processed, including skipped ones', async () => {
@@ -187,7 +195,7 @@ describe('cvLabelDatasetToSamples', () => {
     ]
     const onProgress = vi.fn()
 
-    await cvLabelDatasetToSamples(pairs, new Map(), onProgress)
+    await cvLabelDatasetToSamples(pairs, new Map(), '/scratch', onProgress)
 
     expect(onProgress).toHaveBeenCalledTimes(2)
     expect(onProgress).toHaveBeenLastCalledWith(2, 2)

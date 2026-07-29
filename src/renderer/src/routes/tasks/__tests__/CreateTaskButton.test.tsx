@@ -4,9 +4,35 @@ import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { CreateTaskButton } from '../CreateTaskButton'
 import { IProject } from '@shared/types'
 
+const fileSizeByPath = new Map<string, number>()
+const createTemporaryDirectory = vi.fn()
+const writeFile = vi.fn((filePath: string, data: ArrayBuffer) => {
+  fileSizeByPath.set(filePath, data.byteLength)
+  return Promise.resolve()
+})
+const getFileSize = vi.fn((filePath: string) => Promise.resolve(fileSizeByPath.get(filePath) ?? 0))
+const getScratchPreviewUri = vi.fn((filePath: string) =>
+  Promise.resolve(`scratch://${encodeURIComponent(filePath)}`)
+)
+const deleteDirectory = vi.fn().mockResolvedValue(undefined)
+
 beforeEach(() => {
   URL.createObjectURL = vi.fn(() => 'blob:mock-url')
   URL.revokeObjectURL = vi.fn()
+
+  fileSizeByPath.clear()
+  createTemporaryDirectory.mockReset().mockResolvedValue('/scratch')
+  writeFile.mockClear()
+  getFileSize.mockClear()
+  getScratchPreviewUri.mockClear()
+  deleteDirectory.mockClear()
+  window.system = {
+    createTemporaryDirectory,
+    writeFile,
+    getFileSize,
+    getScratchPreviewUri,
+    deleteDirectory
+  } as unknown as typeof window.system
 })
 
 const project: IProject = { id: 'project-1', name: 'Test Project', labels: [] }

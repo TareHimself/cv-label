@@ -1,6 +1,7 @@
 // Will be loaded in a worker thread, cant use any electron API's
 import {
   AnnotationType,
+  ArchiveManifest,
   IAnnotation,
   IAnnotator,
   IDataStore,
@@ -11,6 +12,7 @@ import {
   IProject,
   ISample,
   ITask,
+  LOCAL_STORE_ID,
   TrainingSplit
 } from '../shared/types'
 import Database from 'better-sqlite3'
@@ -19,10 +21,14 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import path from 'path'
 import fs from 'fs/promises'
+import { createReadStream, createWriteStream } from 'fs'
+import type { Readable } from 'node:stream'
+import archiver from 'archiver'
 import sharp from 'sharp'
 import { makeUUID } from '../shared/utils'
+import { mapWithConcurrency } from '../shared/concurrency'
 import assert from 'assert'
-import { sha512 } from './utils_no_electron'
+import { hashFile } from './utils_no_electron'
 import * as schema from './schema'
 
 console.log('Database loaded into worker', APP_PATH)
@@ -52,16 +58,16 @@ migrate(db, { migrationsFolder: MIGRATIONS_PATH })
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-export const IMAGES_PROTOCOL_URL = 'images'
-
 const makeImageUri = (id: string, extension: string) => {
-  return `${IMAGES_PROTOCOL_URL}://${id}.${extension}`
+  return `image://${LOCAL_STORE_ID}/${id}.${extension}`
 }
 
-export const getImagePathFromUrl = async (url: string) => {
-  const imageKey = url.slice(IMAGES_PROTOCOL_URL.length + 3)
+/** Takes just the `<id>.<ext>` segment (the image:// URL's pathname, minus the leading
+ *  slash) - the storeId/scheme parsing happens once, centrally, in the orchestrator's
+ *  protocol.handle before this store is ever consulted. */
+export const getImagePathForId = async (idWithExtension: string) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [id, _] = imageKey.split('.') as [string, string]
+  const [id, _] = idWithExtension.split('.') as [string, string]
   const imageInfo = db.select().from(schema.images).where(eq(schema.images.id, id)).get()
 
   if (imageInfo === undefined) {
@@ -69,6 +75,84 @@ export const getImagePathFromUrl = async (url: string) => {
   }
 
   return path.join(imagesPath, `${imageInfo.hash}.${imageInfo.extension}`)
+}
+
+/** A Node Readable can't cross the worker_threads postMessage boundary, so unlike every
+ *  other export here this is never called through the RPC proxy from main - only from
+ *  exportSamplesToArchive, in the same worker module. A future non-local IDataStore
+ *  implementation would swap this for e.g. an HTTP GET response stream; nothing that
+ *  consumes it needs to know which. */
+export const getImageStream = async (imageUri: string) => {
+  const filePath = await getImagePathForId(new URL(imageUri).pathname.slice(1))
+  return filePath === undefined ? undefined : createReadStream(filePath)
+}
+
+// How many image entries can be mid-append (file open, being read/compressed/written) at
+// once. archive.append() only queues an entry and returns immediately, so appending every
+// entry back to back with no bound would open one file descriptor per image up front -
+// fine for a handful of samples, but risks exhausting file descriptors (EMFILE) on
+// datasets with thousands of images. This bounds that to a fixed window instead of either
+// extreme (unbounded, or strictly one-at-a-time).
+const DEFAULT_EXPORT_CONCURRENCY = 10
+
+export const exportSamplesToArchive = async (
+  destinationPath: string,
+  manifest: ArchiveManifest,
+  concurrency: number = DEFAULT_EXPORT_CONCURRENCY,
+  // Must stay the last parameter: the worker-RPC layer detects a trailing function
+  // argument as an out-of-band progress callback (see main/worker/index.ts) and strips it
+  // before the call crosses into the worker.
+  onProgress?: (completed: number, total: number) => void
+): Promise<void> => {
+  const archive = archiver('zip', { zlib: { level: 9 } })
+  const output = createWriteStream(destinationPath)
+
+  const done = new Promise<void>((resolve, reject) => {
+    output.on('close', resolve)
+    output.on('error', reject)
+    archive.on('error', reject)
+  })
+
+  archive.pipe(output)
+
+  // Progress is tracked against the manifest's own (fixed, known-upfront) entry count
+  // rather than archiver's own 'progress' event, which only reflects entries queued so far
+  // and would understate the real dataset size while entries are still being appended.
+  const total = manifest.textEntries.length + manifest.imageEntries.length
+  let completed = 0
+
+  // With several appends in flight at once, archiver's 'entry' event (fired per completed
+  // entry) can't be matched to the right pending promise by registration order - a single
+  // persistent listener correlates each event to its own append by name instead.
+  const pendingByName = new Map<string, () => void>()
+  archive.on('entry', (entryData) => {
+    const resolve = pendingByName.get(entryData.name)
+    if (resolve === undefined) return
+    pendingByName.delete(entryData.name)
+    completed += 1
+    onProgress?.(completed, total)
+    resolve()
+  })
+
+  const appendAndWaitForEntry = (source: string | Readable, name: string): Promise<void> =>
+    new Promise((resolve) => {
+      pendingByName.set(name, resolve)
+      archive.append(source, { name })
+    })
+
+  for (const entry of manifest.textEntries) {
+    await appendAndWaitForEntry(entry.content, entry.path)
+  }
+
+  await mapWithConcurrency(manifest.imageEntries, concurrency, async (entry) => {
+    const stream = await getImageStream(entry.imageUri)
+    if (stream !== undefined) {
+      await appendAndWaitForEntry(stream, entry.path)
+    }
+  })
+
+  await archive.finalize()
+  await done
 }
 
 function fetchSampleWithRelations(id: string) {
@@ -91,32 +175,108 @@ function fetchSampleWithRelations(id: string) {
 // Row shape returned by the sample relational query above (id/image/annotations/points).
 type SampleWithRelationsRow = NonNullable<Awaited<ReturnType<typeof fetchSampleWithRelations>>>
 
-const mapSampleRow = (row: SampleWithRelationsRow): ISample => ({
-  id: row.id,
-  name: row.name,
-  split: row.split as TrainingSplit,
-  createdAt: row.createdAt,
-  completedAt: row.completedAt,
-  imageUri: makeImageUri(row.image.id, row.image.extension),
-  annotations: row.annotations.map<IAnnotation>((a) => ({
-    id: a.id,
-    type: a.type as AnnotationType,
-    labelId: a.labelId,
-    points: a.points
-  }))
-})
+/** Images written before the width/height columns existed have them as null - backfill
+ *  lazily on first read rather than a blocking startup migration over every existing file. */
+const imageDimensions = async (
+  image: SampleWithRelationsRow['image']
+): Promise<{ width: number; height: number }> => {
+  if (image.width !== null && image.height !== null) {
+    return { width: image.width, height: image.height }
+  }
+
+  try {
+    const imagePath = path.join(imagesPath, `${image.hash}.${image.extension}`)
+    const metadata = await sharp(imagePath).metadata()
+    const width = metadata.width ?? 0
+    const height = metadata.height ?? 0
+    db.update(schema.images).set({ width, height }).where(eq(schema.images.id, image.id)).run()
+    return { width, height }
+  } catch (error) {
+    console.error('Failed to backfill image dimensions', error)
+    return { width: 0, height: 0 }
+  }
+}
+
+const mapSampleRow = async (row: SampleWithRelationsRow): Promise<ISample> => {
+  const { width, height } = await imageDimensions(row.image)
+
+  return {
+    id: row.id,
+    name: row.name,
+    split: row.split as TrainingSplit,
+    createdAt: row.createdAt,
+    completedAt: row.completedAt,
+    imageUri: makeImageUri(row.image.id, row.image.extension),
+    width,
+    height,
+    annotations: row.annotations.map<IAnnotation>((a) => ({
+      id: a.id,
+      type: a.type as AnnotationType,
+      labelId: a.labelId,
+      points: a.points
+    }))
+  }
+}
+
+type ImageMetadata = { hash: string; extension: string; width: number; height: number }
+
+// Bounds in-flight file handles/hashes during ingestion instead of processing a whole
+// import batch (which can run into the thousands of images) at once.
+const INGEST_CONCURRENCY = 8
+
+const ingestScratchImage = async (imagePath: string): Promise<ImageMetadata> => {
+  const [hash, metadata] = await Promise.all([hashFile(imagePath), sharp(imagePath).metadata()])
+  return {
+    hash,
+    extension: metadata.format as string,
+    width: metadata.width ?? 0,
+    height: metadata.height ?? 0
+  }
+}
+
+/** Moves a scratch file into the store, falling back to copy+unlink when the scratch
+ *  directory (os.tmpdir()) isn't on the same filesystem/drive as the store - fs.rename
+ *  throws EXDEV in that case rather than silently failing, so this must not be skipped. */
+const moveOrCopyFile = async (source: string, destination: string): Promise<void> => {
+  try {
+    await fs.rename(source, destination)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EXDEV') {
+      await fs.copyFile(source, destination)
+      await fs.unlink(source)
+    } else {
+      throw error
+    }
+  }
+}
+
+/** Consumes every scratch file referenced by samples: moves the ones behind a newly
+ *  inserted image into the store, and discards the rest (their content is already
+ *  covered by an existing store file, per insertedImagesIndex). */
+const consumeScratchFiles = async (
+  samples: INewSample[],
+  images: ImageMetadata[],
+  insertedImagesIndex: Set<number>
+): Promise<void> => {
+  await mapWithConcurrency(samples, INGEST_CONCURRENCY, async (sample, idx) => {
+    if (insertedImagesIndex.has(idx)) {
+      const { hash, extension } = images[idx]
+      await moveOrCopyFile(sample.imagePath, path.join(imagesPath, `${hash}.${extension}`))
+    } else {
+      await fs.unlink(sample.imagePath)
+    }
+  })
+}
 
 const dedupeImages = (
   tx: Tx,
-  hashes: string[],
-  extensions: string[]
+  images: ImageMetadata[]
 ): { ids: string[]; inserted: Set<number> } => {
   const ids: string[] = []
   const inserted: Set<number> = new Set()
 
-  for (let i = 0; i < hashes.length; i++) {
-    const hash = hashes[i]
-    const extension = extensions[i]
+  for (let i = 0; i < images.length; i++) {
+    const { hash, extension, width, height } = images[i]
     const existing = tx.select().from(schema.images).where(eq(schema.images.hash, hash)).get()
     if (existing !== undefined) {
       ids.push(existing.id)
@@ -124,7 +284,7 @@ const dedupeImages = (
       inserted.add(i)
       const id = makeUUID()
       ids.push(id)
-      tx.insert(schema.images).values({ id, hash, extension }).run()
+      tx.insert(schema.images).values({ id, hash, extension, width, height }).run()
     }
   }
 
@@ -163,17 +323,16 @@ const insertSamplesWithImages = (
   tx: Tx,
   taskId: string,
   samples: INewSample[],
-  hashes: string[],
-  extensions: string[]
+  images: ImageMetadata[]
 ): { insertedImagesIndex: Set<number>; newSamples: ISample[] } => {
-  const { ids: imageIds, inserted: insertedImagesIndex } = dedupeImages(tx, hashes, extensions)
+  const { ids: imageIds, inserted: insertedImagesIndex } = dedupeImages(tx, images)
 
   const newSamples: ISample[] = []
 
   for (let i = 0; i < samples.length; i++) {
     const sample = samples[i]
     const imageId = imageIds[i]
-    const imageExtension = extensions[i]
+    const { extension, width, height } = images[i]
 
     tx.insert(schema.samples)
       .values({
@@ -189,7 +348,9 @@ const insertSamplesWithImages = (
     newSamples.push({
       id: sample.id,
       name: sample.name,
-      imageUri: makeImageUri(imageId, imageExtension),
+      imageUri: makeImageUri(imageId, extension),
+      width,
+      height,
       createdAt: sample.createdAt,
       annotations: insertAnnotations(tx, sample.id, sample.annotations),
       split: sample.split,
@@ -325,30 +486,20 @@ const localStore: IDataStore = {
       return task
     }
 
-    const b64Images = newSamples.map((c) => c.base64Image)
-    const hashes = sha512(b64Images)
-    const buffers = b64Images.map((c) => Buffer.from(c, 'base64'))
-    const extensions = await Promise.all(
-      buffers.map((buffer) =>
-        sharp(buffer)
-          .metadata()
-          .then((c) => c.format)
-      )
+    const images = await mapWithConcurrency(
+      newSamples.map((s) => s.imagePath),
+      INGEST_CONCURRENCY,
+      ingestScratchImage
     )
 
-    // Persist files first so DB writes can stay inside one sync transaction.
-    await Promise.all(
-      buffers.map((buffer, idx) =>
-        fs.writeFile(path.join(imagesPath, `${hashes[idx]}.${extensions[idx]}`), buffer)
-      )
-    )
-
-    db.transaction((tx) => {
+    const { insertedImagesIndex } = db.transaction((tx) => {
       tx.insert(schema.tasks)
         .values({ ...task, projectId })
         .run()
-      insertSamplesWithImages(tx, task.id, newSamples, hashes, extensions as string[])
+      return insertSamplesWithImages(tx, task.id, newSamples, images)
     })
+
+    await consumeScratchFiles(newSamples, images, insertedImagesIndex)
 
     return task
   },
@@ -379,7 +530,7 @@ const localStore: IDataStore = {
       }
     })
 
-    return samples.map(mapSampleRow)
+    return Promise.all(samples.map(mapSampleRow))
   },
 
   getSamples: async (sampleIds) => {
@@ -387,65 +538,65 @@ const localStore: IDataStore = {
     for (const sampleId of sampleIds) {
       const sample = await fetchSampleWithRelations(sampleId)
       if (sample !== undefined) {
-        samples.push(mapSampleRow(sample))
+        samples.push(await mapSampleRow(sample))
       }
     }
     return samples
   },
 
   createSamples: async (taskId, samples) => {
-    const b64Images = samples.map((c) => c.base64Image)
-    const hashes = sha512(b64Images)
-    const buffers = b64Images.map((c) => Buffer.from(c, 'base64'))
-    const extensions = await Promise.all(
-      buffers.map((buffer) =>
-        sharp(buffer)
-          .metadata()
-          .then((c) => c.format)
-      )
+    const images = await mapWithConcurrency(
+      samples.map((s) => s.imagePath),
+      INGEST_CONCURRENCY,
+      ingestScratchImage
     )
 
     const { insertedImagesIndex, newSamples } = db.transaction((tx) =>
-      insertSamplesWithImages(tx, taskId, samples, hashes, extensions as string[])
+      insertSamplesWithImages(tx, taskId, samples, images)
     )
 
-    // Write images to disk
-    await Promise.all(
-      Array.from(insertedImagesIndex).map((idx) =>
-        fs.writeFile(path.join(imagesPath, `${hashes[idx]}.${extensions[idx]}`), buffers[idx])
-      )
-    )
+    await consumeScratchFiles(samples, images, insertedImagesIndex)
 
     return newSamples
   },
 
   updateSamples: async (updates) => {
-    return db.transaction((tx) => {
-      const updatedSamples: ISample[] = []
-
-      for (const update of updates) {
-        const existingRow = tx.query.samples
-          .findFirst({
-            where: eq(schema.samples.id, update.id),
-            with: {
-              image: true,
-              annotations: {
-                orderBy: (annotations, { asc }) => [asc(annotations.id)],
-                with: {
-                  points: {
-                    orderBy: (points, { asc }) => [asc(points.sequence)]
-                  }
+    // Read rows and resolve (possibly-backfilled) width/height before the transaction,
+    // since better-sqlite3 transactions run synchronously and sharp's metadata read doesn't.
+    const existingRows = updates.map((update) => {
+      const row = db.query.samples
+        .findFirst({
+          where: eq(schema.samples.id, update.id),
+          with: {
+            image: true,
+            annotations: {
+              orderBy: (annotations, { asc }) => [asc(annotations.id)],
+              with: {
+                points: {
+                  orderBy: (points, { asc }) => [asc(points.sequence)]
                 }
               }
             }
-          })
-          .sync()
+          }
+        })
+        .sync()
 
-        if (existingRow === undefined) {
-          throw new Error(`sample not found: ${update.id}`)
-        }
+      if (row === undefined) {
+        throw new Error(`sample not found: ${update.id}`)
+      }
 
-        const existingSample = mapSampleRow(existingRow)
+      return row
+    })
+
+    const existingSamples = await Promise.all(existingRows.map(mapSampleRow))
+
+    return db.transaction((tx) => {
+      const updatedSamples: ISample[] = []
+
+      for (let i = 0; i < updates.length; i++) {
+        const update = updates[i]
+        const existingRow = existingRows[i]
+        const existingSample = existingSamples[i]
 
         tx.update(schema.samples)
           .set({
@@ -684,7 +835,7 @@ export const {
   createProject,
   updateProjects,
   deleteProjects,
-  getTasksForProject: getTasks,
+  getTasksForProject,
   createTask,
   updateTasks,
   deleteTasks,

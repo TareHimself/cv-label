@@ -5,7 +5,7 @@ import { FaFileZipper } from 'react-icons/fa6'
 import type { SampleImporterComponentProps } from '../../types'
 import { ZIndex } from '@renderer/zIndex'
 import { findLabelIdById, findLabelIdByName } from '../matchLabel'
-import { virtualFilesFromZip } from '../virtualFileSystem'
+import { virtualFilesFromExtractedZip } from '../virtualFileSystem'
 import {
   cvLabelDatasetToSamples,
   findCvLabelManifest,
@@ -28,6 +28,14 @@ export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
   const [state, setState] = useState<WizardState>({ step: 'select-source' })
   const [labelByClassId, setLabelByClassId] = useState<Map<string, string>>(new Map())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const scratchDirRef = useRef<string | null>(null)
+
+  const ensureScratchDir = async (): Promise<string> => {
+    if (!scratchDirRef.current) {
+      scratchDirRef.current = await window.system.createTemporaryDirectory()
+    }
+    return scratchDirRef.current
+  }
 
   const handleFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -36,7 +44,8 @@ export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
 
     setState({ step: 'parsing' })
     try {
-      const files = await virtualFilesFromZip(file)
+      const scratchDir = await ensureScratchDir()
+      const files = await virtualFilesFromExtractedZip(file, scratchDir)
       const found = await findCvLabelManifest(files)
       if (!found) {
         toast.error('No manifest.json found - is this a .cvlabel file?')
@@ -70,16 +79,18 @@ export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
 
   const runImport = async () => {
     if (state.step !== 'mapping') return
+    const scratchDir = await ensureScratchDir()
     setState({ step: 'importing', progress: 0 })
     try {
       const samples = await cvLabelDatasetToSamples(
         state.pairs,
         labelByClassId,
+        scratchDir,
         (completed, total) => {
           setState({ step: 'importing', progress: Math.round((completed / total) * 100) })
         }
       )
-      onComplete(samples)
+      onComplete(samples, scratchDir)
     } catch (error) {
       console.error(error)
       toast.error('Failed to import the file')

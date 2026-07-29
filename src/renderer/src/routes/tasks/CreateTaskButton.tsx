@@ -12,7 +12,7 @@ import {
 } from '@mantine/core'
 import { styled } from '@linaria/react'
 import { Dropzone, IMAGE_MIME_TYPE, type FileWithPath } from '@mantine/dropzone'
-import { FC, memo, useCallback, useState } from 'react'
+import { FC, memo, useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { IoMdAdd } from 'react-icons/io'
 import { MdDeleteOutline } from 'react-icons/md'
@@ -61,21 +61,31 @@ const SelectedSampleRow = memo(function SelectedSampleRow({
   sample: INewSample
   onRemove: () => void
 }) {
+  const [sizeBytes, setSizeBytes] = useState<number | null>(null)
+  const [previewUri, setPreviewUri] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    window.system.getFileSize(sample.imagePath).then((size) => {
+      if (!cancelled) setSizeBytes(size)
+    })
+    window.system.getScratchPreviewUri(sample.imagePath).then((uri) => {
+      if (!cancelled) setPreviewUri(uri)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [sample.imagePath])
+
   return (
     <FileRow>
-      <Image
-        src={`data:image/png;base64,${sample.base64Image}`}
-        w={36}
-        h={36}
-        radius="sm"
-        fit="cover"
-      />
+      <Image src={previewUri ?? undefined} w={36} h={36} radius="sm" fit="cover" />
       <Flex direction="column" flex={1} miw={0} mx="sm">
         <Text size="sm" truncate>
           {sample.name}
         </Text>
         <Text size="xs" c="dimmed">
-          {formatFileSize(Math.floor((sample.base64Image.length * 3) / 4))}
+          {sizeBytes === null ? ' ' : formatFileSize(sizeBytes)}
         </Text>
       </Flex>
       <ActionIcon aria-label="Remove file" variant="subtle" color="red" onClick={onRemove}>
@@ -86,8 +96,8 @@ const SelectedSampleRow = memo(function SelectedSampleRow({
 })
 
 /** Memoized so typing in the task name field (which lives in the same parent state as
- *  `samples`) doesn't re-render every imported sample's row - each one holds a full
- *  base64-encoded image, so with a large import that re-render was visibly laggy. */
+ *  `samples`) doesn't re-render every imported sample's row, which was visibly laggy for
+ *  a large import even before rows only held a scratch path rather than a full image. */
 const SampleList = memo(function SampleList({
   samples,
   onAddSamples,
@@ -168,6 +178,20 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
   const [importQueueIndex, setImportQueueIndex] = useState(0)
   const [isStopConfirmOpen, setIsStopConfirmOpen] = useState(false)
 
+  // Every scratch dir created while staging samples for this Create Task session (from
+  // direct drops or from "Add Samples" sub-imports) - swept once the session ends,
+  // whether that's a submitted task, a skipped item, or the modal being closed outright.
+  const [, setPendingScratchDirs] = useState<string[]>([])
+
+  const discardPendingScratchDirs = useCallback(() => {
+    setPendingScratchDirs((dirs) => {
+      for (const dir of dirs) {
+        window.system.deleteDirectory(dir).catch(() => {})
+      }
+      return []
+    })
+  }, [])
+
   const openModal = useCallback((name: string = '') => {
     setTaskName(name)
     setIsModalOpen(true)
@@ -178,16 +202,23 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
       const { name, files } = queue[index]
       setIsDropProcessing(true)
       toast
-        .promise(filesToSamples(files), {
-          loading: `Processing ${files.length} file${files.length === 1 ? '' : 's'}`,
-          success: 'Files loaded',
-          error: (e) => {
-            console.error(e)
-            return 'Failed to read image files'
+        .promise(
+          window.system.createTemporaryDirectory().then(async (scratchDir) => ({
+            scratchDir,
+            newSamples: await filesToSamples(files, scratchDir)
+          })),
+          {
+            loading: `Processing ${files.length} file${files.length === 1 ? '' : 's'}`,
+            success: 'Files loaded',
+            error: (e) => {
+              console.error(e)
+              return 'Failed to read image files'
+            }
           }
-        })
-        .then((newSamples) => {
+        )
+        .then(({ newSamples, scratchDir }) => {
           setSamples(newSamples)
+          setPendingScratchDirs((dirs) => [...dirs, scratchDir])
           openModal(name)
         })
         .catch(() => {})
@@ -223,6 +254,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
       // already-created samples and hit a UNIQUE constraint on their ids.
       setSamples([])
       setTaskName('')
+      discardPendingScratchDirs()
     }
   }
 
@@ -233,6 +265,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
     setIsModalOpen(false)
     setImportQueue([])
     setImportQueueIndex(0)
+    discardPendingScratchDirs()
   }
 
   const handleModalClose = () => {
@@ -240,6 +273,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
       setIsStopConfirmOpen(true)
     } else {
       setIsModalOpen(false)
+      discardPendingScratchDirs()
     }
   }
 
@@ -314,8 +348,9 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
         opened={isImportOpen}
         project={project}
         onClose={() => setIsImportOpen(false)}
-        onImported={async (newSamples) => {
+        onImported={async (newSamples, scratchDir) => {
           setSamples((s) => [...s, ...newSamples])
+          setPendingScratchDirs((dirs) => [...dirs, scratchDir])
         }}
         zIndex={ZIndex.nestedActionModal}
       />

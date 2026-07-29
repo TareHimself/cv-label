@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
-import JSZip from 'jszip'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { AnnotationType, IProject, ISample, ITask, TrainingSplit } from '@shared/types'
 
@@ -23,6 +22,8 @@ const sample: ISample = {
   name: 'photo-one',
   imageUri: 'cv-label-image://s1.jpg',
   split: TrainingSplit.Train,
+  width: 400,
+  height: 300,
   annotations: [
     {
       id: 'a1',
@@ -38,24 +39,19 @@ const sample: ISample = {
   createdAt: new Date().toISOString()
 }
 
-const saveFile = vi.fn()
+const runExport = vi.fn()
 
 beforeEach(() => {
   toastError.mockReset()
-  saveFile.mockReset().mockResolvedValue(true)
-  window.system = { saveFile } as unknown as typeof window.system
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({ blob: () => Promise.resolve(new Blob(['fake-image-bytes'])) })
-  )
-  vi.stubGlobal(
-    'createImageBitmap',
-    vi.fn().mockResolvedValue({ width: 400, height: 200, close: vi.fn() })
-  )
+  runExport.mockReset().mockResolvedValue(true)
+  window.exportApi = {
+    runExport,
+    onProgress: vi.fn().mockReturnValue(() => {})
+  } as unknown as typeof window.exportApi
 })
 
 describe('YoloExporterComponent', () => {
-  it('zips images/labels by split plus a data.yaml, and calls onComplete on save', async () => {
+  it('builds a manifest of images/labels by split plus a data.yaml, and calls onComplete on save', async () => {
     const onComplete = vi.fn()
 
     renderWithProviders(
@@ -71,16 +67,17 @@ describe('YoloExporterComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
-    expect(saveFile).toHaveBeenCalledWith('Street Signs-yolo-export.zip', expect.any(ArrayBuffer))
-
-    const zip = await JSZip.loadAsync(saveFile.mock.calls[0][1])
-    expect(await zip.file('images/train/s1.jpg')?.async('string')).toBe('fake-image-bytes')
-    expect(await zip.file('labels/train/s1.txt')?.async('string')).toBe(
-      '0 0.500000 0.500000 0.500000 0.500000\n'
-    )
-    expect(await zip.file('data.yaml')?.async('string')).toBe(
-      'train: images/train\nval: images/valid\ntest: images/test\nnames:\n  0: Stop Sign\n'
-    )
+    expect(runExport).toHaveBeenCalledWith('Street Signs-yolo-export.zip', {
+      textEntries: [
+        { path: 'labels/train/s1.txt', content: '0 0.500000 0.333333 0.500000 0.333333\n' },
+        {
+          path: 'data.yaml',
+          content:
+            'train: images/train\nval: images/valid\ntest: images/test\nnames:\n  0: Stop Sign\n'
+        }
+      ],
+      imageEntries: [{ path: 'images/train/s1.jpg', imageUri: 'cv-label-image://s1.jpg' }]
+    })
   })
 
   it('switches to Segments and exports the box as its own 4-corner polygon', async () => {
@@ -100,14 +97,15 @@ describe('YoloExporterComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
-    const zip = await JSZip.loadAsync(saveFile.mock.calls[0][1])
-    expect(await zip.file('labels/train/s1.txt')?.async('string')).toBe(
-      '0 0.250000 0.250000 0.750000 0.250000 0.750000 0.750000 0.250000 0.750000\n'
-    )
+    const manifest = runExport.mock.calls[0][1]
+    expect(manifest.textEntries[0]).toEqual({
+      path: 'labels/train/s1.txt',
+      content: '0 0.250000 0.166667 0.750000 0.166667 0.750000 0.500000 0.250000 0.500000\n'
+    })
   })
 
   it('does not call onComplete when the user cancels the save dialog', async () => {
-    saveFile.mockResolvedValue(false)
+    runExport.mockResolvedValue(false)
     const onComplete = vi.fn()
 
     renderWithProviders(
@@ -122,18 +120,16 @@ describe('YoloExporterComponent', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
-    await waitFor(() => expect(saveFile).toHaveBeenCalled())
+    await waitFor(() => expect(runExport).toHaveBeenCalled())
     expect(onComplete).not.toHaveBeenCalled()
   })
 
-  it('shows an error toast and re-enables Export when a sample fetch fails', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')))
-
+  it('shows an error toast and re-enables Export when fetching samples fails', async () => {
     renderWithProviders(
       <YoloExporterComponent
         project={project}
         tasks={tasks}
-        getSamplesForTask={vi.fn().mockResolvedValue([sample])}
+        getSamplesForTask={vi.fn().mockRejectedValue(new Error('boom'))}
         onComplete={vi.fn()}
         onCancel={vi.fn()}
       />
@@ -143,6 +139,40 @@ describe('YoloExporterComponent', () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to export samples'))
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+  })
+
+  it('shows a preparing message while fetching samples, then a waiting message before the first progress event, then a percentage', async () => {
+    let resolveGetSamples: (samples: ISample[]) => void = () => {}
+    const getSamplesForTask = vi.fn(
+      () => new Promise<ISample[]>((resolve) => (resolveGetSamples = resolve))
+    )
+    let capturedOnProgress: ((event: { completed: number; total: number }) => void) | undefined
+    window.exportApi = {
+      runExport: vi.fn().mockImplementation(() => new Promise(() => {})),
+      onProgress: vi.fn().mockImplementation((cb) => {
+        capturedOnProgress = cb
+        return () => {}
+      })
+    } as unknown as typeof window.exportApi
+
+    renderWithProviders(
+      <YoloExporterComponent
+        project={project}
+        tasks={tasks}
+        getSamplesForTask={getSamplesForTask}
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    expect(await screen.findByText('Preparing export…')).toBeInTheDocument()
+
+    resolveGetSamples([sample])
+    expect(await screen.findByText('Waiting for save location…')).toBeInTheDocument()
+
+    capturedOnProgress?.({ completed: 1, total: 1 })
+    expect(await screen.findByText('Exporting samples… 100%')).toBeInTheDocument()
   })
 
   it('calls onCancel when Cancel is clicked', () => {

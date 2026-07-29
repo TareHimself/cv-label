@@ -1,9 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import JSZip from 'jszip'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject } from '@shared/types'
+import { installFakeFileSystem } from '../../__tests__/fakeFileSystem'
 import { CvLabelImporterComponent } from '../CvLabelImporterComponent'
+
+beforeEach(() => {
+  installFakeFileSystem()
+})
 
 const project: IProject = {
   id: 'p1',

@@ -15,6 +15,8 @@ describe('buildCvLabelManifest', () => {
         split: TrainingSplit.Train,
         annotations: [{ id: 'a1', type: AnnotationType.Box, labelId: 'l1', points: [] }],
         createdAt: '2026-01-01T00:00:00.000Z',
+        width: 400,
+        height: 300,
         imageFile: 'images/s1.jpg'
       }
     ]

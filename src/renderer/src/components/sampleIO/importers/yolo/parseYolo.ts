@@ -1,9 +1,10 @@
 import { parse as parseYaml } from 'yaml'
 import { AnnotationType, INewAnnotation, INewSample, IPoint, TrainingSplit } from '@shared/types'
 import { makeUUID } from '@shared/utils'
-import { fileToBase64, normalizeFilename } from '@renderer/utils'
+import { normalizeFilename } from '@renderer/utils'
 import { splitFromPath } from '../splitFromPath'
 import type { VirtualFile } from '../virtualFileSystem'
+import { writeBlobToScratchFile } from '../writeToScratch'
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'bmp', 'webp'])
 
@@ -196,13 +197,36 @@ export const findReferencedClassIds = async (pairs: YoloImagePair[]): Promise<nu
   return Array.from(ids).sort((a, b) => a - b)
 }
 
+/** Gets the image's pixel dimensions (needed to normalize box/polygon coordinates) and a
+ *  scratch-file imagePath. A disk-backed pair (extracted from a zip) already has a real
+ *  file - its dimensions are read directly via sharp (main-process, no bytes cross into
+ *  the renderer) and its diskPath is reused as-is, no extra copy. A blob-backed pair (a
+ *  picked folder) has no on-disk file yet, so it's decoded once via createImageBitmap for
+ *  its dimensions and then written to scratchDir. */
+const resolveImagePathAndDimensions = async (
+  image: VirtualFile,
+  scratchDir: string
+): Promise<{ imagePath: string; width: number; height: number }> => {
+  if (image.diskPath) {
+    const { width, height } = await window.system.getImageDimensions(image.diskPath)
+    return { imagePath: image.diskPath, width, height }
+  }
+
+  const blob = await image.blob()
+  const bitmap = await createImageBitmap(blob)
+  const { width, height } = bitmap
+  bitmap.close()
+  const imagePath = await writeBlobToScratchFile(scratchDir, blob, extensionOf(image.path))
+  return { imagePath, width, height }
+}
+
 const buildSampleFromYoloPair = async (
   pair: YoloImagePair,
   classIdToLabelId: Map<number, string>,
-  format: YoloLabelFormat
+  format: YoloLabelFormat,
+  scratchDir: string
 ): Promise<INewSample> => {
-  const blob = await pair.image.blob()
-  const [base64Image, bitmap] = await Promise.all([fileToBase64(blob), createImageBitmap(blob)])
+  const { imagePath, width, height } = await resolveImagePathAndDimensions(pair.image, scratchDir)
 
   const annotations: INewAnnotation[] = []
   if (pair.label) {
@@ -215,7 +239,7 @@ const buildSampleFromYoloPair = async (
           id: makeUUID(),
           type: AnnotationType.Mask,
           labelId,
-          points: yoloPolygonToPoints(polygon, bitmap.width, bitmap.height)
+          points: yoloPolygonToPoints(polygon, width, height)
         })
       }
     } else {
@@ -226,17 +250,16 @@ const buildSampleFromYoloPair = async (
           id: makeUUID(),
           type: AnnotationType.Box,
           labelId,
-          points: yoloBoxToPoints(box, bitmap.width, bitmap.height)
+          points: yoloBoxToPoints(box, width, height)
         })
       }
     }
   }
-  bitmap.close()
 
   return {
     id: makeUUID(),
     name: normalizeFilename(basenameOf(pair.image.path)),
-    base64Image,
+    imagePath,
     split: pair.split,
     annotations,
     createdAt: new Date().toISOString()
@@ -252,11 +275,12 @@ export const yoloDatasetToSamples = async (
   pairs: YoloImagePair[],
   classIdToLabelId: Map<number, string>,
   format: YoloLabelFormat,
+  scratchDir: string,
   onProgress?: (completed: number, total: number) => void
 ): Promise<INewSample[]> => {
   const samples: INewSample[] = []
   for (const pair of pairs) {
-    samples.push(await buildSampleFromYoloPair(pair, classIdToLabelId, format))
+    samples.push(await buildSampleFromYoloPair(pair, classIdToLabelId, format, scratchDir))
     onProgress?.(samples.length, pairs.length)
   }
   return samples

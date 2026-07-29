@@ -26,7 +26,10 @@ export type ImportSamplesModalProps = {
   opened: boolean
   project: IProject
   onClose: () => void
-  onImported: (samples: INewSample[]) => Promise<void>
+  /** scratchDir is where the imported samples' image files live - onImported decides
+   *  when it's safe to delete it (immediately once persisted, or later if the caller only
+   *  stages samples for review before actually persisting them). */
+  onImported: (samples: INewSample[], scratchDir: string) => Promise<void>
   /** Defaults to the standalone action-modal layer - pass ZIndex.nestedActionModal when
    *  this is opened from within another already-open action modal (e.g. Create Task). */
   zIndex?: number
@@ -49,16 +52,20 @@ export const ImportSamplesModal = ({
     }
   }
 
-  const handleComplete = (samples: INewSample[]) => {
-    toast.promise(onImported(samples), {
-      loading: 'Importing samples',
-      success: 'Samples imported',
-      error: (e) => {
-        console.error(e)
-        return 'Failed to import samples'
-      }
-    })
-    onClose()
+  const handleComplete = async (samples: INewSample[], scratchDir: string) => {
+    try {
+      await toast.promise(onImported(samples, scratchDir), {
+        loading: 'Importing samples',
+        success: 'Samples imported',
+        error: (e) => {
+          console.error(e)
+          return 'Failed to import samples'
+        }
+      })
+      onClose()
+    } catch {
+      // Already surfaced via the toast above - keep the modal open so the user can retry.
+    }
   }
 
   const handleCancel = () => {
