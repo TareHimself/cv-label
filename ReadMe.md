@@ -8,6 +8,19 @@ Built with Electron, React, and TypeScript. Data is stored locally in SQLite by
 default, behind an `IDataStore` interface designed to be swapped for other backends
 (e.g. an HTTP-based store) without touching any UI code.
 
+## Screenshots
+
+| Projects | Tasks | Samples |
+| :---: | :---: | :---: |
+| ![Projects list](.github/screenshots/projects_2026-07-24.webp) | ![Tasks list](.github/screenshots/tasks_2026-07-24.webp) | ![Samples grid](.github/screenshots/samples_2026-07-24.webp) |
+
+| Bounding boxes | Segmentation | Annotations panel |
+| :---: | :---: | :---: |
+| ![Labeler with bounding box annotations](.github/screenshots/labeler-boxes_2026-07-24.webp) | ![Labeler with polygon segmentation annotations](.github/screenshots/labeler-segmentation_2026-07-24.webp) | ![Labeler with the annotations panel open](.github/screenshots/labeler-boxes-annotations_2026-07-24.webp) |
+
+Sample images are from the [COCO dataset](https://cocodataset.org), used here for
+demonstration only.
+
 ## Recommended IDE Setup
 
 - [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)

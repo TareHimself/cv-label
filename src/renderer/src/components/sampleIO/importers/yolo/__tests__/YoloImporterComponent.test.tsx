@@ -15,6 +15,9 @@ const project: IProject = {
 
 const makeFile = (name: string, content: string) => new File([content], name)
 
+const createTemporaryDirectory = vi.fn()
+const writeFile = vi.fn()
+
 // Not undone in afterEach: vi.unstubAllGlobals() would also wipe the ResizeObserver stub
 // that setup.ts installs for Mantine's ScrollArea (used by the class-mapping step), breaking
 // every test after the first in this file. A fresh stub each beforeEach is enough on its own.
@@ -23,6 +26,9 @@ beforeEach(() => {
     'createImageBitmap',
     vi.fn().mockResolvedValue({ width: 400, height: 200, close: vi.fn() })
   )
+  createTemporaryDirectory.mockReset().mockResolvedValue('/scratch')
+  writeFile.mockReset().mockResolvedValue(undefined)
+  window.system = { createTemporaryDirectory, writeFile } as unknown as typeof window.system
 })
 
 describe('YoloImporterComponent', () => {

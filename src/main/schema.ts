@@ -48,7 +48,9 @@ export const labels = sqliteTable(
 export const images = sqliteTable('images', {
   id: text('id').primaryKey(),
   hash: text('hash').notNull(),
-  extension: text('extension').notNull()
+  extension: text('extension').notNull(),
+  width: integer('width'),
+  height: integer('height')
 })
 
 export const samples = sqliteTable(

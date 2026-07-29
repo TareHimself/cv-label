@@ -215,11 +215,15 @@ describe('findReferencedClassIds', () => {
 })
 
 describe('yoloDatasetToSamples', () => {
+  const writeFile = vi.fn()
+
   beforeEach(() => {
     vi.stubGlobal(
       'createImageBitmap',
       vi.fn().mockResolvedValue({ width: 400, height: 200, close: vi.fn() })
     )
+    writeFile.mockReset().mockResolvedValue(undefined)
+    window.system = { writeFile } as unknown as typeof window.system
   })
 
   it('builds a sample per image, mapping YOLO classes to the given project label ids', async () => {
@@ -230,10 +234,16 @@ describe('yoloDatasetToSamples', () => {
     const pairs = findYoloImagePairs(files)
     const classIdToLabelId = new Map([[0, 'label-a']])
 
-    const samples = await yoloDatasetToSamples(pairs, classIdToLabelId, YoloLabelFormat.Detection)
+    const samples = await yoloDatasetToSamples(
+      pairs,
+      classIdToLabelId,
+      YoloLabelFormat.Detection,
+      '/scratch'
+    )
 
     expect(samples).toHaveLength(1)
     expect(samples[0].name).toBe('img1')
+    expect(samples[0].imagePath).toMatch(/^\/scratch\/.+\.jpg$/)
     expect(samples[0].annotations).toHaveLength(1)
     expect(samples[0].annotations[0].type).toBe(AnnotationType.Box)
     expect(samples[0].annotations[0].labelId).toBe('label-a')
@@ -251,7 +261,8 @@ describe('yoloDatasetToSamples', () => {
     const samples = await yoloDatasetToSamples(
       pairs,
       classIdToLabelId,
-      YoloLabelFormat.Segmentation
+      YoloLabelFormat.Segmentation,
+      '/scratch'
     )
 
     expect(samples[0].annotations).toHaveLength(1)
@@ -266,7 +277,12 @@ describe('yoloDatasetToSamples', () => {
     ]
     const pairs = findYoloImagePairs(files)
 
-    const samples = await yoloDatasetToSamples(pairs, new Map(), YoloLabelFormat.Detection)
+    const samples = await yoloDatasetToSamples(
+      pairs,
+      new Map(),
+      YoloLabelFormat.Detection,
+      '/scratch'
+    )
 
     expect(samples[0].annotations).toHaveLength(0)
   })
@@ -275,7 +291,12 @@ describe('yoloDatasetToSamples', () => {
     const files = [makeFile('img1.jpg', 'fake-image-bytes')]
     const pairs = findYoloImagePairs(files)
 
-    const samples = await yoloDatasetToSamples(pairs, new Map(), YoloLabelFormat.Detection)
+    const samples = await yoloDatasetToSamples(
+      pairs,
+      new Map(),
+      YoloLabelFormat.Detection,
+      '/scratch'
+    )
 
     expect(samples).toHaveLength(1)
     expect(samples[0].annotations).toEqual([])
@@ -286,7 +307,7 @@ describe('yoloDatasetToSamples', () => {
     const pairs = findYoloImagePairs(files)
     const onProgress = vi.fn()
 
-    await yoloDatasetToSamples(pairs, new Map(), YoloLabelFormat.Detection, onProgress)
+    await yoloDatasetToSamples(pairs, new Map(), YoloLabelFormat.Detection, '/scratch', onProgress)
 
     expect(onProgress).toHaveBeenCalledTimes(3)
     expect(onProgress).toHaveBeenLastCalledWith(3, 3)

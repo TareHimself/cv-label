@@ -27,6 +27,16 @@ export type WorkerResponse<T = unknown> =
       error: string
     }
 
+/** Out-of-band progress update for a still-in-flight Call. Any worker-module export can
+ *  opt into this by declaring a real trailing `onProgress?: (...args) => void` parameter
+ *  and calling it - the dispatcher always passes one, so it works for any method without
+ *  further changes to this transport. */
+export type WorkerProgressMessage = {
+  type: 'progress'
+  callRef: string
+  args: unknown[]
+}
+
 export type MethodInfo = {
   id: string
   name: string

@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 export class TasksPage {
   constructor(private readonly page: Page) {}
@@ -113,16 +113,34 @@ export class TasksPage {
     await this.createButton.click()
   }
 
+  // Mantine's SegmentedControl keeps the native radio visually hidden and pairs it with
+  // a <label> that's the actual visible/clickable surface (same trick as LabelPage's
+  // clickOption, for the importer's "Label Format" control).
+  private async clickOption(radioLocator: Locator) {
+    await radioLocator.evaluate((input: HTMLInputElement) => {
+      const label = input.labels?.[0]
+      ;(label ?? input).click()
+    })
+  }
+
   /** Opens the create-task modal, names it, and imports samples from a YOLO dataset zip via
    *  the YOLO Dataset importer, accepting the default class-to-label mapping (each class
-   *  defaults to the project's first label). */
-  async createTaskFromYoloZip(name: string, zipPath: string) {
+   *  defaults to the project's first label). `format` picks the importer's "Label Format"
+   *  toggle - defaults to Detection, matching the importer's own default. */
+  async createTaskFromYoloZip(
+    name: string,
+    zipPath: string,
+    format: 'Detection' | 'Segmentation' = 'Detection'
+  ) {
     await this.createTaskButton.click()
     await this.nameInput.waitFor()
     await this.nameInput.fill(name)
     await this.addSamplesButton.click()
     await this.importDialog.getByText('YOLO Dataset').click()
     await this.yoloZipInput.setInputFiles(zipPath)
+    if (format === 'Segmentation') {
+      await this.clickOption(this.importDialog.getByRole('radio', { name: 'Segmentation' }))
+    }
     await this.importDialog.getByRole('button', { name: 'Import' }).click()
     await this.importDialog.waitFor({ state: 'hidden' })
     await this.createButton.click()

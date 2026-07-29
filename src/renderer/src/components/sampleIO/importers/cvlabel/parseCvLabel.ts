@@ -1,7 +1,7 @@
 import { AnnotationType, INewAnnotation, INewSample, TrainingSplit } from '@shared/types'
 import { makeUUID } from '@shared/utils'
-import { fileToBase64 } from '@renderer/utils'
 import type { VirtualFile } from '../virtualFileSystem'
+import { resolveImagePath } from '../writeToScratch'
 
 export type CvLabelClass = {
   id: string
@@ -91,6 +91,7 @@ export const findCvLabelPairs = (
 export const cvLabelDatasetToSamples = async (
   pairs: CvLabelPair[],
   labelIdToProjectLabelId: Map<string, string>,
+  scratchDir: string,
   onProgress?: (completed: number, total: number) => void
 ): Promise<INewSample[]> => {
   const samples: INewSample[] = []
@@ -98,8 +99,7 @@ export const cvLabelDatasetToSamples = async (
 
   for (const pair of pairs) {
     if (pair.image) {
-      const blob = await pair.image.blob()
-      const base64Image = await fileToBase64(blob)
+      const imagePath = await resolveImagePath(pair.image, scratchDir)
 
       const annotations: INewAnnotation[] = []
       for (const annotation of pair.sample.annotations) {
@@ -116,7 +116,7 @@ export const cvLabelDatasetToSamples = async (
       samples.push({
         id: makeUUID(),
         name: pair.sample.name,
-        base64Image,
+        imagePath,
         split: pair.sample.split,
         annotations,
         createdAt: pair.sample.createdAt

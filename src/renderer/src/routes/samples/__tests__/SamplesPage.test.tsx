@@ -30,6 +30,8 @@ const samples: ISample[] = [
     name: 'photo-one',
     imageUri: 'cv-label-image://s1',
     split: TrainingSplit.Train,
+    width: 400,
+    height: 300,
     annotations: [],
     completedAt: null,
     createdAt: new Date().toISOString()
@@ -39,6 +41,8 @@ const samples: ISample[] = [
     name: 'photo-two',
     imageUri: 'cv-label-image://s2',
     split: TrainingSplit.Test,
+    width: 400,
+    height: 300,
     annotations: [],
     completedAt: new Date().toISOString(),
     createdAt: new Date().toISOString()

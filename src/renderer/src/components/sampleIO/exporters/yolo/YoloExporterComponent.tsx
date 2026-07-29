@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { Button, Group, Progress, SegmentedControlItem, Stack, Text } from '@mantine/core'
+import { useEffect, useState } from 'react'
+import { Button, Group, Loader, Progress, SegmentedControlItem, Stack, Text } from '@mantine/core'
 import { FaFileExport } from 'react-icons/fa'
 import toast from 'react-hot-toast'
-import JSZip from 'jszip'
 import { AsyncButton } from '@renderer/components/AsyncButton'
+import type { ArchiveManifest } from '@shared/types'
 import type { SampleExporterComponentProps } from '../../types'
 import { imageExtensionFromUri } from '../imageExtensionFromUri'
 import { ExportShape } from '../annotationShape'
@@ -15,6 +15,11 @@ const YOLO_SHAPE_OPTIONS: SegmentedControlItem[] = [
   { value: ExportShape.Segment, label: 'Segments' }
 ]
 
+// 'preparing' covers fetching samples and building the manifest, plus the native save
+// dialog (no progress events arrive during either) - without it the progress bar would
+// otherwise sit at 0% with nothing explaining why until the first image is archived.
+type ExportPhase = 'preparing' | 'exporting'
+
 export const YoloExporterComponent = ({
   project,
   tasks,
@@ -23,47 +28,52 @@ export const YoloExporterComponent = ({
   onCancel
 }: SampleExporterComponentProps) => {
   const [isExporting, setIsExporting] = useState(false)
+  const [phase, setPhase] = useState<ExportPhase>('preparing')
   const [progress, setProgress] = useState(0)
   const [shape, setShape] = useState<ExportShape>(ExportShape.Box)
 
+  useEffect(
+    () =>
+      window.exportApi.onProgress(({ completed, total }) => {
+        setProgress(Math.round((completed / Math.max(total, 1)) * 100))
+      }),
+    []
+  )
+
   const runExport = async () => {
+    setPhase('preparing')
+    setProgress(0)
     try {
-      const zip = new JSZip()
       const labelIdToClassId = new Map(project.labels.map((label, id) => [label.id, id]))
 
       const samplesByTask = await Promise.all(tasks.map((task) => getSamplesForTask(task.id)))
       const samples = samplesByTask.flat()
 
-      let completed = 0
-      for (const sample of samples) {
-        const response = await fetch(sample.imageUri)
-        const blob = await response.blob()
-        const bitmap = await createImageBitmap(blob)
+      const manifest: ArchiveManifest = { textEntries: [], imageEntries: [] }
 
-        zip.file(
-          yoloImagePath(sample.id, sample.split, imageExtensionFromUri(sample.imageUri)),
-          blob
-        )
-        zip.file(
-          yoloLabelPath(sample.id, sample.split),
-          yoloLabelFileContent(
+      for (const sample of samples) {
+        const extension = imageExtensionFromUri(sample.imageUri)
+
+        manifest.imageEntries.push({
+          path: yoloImagePath(sample.id, sample.split, extension),
+          imageUri: sample.imageUri
+        })
+        manifest.textEntries.push({
+          path: yoloLabelPath(sample.id, sample.split),
+          content: yoloLabelFileContent(
             sample.annotations,
             labelIdToClassId,
-            bitmap.width,
-            bitmap.height,
+            sample.width,
+            sample.height,
             shape
           )
-        )
-
-        bitmap.close()
-        completed += 1
-        setProgress(Math.round((completed / Math.max(samples.length, 1)) * 100))
+        })
       }
 
-      zip.file('data.yaml', buildYoloDataYaml(project.labels))
+      manifest.textEntries.push({ path: 'data.yaml', content: buildYoloDataYaml(project.labels) })
 
-      const zipData = await zip.generateAsync({ type: 'arraybuffer' })
-      const saved = await window.system.saveFile(`${project.name}-yolo-export.zip`, zipData)
+      setPhase('exporting')
+      const saved = await window.exportApi.runExport(`${project.name}-yolo-export.zip`, manifest)
 
       if (saved) {
         onComplete()
@@ -88,7 +98,25 @@ export const YoloExporterComponent = ({
         onChange={setShape}
         disabled={isExporting}
       />
-      {isExporting && <Progress value={progress} animated />}
+      {isExporting && (
+        <Stack gap={4}>
+          {phase === 'preparing' ? (
+            <Group justify="center" py="xs">
+              <Loader size="sm" />
+              <Text size="sm" c="dimmed">
+                Preparing export…
+              </Text>
+            </Group>
+          ) : (
+            <>
+              <Progress value={progress} animated />
+              <Text size="xs" c="dimmed" ta="center">
+                {progress === 0 ? 'Waiting for save location…' : `Exporting samples… ${progress}%`}
+              </Text>
+            </>
+          )}
+        </Stack>
+      )}
       <Group justify="flex-end">
         <Button variant="subtle" onClick={onCancel} disabled={isExporting}>
           Cancel

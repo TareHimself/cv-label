@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AnnotationType, TrainingSplit } from '@shared/types'
 import type { VirtualFile } from '../../virtualFileSystem'
 import {
@@ -164,6 +164,13 @@ describe('cocoAnnotationToPoints', () => {
 })
 
 describe('cocoDatasetToSamples', () => {
+  const writeFile = vi.fn()
+
+  beforeEach(() => {
+    writeFile.mockReset().mockResolvedValue(undefined)
+    window.system = { writeFile } as unknown as typeof window.system
+  })
+
   it('builds a sample per image, mapping COCO categories to the given project label ids', async () => {
     const files = [
       makeFile('img1.jpg', 'fake-image-bytes'),
@@ -179,10 +186,11 @@ describe('cocoDatasetToSamples', () => {
     const pairs = await findCocoImagePairs(files)
     const categoryIdToLabelId = new Map([[5, 'label-a']])
 
-    const samples = await cocoDatasetToSamples(pairs, categoryIdToLabelId)
+    const samples = await cocoDatasetToSamples(pairs, categoryIdToLabelId, '/scratch')
 
     expect(samples).toHaveLength(1)
     expect(samples[0].name).toBe('img1')
+    expect(samples[0].imagePath).toMatch(/^\/scratch\/.+\.jpg$/)
     expect(samples[0].annotations).toHaveLength(1)
     expect(samples[0].annotations[0].labelId).toBe('label-a')
   })
@@ -201,7 +209,7 @@ describe('cocoDatasetToSamples', () => {
     ]
     const pairs = await findCocoImagePairs(files)
 
-    const samples = await cocoDatasetToSamples(pairs, new Map())
+    const samples = await cocoDatasetToSamples(pairs, new Map(), '/scratch')
 
     expect(samples[0].annotations).toHaveLength(0)
   })
@@ -225,7 +233,7 @@ describe('cocoDatasetToSamples', () => {
     const pairs = await findCocoImagePairs(files)
     const onProgress = vi.fn()
 
-    await cocoDatasetToSamples(pairs, new Map(), onProgress)
+    await cocoDatasetToSamples(pairs, new Map(), '/scratch', onProgress)
 
     expect(onProgress).toHaveBeenCalledTimes(2)
     expect(onProgress).toHaveBeenLastCalledWith(2, 2)

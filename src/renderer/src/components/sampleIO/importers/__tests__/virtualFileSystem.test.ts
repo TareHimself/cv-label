@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import JSZip from 'jszip'
-import { virtualFilesFromFileList, virtualFilesFromZip } from '../virtualFileSystem'
+import {
+  virtualFilesFromExtractedZip,
+  virtualFilesFromFileList,
+  virtualFilesFromZip
+} from '../virtualFileSystem'
+import { installFakeFileSystem } from './fakeFileSystem'
 
 const makeFileList = (files: File[]): FileList => {
   const list: Record<number, File> & { length: number; item: (i: number) => File | null } = {
@@ -61,6 +66,64 @@ describe('virtualFilesFromZip', () => {
 
     expect(blob).toBeInstanceOf(Blob)
     expect(await blob.text()).toBe('fake-image-bytes')
+  })
+})
+
+describe('virtualFilesFromExtractedZip', () => {
+  beforeEach(() => {
+    installFakeFileSystem()
+  })
+
+  it('extracts every entry to disk and sets diskPath, readable via text()', async () => {
+    const zip = new JSZip()
+    zip.file('dataset/img1.jpg', 'fake-image-bytes')
+    zip.file('dataset/labels/img1.txt', '0 0.5 0.5 0.1 0.1')
+    const zipFile = new File([await zip.generateAsync({ type: 'arraybuffer' })], 'dataset.zip')
+
+    const files = await virtualFilesFromExtractedZip(zipFile, '/scratch')
+
+    expect(files.map((f) => f.path).sort()).toEqual(['dataset/img1.jpg', 'dataset/labels/img1.txt'])
+    const label = files.find((f) => f.path === 'dataset/labels/img1.txt')
+    expect(label?.diskPath).toBe('/scratch/dataset/labels/img1.txt')
+    expect(await label?.text()).toBe('0 0.5 0.5 0.1 0.1')
+  })
+
+  it('resolves the picked file via getPathForFile instead of copying its bytes through IPC', async () => {
+    const zip = new JSZip()
+    zip.file('img1.jpg', 'x')
+    const zipFile = new File([await zip.generateAsync({ type: 'arraybuffer' })], 'dataset.zip')
+
+    const { getPathForFile, extractTo, writeFile, deleteFile } = installFakeFileSystem()
+    await virtualFilesFromExtractedZip(zipFile, '/scratch')
+
+    expect(getPathForFile).toHaveBeenCalledWith(zipFile)
+    expect(extractTo).toHaveBeenCalledWith(getPathForFile.mock.results[0].value, '/scratch')
+    // No arrayBuffer()-and-ship-across-IPC copy of the picked file's own bytes - the file
+    // it points at is already on disk, so there's nothing to write out or clean up here.
+    expect(writeFile).not.toHaveBeenCalled()
+    expect(deleteFile).not.toHaveBeenCalled()
+  })
+
+  it('throws a clear error rather than silently misbehaving when the file has no real path', async () => {
+    installFakeFileSystem()
+    window.fileUtils.getPathForFile = () => ''
+    const zip = new JSZip()
+    zip.file('img1.jpg', 'x')
+    const zipFile = new File([await zip.generateAsync({ type: 'arraybuffer' })], 'dataset.zip')
+
+    await expect(virtualFilesFromExtractedZip(zipFile, '/scratch')).rejects.toThrow(
+      'Could not resolve a real path'
+    )
+  })
+
+  it('rejects blob() for a disk-backed entry rather than silently misreading it', async () => {
+    const zip = new JSZip()
+    zip.file('img1.jpg', 'x')
+    const zipFile = new File([await zip.generateAsync({ type: 'arraybuffer' })], 'dataset.zip')
+
+    const [file] = await virtualFilesFromExtractedZip(zipFile, '/scratch')
+
+    await expect(file.blob()).rejects.toThrow()
   })
 })
 

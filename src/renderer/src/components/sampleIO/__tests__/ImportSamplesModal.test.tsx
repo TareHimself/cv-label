@@ -13,12 +13,12 @@ vi.mock('../importers/registry', () => {
       onComplete,
       onCancel
     }: {
-      onComplete: (samples: []) => void
+      onComplete: (samples: [], scratchDir: string) => void
       onCancel: () => void
     }) => (
       <div>
         <p>Importer A Component</p>
-        <button onClick={() => onComplete([])}>Finish A</button>
+        <button onClick={() => onComplete([], '/scratch')}>Finish A</button>
         <button onClick={onCancel}>Cancel A</button>
       </div>
     )
@@ -81,7 +81,7 @@ describe('ImportSamplesModal', () => {
     fireEvent.click(screen.getByText('Importer A'))
     fireEvent.click(screen.getByText('Finish A'))
 
-    await waitFor(() => expect(onImported).toHaveBeenCalledWith([]))
+    await waitFor(() => expect(onImported).toHaveBeenCalledWith([], '/scratch'))
     expect(onClose).toHaveBeenCalled()
   })
 

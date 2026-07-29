@@ -105,3 +105,4 @@ if (!gotSingleInstanceLock) {
 import './store'
 import './zip'
 import './system'
+import './scratchProtocol'

@@ -253,8 +253,9 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
         opened={isImportOpen}
         project={project}
         onClose={() => setIsImportOpen(false)}
-        onImported={async (samples) => {
+        onImported={async (samples, scratchDir) => {
           await createSamples(samples)
+          await window.system.deleteDirectory(scratchDir).catch(() => {})
         }}
       />
       <BasicListPage

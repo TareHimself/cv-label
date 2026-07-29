@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject } from '@shared/types'
@@ -17,6 +17,15 @@ const makeFile = (name: string, content: string) => new File([content], name)
 
 const cocoJson = (images: unknown[], annotations: unknown[], categories: unknown[]) =>
   JSON.stringify({ images, annotations, categories })
+
+const createTemporaryDirectory = vi.fn()
+const writeFile = vi.fn()
+
+beforeEach(() => {
+  createTemporaryDirectory.mockReset().mockResolvedValue('/scratch')
+  writeFile.mockReset().mockResolvedValue(undefined)
+  window.system = { createTemporaryDirectory, writeFile } as unknown as typeof window.system
+})
 
 describe('CocoImporterComponent', () => {
   it('goes from folder selection to the class-mapping step, defaulting each class to the same-named project label', async () => {

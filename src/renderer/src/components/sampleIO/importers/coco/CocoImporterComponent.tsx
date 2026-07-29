@@ -6,8 +6,8 @@ import type { SampleImporterComponentProps } from '../../types'
 import { ZIndex } from '@renderer/zIndex'
 import { findLabelIdByName } from '../matchLabel'
 import {
+  virtualFilesFromExtractedZip,
   virtualFilesFromFileList,
-  virtualFilesFromZip,
   type VirtualFile
 } from '../virtualFileSystem'
 import {
@@ -33,11 +33,22 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
   const [labelByClassId, setLabelByClassId] = useState<Map<number, string>>(new Map())
   const zipInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const scratchDirRef = useRef<string | null>(null)
 
-  const loadSource = async (getFiles: () => Promise<VirtualFile[]> | VirtualFile[]) => {
+  const ensureScratchDir = async (): Promise<string> => {
+    if (!scratchDirRef.current) {
+      scratchDirRef.current = await window.system.createTemporaryDirectory()
+    }
+    return scratchDirRef.current
+  }
+
+  const loadSource = async (
+    getFiles: (scratchDir: string) => Promise<VirtualFile[]> | VirtualFile[]
+  ) => {
     setState({ step: 'parsing' })
     try {
-      const files = await getFiles()
+      const scratchDir = await ensureScratchDir()
+      const files = await getFiles(scratchDir)
       const pairs = await findCocoImagePairs(files)
       if (pairs.length === 0) {
         toast.error('No images found - is this a COCO dataset?')
@@ -66,28 +77,38 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    loadSource(() => virtualFilesFromZip(file))
+    loadSource((scratchDir) => virtualFilesFromExtractedZip(file, scratchDir))
   }
 
   const handleFolderSelected = (e: ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files
+    if (!fileList || fileList.length === 0) {
+      e.target.value = ''
+      return
+    }
+    // input.files is the same mutable FileList object on every read, not a fresh
+    // snapshot - materialize it into a plain array before resetting the input's value
+    // below (needed so re-picking the same folder still fires onChange), since that reset
+    // clears this same FileList in place.
+    const files = Array.from(fileList)
     e.target.value = ''
-    if (!fileList || fileList.length === 0) return
-    loadSource(() => virtualFilesFromFileList(fileList))
+    loadSource(() => virtualFilesFromFileList(files))
   }
 
   const runImport = async () => {
     if (state.step !== 'mapping') return
+    const scratchDir = await ensureScratchDir()
     setState({ step: 'importing', progress: 0 })
     try {
       const samples = await cocoDatasetToSamples(
         state.pairs,
         labelByClassId,
+        scratchDir,
         (completed, total) => {
           setState({ step: 'importing', progress: Math.round((completed / total) * 100) })
         }
       )
-      onComplete(samples)
+      onComplete(samples, scratchDir)
     } catch (error) {
       console.error(error)
       toast.error('Failed to import the dataset')

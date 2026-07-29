@@ -8,8 +8,8 @@ import { LabeledSegmentedControl } from '../../LabeledSegmentedControl'
 import { ZIndex } from '@renderer/zIndex'
 import { findLabelIdByName } from '../matchLabel'
 import {
+  virtualFilesFromExtractedZip,
   virtualFilesFromFileList,
-  virtualFilesFromZip,
   type VirtualFile
 } from '../virtualFileSystem'
 import {
@@ -43,11 +43,22 @@ export const YoloImporterComponent: FC<SampleImporterComponentProps> = ({
   const [format, setFormat] = useState<YoloLabelFormat>(YoloLabelFormat.Detection)
   const zipInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const scratchDirRef = useRef<string | null>(null)
 
-  const loadSource = async (getFiles: () => Promise<VirtualFile[]> | VirtualFile[]) => {
+  const ensureScratchDir = async (): Promise<string> => {
+    if (!scratchDirRef.current) {
+      scratchDirRef.current = await window.system.createTemporaryDirectory()
+    }
+    return scratchDirRef.current
+  }
+
+  const loadSource = async (
+    getFiles: (scratchDir: string) => Promise<VirtualFile[]> | VirtualFile[]
+  ) => {
     setState({ step: 'parsing' })
     try {
-      const files = await getFiles()
+      const scratchDir = await ensureScratchDir()
+      const files = await getFiles(scratchDir)
       const pairs = findYoloImagePairs(files)
       if (pairs.length === 0) {
         toast.error('No images found - is this a YOLO dataset?')
@@ -81,29 +92,40 @@ export const YoloImporterComponent: FC<SampleImporterComponentProps> = ({
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    loadSource(() => virtualFilesFromZip(file))
+    loadSource((scratchDir) => virtualFilesFromExtractedZip(file, scratchDir))
   }
 
   const handleFolderSelected = (e: ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files
+
+    if (!fileList || fileList.length === 0) {
+      e.target.value = ''
+      return
+    }
+    // input.files is the same mutable FileList object on every read, not a fresh
+    // snapshot - materialize it into a plain array now, synchronously, before loadSource's
+    // first await runs. Otherwise the value reset below (needed so re-picking the same
+    // folder still fires onChange) clears this same FileList in place before it's read.
+    const files = Array.from(fileList)
+    loadSource(() => virtualFilesFromFileList(files))
     e.target.value = ''
-    if (!fileList || fileList.length === 0) return
-    loadSource(() => virtualFilesFromFileList(fileList))
   }
 
   const runImport = async () => {
     if (state.step !== 'mapping') return
+    const scratchDir = await ensureScratchDir()
     setState({ step: 'importing', progress: 0 })
     try {
       const samples = await yoloDatasetToSamples(
         state.pairs,
         labelByClassId,
         format,
+        scratchDir,
         (completed, total) => {
           setState({ step: 'importing', progress: Math.round((completed / total) * 100) })
         }
       )
-      onComplete(samples)
+      onComplete(samples, scratchDir)
     } catch (error) {
       console.error(error)
       toast.error('Failed to import the dataset')

@@ -1,8 +1,9 @@
 import { AnnotationType, INewAnnotation, INewSample, IPoint, TrainingSplit } from '@shared/types'
 import { makeUUID } from '@shared/utils'
-import { fileToBase64, normalizeFilename } from '@renderer/utils'
+import { normalizeFilename } from '@renderer/utils'
 import { splitFromPath } from '../splitFromPath'
 import type { VirtualFile } from '../virtualFileSystem'
+import { resolveImagePath } from '../writeToScratch'
 
 type RawCocoImage = {
   id: number
@@ -160,10 +161,10 @@ export const cocoAnnotationToPoints = (
 
 const buildSampleFromCocoPair = async (
   pair: CocoImagePair,
-  categoryIdToLabelId: Map<number, string>
+  categoryIdToLabelId: Map<number, string>,
+  scratchDir: string
 ): Promise<INewSample> => {
-  const blob = await pair.image.blob()
-  const base64Image = await fileToBase64(blob)
+  const imagePath = await resolveImagePath(pair.image, scratchDir)
 
   const annotations: INewAnnotation[] = []
   for (const raw of pair.annotations) {
@@ -176,7 +177,7 @@ const buildSampleFromCocoPair = async (
   return {
     id: makeUUID(),
     name: normalizeFilename(basenameOf(pair.image.path)),
-    base64Image,
+    imagePath,
     split: pair.split,
     annotations,
     createdAt: new Date().toISOString()
@@ -188,11 +189,12 @@ const buildSampleFromCocoPair = async (
 export const cocoDatasetToSamples = async (
   pairs: CocoImagePair[],
   categoryIdToLabelId: Map<number, string>,
+  scratchDir: string,
   onProgress?: (completed: number, total: number) => void
 ): Promise<INewSample[]> => {
   const samples: INewSample[] = []
   for (const pair of pairs) {
-    samples.push(await buildSampleFromCocoPair(pair, categoryIdToLabelId))
+    samples.push(await buildSampleFromCocoPair(pair, categoryIdToLabelId, scratchDir))
     onProgress?.(samples.length, pairs.length)
   }
   return samples

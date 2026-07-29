@@ -1,10 +1,9 @@
-import { useState } from 'react'
-import { Button, Group, Progress, SegmentedControlItem, Stack, Text } from '@mantine/core'
+import { useEffect, useState } from 'react'
+import { Button, Group, Loader, Progress, SegmentedControlItem, Stack, Text } from '@mantine/core'
 import { FaFileExport } from 'react-icons/fa'
 import toast from 'react-hot-toast'
-import JSZip from 'jszip'
 import { AsyncButton } from '@renderer/components/AsyncButton'
-import type { ISample } from '@shared/types'
+import type { ArchiveManifest, ISample } from '@shared/types'
 import type { SampleExporterComponentProps } from '../../types'
 import { imageExtensionFromUri } from '../imageExtensionFromUri'
 import { LabeledSegmentedControl } from '../../LabeledSegmentedControl'
@@ -24,6 +23,11 @@ const COCO_SHAPE_OPTIONS: SegmentedControlItem[] = [
   { value: CocoShapeMode.Native, label: 'As Is' }
 ]
 
+// 'preparing' covers fetching samples and building the manifest, plus the native save
+// dialog (no progress events arrive during either) - without it the progress bar would
+// otherwise sit at 0% with nothing explaining why until the first image is archived.
+type ExportPhase = 'preparing' | 'exporting'
+
 export const CocoExporterComponent = ({
   project,
   tasks,
@@ -32,12 +36,22 @@ export const CocoExporterComponent = ({
   onCancel
 }: SampleExporterComponentProps) => {
   const [isExporting, setIsExporting] = useState(false)
+  const [phase, setPhase] = useState<ExportPhase>('preparing')
   const [progress, setProgress] = useState(0)
   const [shape, setShape] = useState<CocoShapeMode>(CocoShapeMode.Native)
 
+  useEffect(
+    () =>
+      window.exportApi.onProgress(({ completed, total }) => {
+        setProgress(Math.round((completed / Math.max(total, 1)) * 100))
+      }),
+    []
+  )
+
   const runExport = async () => {
+    setPhase('preparing')
+    setProgress(0)
     try {
-      const zip = new JSZip()
       const labelIdToCategoryId = new Map(project.labels.map((label, i) => [label.id, i + 1]))
       const categories = buildCocoCategories(project.labels)
 
@@ -50,7 +64,8 @@ export const CocoExporterComponent = ({
         samplesBySplit.set(sample.split, bucket)
       }
 
-      let completed = 0
+      const manifest: ArchiveManifest = { textEntries: [], imageEntries: [] }
+
       for (const [split, splitSamples] of samplesBySplit) {
         const images: CocoImage[] = []
         const annotations: CocoAnnotation[] = []
@@ -58,18 +73,18 @@ export const CocoExporterComponent = ({
         let nextAnnotationId = 1
 
         for (const sample of splitSamples) {
-          const response = await fetch(sample.imageUri)
-          const blob = await response.blob()
-          const bitmap = await createImageBitmap(blob)
           const imageId = nextImageId++
           const extension = imageExtensionFromUri(sample.imageUri)
 
-          zip.file(cocoImagePath(sample.id, split, extension), blob)
+          manifest.imageEntries.push({
+            path: cocoImagePath(sample.id, split, extension),
+            imageUri: sample.imageUri
+          })
           images.push({
             id: imageId,
             file_name: `${sample.id}.${extension}`,
-            width: bitmap.width,
-            height: bitmap.height
+            width: sample.width,
+            height: sample.height
           })
           annotations.push(
             ...buildCocoAnnotations(
@@ -80,20 +95,16 @@ export const CocoExporterComponent = ({
               shape
             )
           )
-
-          bitmap.close()
-          completed += 1
-          setProgress(Math.round((completed / Math.max(samples.length, 1)) * 100))
         }
 
-        zip.file(
-          cocoAnnotationsFilePath(split),
-          JSON.stringify({ images, annotations, categories }, null, 2)
-        )
+        manifest.textEntries.push({
+          path: cocoAnnotationsFilePath(split),
+          content: JSON.stringify({ images, annotations, categories }, null, 2)
+        })
       }
 
-      const zipData = await zip.generateAsync({ type: 'arraybuffer' })
-      const saved = await window.system.saveFile(`${project.name}-coco-export.zip`, zipData)
+      setPhase('exporting')
+      const saved = await window.exportApi.runExport(`${project.name}-coco-export.zip`, manifest)
 
       if (saved) {
         onComplete()
@@ -119,7 +130,25 @@ export const CocoExporterComponent = ({
         onChange={setShape}
         disabled={isExporting}
       />
-      {isExporting && <Progress value={progress} animated />}
+      {isExporting && (
+        <Stack gap={4}>
+          {phase === 'preparing' ? (
+            <Group justify="center" py="xs">
+              <Loader size="sm" />
+              <Text size="sm" c="dimmed">
+                Preparing export…
+              </Text>
+            </Group>
+          ) : (
+            <>
+              <Progress value={progress} animated />
+              <Text size="xs" c="dimmed" ta="center">
+                {progress === 0 ? 'Waiting for save location…' : `Exporting samples… ${progress}%`}
+              </Text>
+            </>
+          )}
+        </Stack>
+      )}
       <Group justify="flex-end">
         <Button variant="subtle" onClick={onCancel} disabled={isExporting}>
           Cancel

@@ -104,6 +104,22 @@ describe('LabelPage', () => {
     expect(screen.queryByText('Only Label')).not.toBeInTheDocument()
   })
 
+  it('keeps the label picker in a width-bounded scroll container so it does not grow unbounded', () => {
+    const manyLabels = Array.from({ length: 15 }, (_, i) => ({
+      id: `l${i}`,
+      name: `Label ${i}`,
+      color: '#ff0000'
+    }))
+    renderLabelPage({ id: 'p3', name: 'Many Labels Project', labels: manyLabels })
+
+    for (const label of manyLabels) {
+      expect(screen.getByText(label.name)).toBeInTheDocument()
+    }
+
+    const scrollArea = screen.getByTestId('label-scroll-area')
+    expect(scrollArea.style.maxWidth).toBeTruthy()
+  })
+
   it('shows the completed toggle for the current sample', () => {
     renderLabelPage()
 

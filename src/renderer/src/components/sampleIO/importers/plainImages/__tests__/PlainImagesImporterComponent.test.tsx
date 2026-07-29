@@ -21,9 +21,13 @@ const makeFile = (name: string) => new File(['x'], name, { type: 'image/jpeg' })
 
 const getFileInput = () => document.querySelector('input[type=file]') as HTMLInputElement
 
+const createTemporaryDirectory = vi.fn()
+
 beforeEach(() => {
   filesToSamples.mockReset()
   toastError.mockReset()
+  createTemporaryDirectory.mockReset().mockResolvedValue('/scratch')
+  window.system = { createTemporaryDirectory } as unknown as typeof window.system
 })
 
 describe('PlainImagesImporterComponent', () => {
@@ -31,14 +35,14 @@ describe('PlainImagesImporterComponent', () => {
     const sample: INewSample = {
       id: 's1',
       name: 'photo',
-      base64Image: 'abc',
+      imagePath: '/scratch/s1.jpg',
       split: TrainingSplit.Train,
       annotations: [],
       createdAt: new Date().toISOString()
     }
     let resolveImport: (samples: INewSample[]) => void = () => {}
     filesToSamples.mockImplementation(
-      (_files: File[], onProgress?: (c: number, t: number) => void) => {
+      (_files: File[], _scratchDir: string, onProgress?: (c: number, t: number) => void) => {
         onProgress?.(1, 2)
         return new Promise<INewSample[]>((resolve) => {
           resolveImport = resolve
@@ -57,7 +61,7 @@ describe('PlainImagesImporterComponent', () => {
 
     resolveImport([sample])
 
-    await waitFor(() => expect(onComplete).toHaveBeenCalledWith([sample]))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith([sample], '/scratch'))
     expect(screen.queryByText(/Processing images/)).not.toBeInTheDocument()
   })
 
