@@ -1,26 +1,21 @@
-import { BasicListPage } from '@renderer/components/BasicListPage'
+import { BasicListPage, BasicListPageTopBar } from '@renderer/components/BasicListPage'
 import {
   BasicListPageItem,
   BasicListPageItemSkeleton
 } from '@renderer/components/BasicListPageItem'
+import { VirtualizedItemList } from '@renderer/components/VirtualizedItemList'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { EditProjectModal } from './EditProjectModal'
-import { styled } from '@linaria/react'
+import { AnnotatorsModal } from '@renderer/components/annotators/AnnotatorsModal'
 import { Badge, Button, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { CiSearch } from 'react-icons/ci'
 import { MdDeleteOutline, MdFolder } from 'react-icons/md'
 import { CreateProjectButton } from './CreateProjectButton'
 import { useProjects } from '@renderer/hooks/useProjects'
-import { useMemo, useState } from 'react'
+import { useOnRouteLeave } from '@renderer/router/appRouter'
+import { useMemo, useRef, useState } from 'react'
 import { ILabel, IProject } from '@shared/types'
 import tinycolor from 'tinycolor2'
-
-const TopContainer = styled.div`
-  display: flex;
-  width: 100%;
-  flex-direction: row;
-  justify-content: space-between;
-`
 
 const LabelTags = ({ labels }: { labels: ILabel[] }) => (
   <Group gap={4} mt={4}>
@@ -46,9 +41,11 @@ const LabelTags = ({ labels }: { labels: ILabel[] }) => (
 
 export const ProjectsPage = () => {
   const { items, create, open, update, remove, removeMany, isLoading } = useProjects()
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<IProject | null>(null)
   const [pendingEdit, setPendingEdit] = useState<IProject | null>(null)
+  const [pendingAnnotators, setPendingAnnotators] = useState<IProject | null>(null)
   const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
   const [isBatchDeletePending, setIsBatchDeletePending] = useState(false)
@@ -71,6 +68,10 @@ export const ProjectsPage = () => {
     setSelectedProjectIds(new Set())
   }
 
+  // Multiselect shouldn't still be armed when the user comes back to this page later -
+  // Activity preserves this state across a hide/show, so it has to be cleared explicitly.
+  useOnRouteLeave(exitSelectMode)
+
   const toggleSelected = (projectId: string, selected: boolean) => {
     setSelectedProjectIds((current) => {
       const next = new Set(current)
@@ -81,6 +82,14 @@ export const ProjectsPage = () => {
       }
       return next
     })
+  }
+
+  // Enters select mode with just this one project selected - the context menu's "Select"
+  // entry point outside select mode (see selectAll/selectAbove/selectBelow below for the
+  // batch variants offered once already in select mode).
+  const selectOnly = (projectId: string) => {
+    setIsSelectMode(true)
+    setSelectedProjectIds(new Set([projectId]))
   }
 
   // Selection helpers operate on filteredItems (the currently visible/filtered list),
@@ -136,9 +145,17 @@ export const ProjectsPage = () => {
           return result
         }}
       />
+      {pendingAnnotators !== null && (
+        <AnnotatorsModal
+          opened
+          project={pendingAnnotators}
+          onClose={() => setPendingAnnotators(null)}
+        />
+      )}
       <BasicListPage
+        scrollContainerRef={scrollContainerRef}
         top={
-          <TopContainer>
+          <BasicListPageTopBar>
             <Group>
               <CreateProjectButton create={create} />
               {!isSelectMode && (
@@ -176,7 +193,7 @@ export const ProjectsPage = () => {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </Group>
-          </TopContainer>
+          </BasicListPageTopBar>
         }
       >
         <Stack>
@@ -196,26 +213,36 @@ export const ProjectsPage = () => {
                 : 'No projects match your search.'}
             </Text>
           )}
-          {!isLoading &&
-            filteredItems.map((p, index) => (
+        </Stack>
+        {!isLoading && filteredItems.length > 0 && (
+          <VirtualizedItemList
+            items={filteredItems}
+            getKey={(p) => p.id}
+            scrollContainerRef={scrollContainerRef}
+            // Closer to a row with a label badge line than the component's generic
+            // default (90) - most projects have at least one label.
+            estimateSize={80}
+            renderItem={(p, index) => (
               <BasicListPageItem
-                key={p.id}
                 icon={<MdFolder size={18} />}
                 title={p.name}
                 subtitle={p.labels.length === 0 ? 'No labels' : undefined}
                 tags={p.labels.length > 0 ? <LabelTags labels={p.labels} /> : undefined}
                 onClick={() => open(p)}
                 onEdit={() => setPendingEdit(p)}
+                onManageAnnotators={() => setPendingAnnotators(p)}
                 onDelete={() => setPendingDelete(p)}
                 selectMode={isSelectMode}
                 selected={selectedProjectIds.has(p.id)}
                 onSelectedChange={(selected) => toggleSelected(p.id, selected)}
+                onSelect={() => selectOnly(p.id)}
                 onSelectAll={selectAll}
                 onSelectAbove={() => selectAbove(index)}
                 onSelectBelow={() => selectBelow(index)}
               />
-            ))}
-        </Stack>
+            )}
+          />
+        )}
       </BasicListPage>
     </>
   )

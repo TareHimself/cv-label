@@ -1,7 +1,7 @@
 # cv-label
 
 A desktop app for labeling image datasets for computer vision. Organize work into
-Projects → Tasks → Samples, and annotate images with bounding boxes or polygon masks
+Projects → Tasks → Samples, and annotate images with bounding boxes or polygons
 in a canvas-based labeler with pan/zoom and per-label colors.
 
 Built with Electron, React, and TypeScript. Data is stored locally in SQLite by

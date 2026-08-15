@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { act, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
 import { IProject } from '@shared/types'
 
@@ -12,9 +12,16 @@ vi.mock('@renderer/hooks/useAppStore', async () => {
   return { useAppStore }
 })
 
+const { onRouteLeave } = vi.hoisted(() => ({
+  onRouteLeave: { current: null as (() => void) | null }
+}))
+
 vi.mock('@renderer/router/appRouter', () => ({
   navigate: vi.fn(),
-  back: vi.fn()
+  back: vi.fn(),
+  useOnRouteLeave: (callback: () => void) => {
+    onRouteLeave.current = callback
+  }
 }))
 
 import { useAppStore } from '@renderer/hooks/useAppStore'
@@ -40,6 +47,7 @@ const projects: IProject[] = [
 beforeEach(() => {
   vi.mocked(navigate).mockReset()
   vi.mocked(useAppStore.getState().store.getProjects).mockReset().mockResolvedValue(projects)
+  onRouteLeave.current = null
 })
 
 describe('ProjectsPage', () => {
@@ -89,8 +97,8 @@ describe('ProjectsPage', () => {
         ...projects[0],
         name: updates[0].name ?? projects[0].name,
         labels: projects[0].labels.map((label) => {
-          const renamed = updates[0].labels?.find((l) => l.id === label.id)
-          return renamed ? { ...label, name: renamed.name } : label
+          const updated = updates[0].labels?.find((l) => l.id === label.id)
+          return updated ? { ...label, name: updated.name, color: updated.color } : label
         })
       }
     ])
@@ -123,8 +131,8 @@ describe('ProjectsPage', () => {
           id: 'p1',
           name: 'Renamed Signs',
           labels: [
-            { id: 'l1', name: 'Stop Sign Renamed' },
-            { id: 'l2', name: 'Yield Sign' }
+            { id: 'l1', name: 'Stop Sign Renamed', color: '#ff0000' },
+            { id: 'l2', name: 'Yield Sign', color: '#00ff00' }
           ]
         }
       ])
@@ -176,10 +184,31 @@ describe('ProjectsPage', () => {
     expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
   })
 
+  it('right-click Select enters select mode with just that project selected', async () => {
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    expect(screen.queryByText('Select All')).not.toBeInTheDocument()
+    // The toolbar's own "Select" button is still visible outside select mode too, so
+    // disambiguate by only clicking the context menu's copy of the text.
+    const [selectMenuItem] = screen
+      .getAllByText('Select')
+      .filter((el) => el.closest('.mantine-contextmenu-item-button') !== null)
+    fireEvent.click(selectMenuItem)
+
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Select Street Signs' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select Wildlife Cams' })).not.toBeChecked()
+  })
+
   it('right-click Select All selects every currently visible (filtered) project', async () => {
     renderWithProviders(<ProjectsPage />)
     await screen.findByText('Street Signs')
 
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(screen.getByText('Street Signs'))
     fireEvent.click(screen.getByText('Select All'))
 
@@ -196,12 +225,27 @@ describe('ProjectsPage', () => {
     renderWithProviders(<ProjectsPage />)
     await screen.findByText('Street Signs')
 
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(screen.getByText('Wildlife Cams'))
     fireEvent.click(screen.getByText('Select Above'))
 
     expect(screen.getByRole('checkbox', { name: 'Select Street Signs' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'Select Wildlife Cams' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'Select Gamma' })).not.toBeChecked()
+  })
+
+  it('exits select mode and clears the selection when the router reports leaving the page', async () => {
+    renderWithProviders(<ProjectsPage />)
+    await screen.findByText('Street Signs')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Street Signs' }))
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+
+    act(() => onRouteLeave.current?.())
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
   })
 
   it('disables batch Delete while nothing is selected, and enables it once something is', async () => {

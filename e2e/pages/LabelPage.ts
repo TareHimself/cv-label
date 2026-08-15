@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 
-export type LabelerModeName = 'Select' | 'Create Boxes' | 'Create Segments'
+export type LabelerModeName = 'Select' | 'Create Boxes' | 'Create Polygon'
 export type CompletedStateName = 'In Progress' | 'Completed'
 
 export class LabelPage {
@@ -12,6 +12,25 @@ export class LabelPage {
 
   get backButton() {
     return this.page.getByRole('button', { name: 'Back' })
+  }
+
+  get annotationsButton() {
+    return this.page.getByRole('button', { name: 'Annotations' })
+  }
+
+  get annotationsDrawerContent() {
+    return this.page.getByTestId('annotations-drawer-content')
+  }
+
+  async openAnnotationsDrawer() {
+    await this.annotationsButton.click()
+    await this.annotationsDrawerContent.waitFor()
+  }
+
+  /** A row's visible label, e.g. "Box 1" or "Polygon 2" - matches AnnotationsDrawer's own
+   *  `${type} ${index + 1}` text per annotation within its label group. */
+  annotationRow(text: string) {
+    return this.annotationsDrawerContent.getByText(text, { exact: true })
   }
 
   async back() {
@@ -29,10 +48,6 @@ export class LabelPage {
 
   labelRadio(labelName: string) {
     return this.page.getByRole('radio', { name: labelName })
-  }
-
-  completedRadio(state: CompletedStateName) {
-    return this.page.getByRole('radio', { name: state })
   }
 
   // Mantine's SegmentedControl keeps the native radio visually hidden and pairs it with
@@ -55,17 +70,28 @@ export class LabelPage {
     await this.clickOption(this.labelRadio(labelName))
   }
 
-  // Unlike setMode/selectLabel (a single synchronous zustand action), toggling
-  // "completed" goes through an optimistic update plus an async IPC round trip to
+  /** The single completed/in-progress toggle button - its label always names the *action*
+   *  the click would perform, not the current state (e.g. reads "Mark Complete" while the
+   *  sample is in progress). */
+  get completedButton() {
+    return this.page.getByRole('button', { name: /Mark (Complete|In Progress)/ })
+  }
+
+  private buttonLabelForCurrentState(state: CompletedStateName) {
+    return state === 'In Progress' ? 'Mark Complete' : 'Mark In Progress'
+  }
+
+  // Toggling completed goes through an optimistic update plus an async IPC round trip to
   // the main process before the UI reflects it - on a loaded CI runner that can
   // occasionally outlast even a generous assertion timeout. Retry the click itself
   // rather than trust one attempt to land within a fixed window.
   async setCompleted(state: CompletedStateName, maxAttempts = 3) {
-    const radio = this.completedRadio(state)
+    const targetLabel = this.buttonLabelForCurrentState(state)
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await this.clickOption(radio)
+      if ((await this.completedButton.textContent())?.trim() === targetLabel) return
+      await this.completedButton.click()
       for (let i = 0; i < 20; i++) {
-        if (await radio.isChecked()) return
+        if ((await this.completedButton.textContent())?.trim() === targetLabel) return
         await this.page.waitForTimeout(250)
       }
     }
@@ -100,13 +126,39 @@ export class LabelPage {
   }
 
   async rightClickCenter() {
+    await this.rightClickAt(0, 0)
+  }
+
+  /** Right-clicks a point offset from the canvas center by (dx, dy) canvas pixels -
+   *  e.g. to hit-test a spot on a resized annotation's edge. */
+  async rightClickAt(dx: number, dy: number) {
     const { x, y } = await this.canvasCenter()
-    await this.page.mouse.move(x, y)
-    await this.page.mouse.click(x, y, { button: 'right' })
+    await this.page.mouse.move(x + dx, y + dy)
+    await this.page.mouse.click(x + dx, y + dy, { button: 'right' })
+  }
+
+  /** Drags the mouse between two points offset from the canvas center by (dx, dy)
+   *  canvas pixels - e.g. to drag a selected box annotation's edge/corner handle. */
+  async dragCanvas(from: { dx: number; dy: number }, to: { dx: number; dy: number }, steps = 5) {
+    const { x, y } = await this.canvasCenter()
+    await this.page.mouse.move(x + from.dx, y + from.dy)
+    await this.page.mouse.down()
+    await this.page.mouse.move(x + to.dx, y + to.dy, { steps })
+    await this.page.mouse.up()
   }
 
   get deleteAnnotationMenuItem() {
     return this.page.getByText('Delete')
+  }
+
+  get duplicateAnnotationMenuItem() {
+    return this.page.getByText('Duplicate')
+  }
+
+  /** Matches either direction - its label always names the type the click would convert
+   *  *to*, not the annotation's current type. */
+  get convertAnnotationTypeMenuItem() {
+    return this.page.getByText(/Convert to (Polygon|Box)/)
   }
 
   /** Selects the annotation under the cursor and deletes it via the right-click menu. */
@@ -114,5 +166,20 @@ export class LabelPage {
     await this.clickCenter()
     await this.rightClickCenter()
     await this.deleteAnnotationMenuItem.click()
+  }
+
+  /** Selects the annotation under the cursor and duplicates it via the right-click menu. */
+  async duplicateAnnotationAtCenter() {
+    await this.clickCenter()
+    await this.rightClickCenter()
+    await this.duplicateAnnotationMenuItem.click()
+  }
+
+  /** Selects the annotation under the cursor and flips its Box/Polygon type via the
+   *  right-click menu. */
+  async convertAnnotationTypeAtCenter() {
+    await this.clickCenter()
+    await this.rightClickCenter()
+    await this.convertAnnotationTypeMenuItem.click()
   }
 }

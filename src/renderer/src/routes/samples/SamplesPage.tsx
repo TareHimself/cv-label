@@ -1,10 +1,10 @@
-import { BasicListPage } from '@renderer/components/BasicListPage'
+import { BasicListPage, BasicListPageTopBar } from '@renderer/components/BasicListPage'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { RenameModal } from '@renderer/components/RenameModal'
-import { styled } from '@linaria/react'
 import {
   Text,
   Button,
+  Badge,
   Card,
   Group,
   TextInput,
@@ -19,22 +19,18 @@ import {
 import { IoMdArrowBack } from 'react-icons/io'
 import { FaFileImport } from 'react-icons/fa'
 import { CiSearch } from 'react-icons/ci'
-import { MdDeleteOutline, MdEdit } from 'react-icons/md'
+import { MdDeleteOutline, MdEdit, MdOutlineSmartToy } from 'react-icons/md'
 import { useContextMenu } from 'mantine-contextmenu'
-import { IProject, ITask, TrainingSplit } from '@shared/types'
+import { IAnnotation, ILabel, IProject, ITask, TrainingSplit } from '@shared/types'
+import tinycolor from 'tinycolor2'
 import { useSamples } from '@renderer/hooks/useSamples'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { OptimisticSample } from '@renderer/types'
 import { useAppStore } from '@renderer/hooks/useAppStore'
+import { useAnnotators } from '@renderer/hooks/useAnnotators'
 import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
-import { back } from '@renderer/router/appRouter'
-
-const TopContainer = styled.div`
-  display: flex;
-  width: 100%;
-  flex-direction: row;
-  justify-content: space-between;
-`
+import { AnnotatorsModal } from '@renderer/components/annotators/AnnotatorsModal'
+import { back, useOnRouteLeave } from '@renderer/router/appRouter'
 
 const SPLIT_COMBO_BOX_OPTIONS: SegmentedControlItem[] = [
   {
@@ -87,16 +83,68 @@ const STATUS_COMBO_BOX_OPTIONS: SegmentedControlItem[] = [
   }
 ]
 
+// Per-label annotation counts for one sample, e.g. "Stop Sign: 2" - ordered to match the
+// project's own label list rather than first-seen order, and coloured the same way
+// ProjectsPage's LabelTags colours a project's label badges (filled with the label's own
+// color, text contrast picked via tinycolor). A label with zero annotations on this
+// sample is omitted entirely rather than shown as "Label: 0".
+const AnnotationLabelCounts = ({
+  annotations,
+  labels
+}: {
+  annotations: IAnnotation[]
+  labels: ILabel[]
+}) => {
+  const counts = new Map<string, number>()
+  for (const annotation of annotations) {
+    counts.set(annotation.labelId, (counts.get(annotation.labelId) ?? 0) + 1)
+  }
+  const labelsWithCounts = labels.filter((label) => counts.has(label.id))
+
+  if (labelsWithCounts.length === 0) {
+    return (
+      <Text size="xs" c="dimmed">
+        No annotations yet
+      </Text>
+    )
+  }
+
+  return (
+    <Group gap={4}>
+      {labelsWithCounts.map((label) => (
+        <Badge
+          key={label.id}
+          size="sm"
+          variant="filled"
+          radius="sm"
+          style={{
+            backgroundColor: label.color,
+            color: tinycolor(label.color).isLight() ? '#000' : '#fff'
+          }}
+        >
+          {label.name}: {counts.get(label.id)}
+        </Badge>
+      ))}
+    </Group>
+  )
+}
+
 const SampleCard = ({
   optimisticSample,
+  labels,
   onLabel,
   onEdit,
-  onDelete
+  onDelete,
+  canAutoLabel,
+  onAutoLabel
 }: {
   optimisticSample: OptimisticSample
+  labels: ILabel[]
   onLabel: (sampleId: string) => void
   onEdit: (sample: OptimisticSample) => void
   onDelete: (sample: OptimisticSample) => void
+  canAutoLabel: boolean
+  onAutoLabel: (sample: OptimisticSample) => void
 }) => {
   const sample = useSyncExternalStore(
     (c) => optimisticSample.subscribe(() => c()),
@@ -105,6 +153,8 @@ const SampleCard = ({
   const store = useAppStore((s) => s.store)
   const [isLoadingImage, setIsLoadingImage] = useState(true)
   const { showContextMenu } = useContextMenu()
+  const annotations = Object.values(sample.annotations.resolve()).map((a) => a.resolve())
+  const isUnlabeled = annotations.length === 0
   return (
     <Card
       shadow="sm"
@@ -116,6 +166,16 @@ const SampleCard = ({
           title: 'Edit',
           onClick: () => onEdit(optimisticSample)
         },
+        ...(canAutoLabel && isUnlabeled
+          ? [
+              {
+                key: 'auto-label',
+                icon: <MdOutlineSmartToy size={16} />,
+                title: 'Auto-label',
+                onClick: () => onAutoLabel(optimisticSample)
+              }
+            ]
+          : []),
         {
           key: 'delete',
           icon: <MdDeleteOutline size={16} />,
@@ -144,6 +204,8 @@ const SampleCard = ({
             {sample.name}
           </Text>
         </Group>
+
+        <AnnotationLabelCounts annotations={annotations} labels={labels} />
 
         <Flex w={'100%'} justify={'flex-end'} gap={'sm'}>
           <Flex align={'center'} gap={'xs'}>
@@ -208,16 +270,33 @@ export type SamplesPageProps = {
 
 export const SamplesPage = ({ project, task }: SamplesPageProps) => {
   const { items, loading, label, remove, createSamples } = useSamples(project, task)
+  const { items: annotators } = useAnnotators()
   const store = useAppStore((s) => s.store)
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<OptimisticSample | null>(null)
   const [pendingRename, setPendingRename] = useState<OptimisticSample | null>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  // A descriptor, not a frozen sample list - the modal can stay open across multiple runs
+  // (see AnnotatorsModal's "Done" button), so the samples it acts on must be re-derived
+  // from the live `items` on every render rather than snapshotted once at click time, or a
+  // second Run would see samples the first run just labeled as still unlabeled.
+  const [autoLabelSelection, setAutoLabelSelection] = useState<'all' | string | null>(null)
+  const canAutoLabel = annotators.length > 0
+
+  // Don't leave the auto-label modal armed to reopen against a stale target next time
+  // this page becomes visible - Activity preserves this state across a hide/show.
+  useOnRouteLeave(() => setAutoLabelSelection(null))
 
   const filteredItems = useMemo(
     () => items.filter((s) => s.resolve().name.toLowerCase().includes(search.trim().toLowerCase())),
     [items, search]
   )
+
+  const autoLabelTargets = useMemo(() => {
+    if (autoLabelSelection === null) return null
+    if (autoLabelSelection === 'all') return items
+    return items.filter((s) => s.resolve().id === autoLabelSelection)
+  }, [autoLabelSelection, items])
 
   return (
     <>
@@ -258,9 +337,18 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
           await window.system.deleteDirectory(scratchDir).catch(() => {})
         }}
       />
+      {autoLabelTargets !== null && (
+        <AnnotatorsModal
+          opened
+          project={project}
+          tasks={[task]}
+          samples={autoLabelTargets}
+          onClose={() => setAutoLabelSelection(null)}
+        />
+      )}
       <BasicListPage
         top={
-          <TopContainer>
+          <BasicListPageTopBar>
             <Group>
               <Button
                 leftSection={<IoMdArrowBack />}
@@ -274,6 +362,13 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
               <Button leftSection={<FaFileImport />} onClick={() => setIsImportOpen(true)}>
                 Import Samples
               </Button>
+              <Button
+                leftSection={<MdOutlineSmartToy />}
+                variant="outline"
+                onClick={() => setAutoLabelSelection('all')}
+              >
+                Auto-label
+              </Button>
             </Group>
             <Group>
               <TextInput
@@ -283,7 +378,7 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </Group>
-          </TopContainer>
+          </BasicListPageTopBar>
         }
       >
         <Stack>
@@ -306,9 +401,12 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
             <SampleCard
               key={p.resolve().id}
               optimisticSample={p}
+              labels={project.labels}
               onLabel={label}
               onEdit={setPendingRename}
               onDelete={setPendingDelete}
+              canAutoLabel={canAutoLabel}
+              onAutoLabel={(sample) => setAutoLabelSelection(sample.resolve().id)}
             />
           ))}
         </Stack>

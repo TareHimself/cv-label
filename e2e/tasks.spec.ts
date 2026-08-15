@@ -140,6 +140,76 @@ test.describe('Tasks page', () => {
     }
   })
 
+  test('exports a single task via its context menu, outside select mode', async ({
+    tasksPage,
+    electronApp,
+    appDataDir
+  }) => {
+    const image = await createTestImage('sample-1')
+    const savePath = join(appDataDir, 'export-single.zip')
+    try {
+      await tasksPage.createTask('Batch 1', [image])
+
+      await electronApp.evaluate(({ dialog }, targetPath) => {
+        dialog.showSaveDialog = (async () => ({
+          canceled: false,
+          filePath: targetPath
+        })) as typeof dialog.showSaveDialog
+      }, savePath)
+
+      await tasksPage.exportTask('Batch 1')
+
+      expect(existsSync(savePath)).toBe(true)
+    } finally {
+      cleanupTestImage(image)
+    }
+  })
+
+  test('hides the per-task Export context-menu entry in select mode', async ({ tasksPage }) => {
+    const image = await createTestImage('sample-1')
+    try {
+      await tasksPage.createTask('Batch 1', [image])
+
+      await tasksPage.selectTasks(['Batch 1'])
+      await tasksPage.row('Batch 1').click({ button: 'right' })
+
+      await expect(tasksPage.allExportTexts).toHaveCount(1)
+    } finally {
+      cleanupTestImage(image)
+    }
+  })
+
+  test('copies annotations from one task to another via the context menu', async ({
+    tasksPage,
+    samplesPage,
+    labelPage
+  }) => {
+    const image = await createTestImage('sample-1')
+    try {
+      // Both tasks import the same file, so their one sample each shares the same
+      // dimensions - the copy flow's own dimension-match guard would otherwise skip it.
+      await tasksPage.createTask('English', [image])
+      await tasksPage.createTask('French', [image])
+
+      await tasksPage.open('English')
+      await samplesPage.label('sample-1')
+      await labelPage.setMode('Create Boxes')
+      await labelPage.drawBoxAroundCenter()
+      await labelPage.back()
+      await samplesPage.back()
+
+      await tasksPage.copyAnnotations('English', 'French')
+
+      await tasksPage.open('French')
+      await samplesPage.label('sample-1')
+      await labelPage.openAnnotationsDrawer()
+
+      await expect(labelPage.annotationRow('Box 1')).toBeVisible()
+    } finally {
+      cleanupTestImage(image)
+    }
+  })
+
   test('renames a task via the context menu', async ({ tasksPage }) => {
     const image = await createTestImage('sample-1')
     try {
@@ -168,6 +238,50 @@ test.describe('Tasks page', () => {
 
       await expect(tasksPage.row('Batch 2')).toBeVisible()
       await expect(tasksPage.row('Batch 1')).toBeVisible()
+    } finally {
+      cleanupTestImage(imageA)
+      cleanupTestImage(imageB)
+    }
+  })
+
+  test('creates a tag from Manage Tags, then picks and creates tags via the TagPicker combobox', async ({
+    tasksPage
+  }) => {
+    const image = await createTestImage('sample-1')
+    try {
+      await tasksPage.createTask('Batch 1', [image])
+
+      await tasksPage.createTag('Urgent')
+      await tasksPage.closeManageTags()
+
+      await tasksPage.openEditTags('Batch 1')
+      await tasksPage.pickExistingTag('Tags', 'Urgent')
+      await tasksPage.createTagInline('Tags', 'Needs Review')
+      await tasksPage.saveTags()
+
+      await expect(tasksPage.tagBadge('Batch 1', 'Urgent')).toBeVisible()
+      await expect(tasksPage.tagBadge('Batch 1', 'Needs Review')).toBeVisible()
+    } finally {
+      cleanupTestImage(image)
+    }
+  })
+
+  test('adds a newly-created tag to a batch of selected tasks via the Add combobox', async ({
+    tasksPage
+  }) => {
+    const imageA = await createTestImage('sample-a')
+    const imageB = await createTestImage('sample-b')
+    try {
+      await tasksPage.createTask('Batch 1', [imageA])
+      await tasksPage.createTask('Batch 2', [imageB])
+
+      await tasksPage.selectTasks(['Batch 1', 'Batch 2'])
+      await tasksPage.batchTagsButton.click()
+      await tasksPage.createTagInline('Add', 'Reviewed')
+      await tasksPage.saveTags()
+
+      await expect(tasksPage.tagBadge('Batch 1', 'Reviewed')).toBeVisible()
+      await expect(tasksPage.tagBadge('Batch 2', 'Reviewed')).toBeVisible()
     } finally {
       cleanupTestImage(imageA)
       cleanupTestImage(imageB)
