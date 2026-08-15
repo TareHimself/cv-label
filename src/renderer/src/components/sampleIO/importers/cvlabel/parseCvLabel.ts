@@ -90,7 +90,7 @@ export const findCvLabelPairs = (
  *  source label has no mapping are dropped. */
 export const cvLabelDatasetToSamples = async (
   pairs: CvLabelPair[],
-  labelIdToProjectLabelId: Map<string, string>,
+  labelIdToProjectLabelId: Map<string, string | null>,
   scratchDir: string,
   onProgress?: (completed: number, total: number) => void
 ): Promise<INewSample[]> => {
@@ -104,7 +104,7 @@ export const cvLabelDatasetToSamples = async (
       const annotations: INewAnnotation[] = []
       for (const annotation of pair.sample.annotations) {
         const labelId = labelIdToProjectLabelId.get(annotation.labelId)
-        if (labelId === undefined) continue
+        if (labelId === undefined || labelId === null) continue
         annotations.push({
           id: makeUUID(),
           type: annotation.type,

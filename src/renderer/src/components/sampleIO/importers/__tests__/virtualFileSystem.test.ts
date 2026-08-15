@@ -104,16 +104,22 @@ describe('virtualFilesFromExtractedZip', () => {
     expect(deleteFile).not.toHaveBeenCalled()
   })
 
-  it('throws a clear error rather than silently misbehaving when the file has no real path', async () => {
-    installFakeFileSystem()
+  it('falls back to writing the file bytes to scratch when it has no real path (e.g. a drag-and-drop-reconstructed File)', async () => {
+    const { writeFile, deleteFile } = installFakeFileSystem()
     window.fileUtils.getPathForFile = () => ''
     const zip = new JSZip()
     zip.file('img1.jpg', 'x')
     const zipFile = new File([await zip.generateAsync({ type: 'arraybuffer' })], 'dataset.zip')
 
-    await expect(virtualFilesFromExtractedZip(zipFile, '/scratch')).rejects.toThrow(
-      'Could not resolve a real path'
-    )
+    const files = await virtualFilesFromExtractedZip(zipFile, '/scratch')
+
+    expect(files.map((f) => f.path)).toEqual(['img1.jpg'])
+    // The staged copy of the zip itself was written into scratchDir and then removed
+    // before listing, so it isn't returned alongside the zip's own extracted entries.
+    expect(writeFile).toHaveBeenCalledTimes(1)
+    const [stagedPath] = writeFile.mock.calls[0]
+    expect(stagedPath.startsWith('/scratch/')).toBe(true)
+    expect(deleteFile).toHaveBeenCalledWith(stagedPath)
   })
 
   it('rejects blob() for a disk-backed entry rather than silently misreading it', async () => {

@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import { writeBlobToScratchFile } from './writeToScratch'
 
 /** A file from either a zip archive or a picked folder, addressed by a forward-slash
  *  relative path so the rest of the importers don't need to know which source it
@@ -41,17 +42,26 @@ export const virtualFilesFromZip = async (zipFile: File): Promise<VirtualFile[]>
  *  copying it into scratchDir first - a naive copy (read the File's bytes, ship them
  *  across IPC, write them back out) would hold the entire file in memory twice over for
  *  something that's already sitting on disk, which for a multi-gigabyte dataset export
- *  defeats the point of extracting it in a streaming fashion at all. */
+ *  defeats the point of extracting it in a streaming fashion at all. That resolution only
+ *  works for a File Electron itself handed the renderer (a native file-picker selection or
+ *  a plain OS drag) - a Dropzone drag that goes through directory-aware processing (needed
+ *  elsewhere for folder drops) re-materializes the File via the FileSystemEntry API first,
+ *  which Electron can't map back to a real path. Falls back to the naive copy only in that
+ *  case, so drag-and-drop still works for a zip too, just without the streaming shortcut. */
 export const virtualFilesFromExtractedZip = async (
   zipFile: File,
   scratchDir: string
 ): Promise<VirtualFile[]> => {
-  const zipPath = window.fileUtils.getPathForFile(zipFile)
-  if (!zipPath) {
-    throw new Error('Could not resolve a real path for the selected file')
-  }
+  const resolvedPath = window.fileUtils.getPathForFile(zipFile)
+  const zipPath = resolvedPath || (await writeBlobToScratchFile(scratchDir, zipFile, 'zip'))
 
   await window.zip.extractTo(zipPath, scratchDir)
+  if (!resolvedPath) {
+    // The staged copy lives inside scratchDir itself (nowhere else to put it without a
+    // second temporary-directory round trip) - remove it before listing so it isn't
+    // mistaken for one of the zip's own extracted entries.
+    await window.system.deleteFile(zipPath)
+  }
 
   const relativePaths = await window.system.listFilesRecursive(scratchDir)
 

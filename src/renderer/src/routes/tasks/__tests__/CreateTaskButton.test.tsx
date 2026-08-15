@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, fireEvent, within, waitFor } from '@testing-library/react'
+import JSZip from 'jszip'
 import { renderWithProviders } from '@renderer/__tests__/renderWithProviders'
+import { installFakeFileSystem } from '@renderer/components/sampleIO/importers/__tests__/fakeFileSystem'
 import { CreateTaskButton } from '../CreateTaskButton'
 import { IProject } from '@shared/types'
 
@@ -64,6 +66,31 @@ const dropFiles = (files: File[]) => {
   const input = document.querySelector('input[type=file]') as HTMLInputElement
   fireEvent.change(input, { target: { files } })
 }
+
+const projectWithLabel: IProject = {
+  id: 'project-1',
+  name: 'Test Project',
+  labels: [{ id: 'l1', name: 'Text', color: '#fff' }]
+}
+
+const makeCvLabelFile = async (name: string, labels: unknown[], samples: unknown[]) => {
+  const zip = new JSZip()
+  zip.file('manifest.json', JSON.stringify({ labels, samples }))
+  zip.file('images/s1.jpg', 'fake-image-bytes')
+  const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+  return new File([buffer], name)
+}
+
+const oneCvLabelSample = [
+  {
+    id: 's1',
+    name: 'photo-one',
+    split: 'train',
+    annotations: [{ id: 'a1', type: 'box', labelId: 'l1', points: [] }],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    imageFile: 'images/s1.jpg'
+  }
+]
 
 describe('CreateTaskButton', () => {
   it('opens the modal showing an empty file list', async () => {
@@ -336,5 +363,82 @@ describe('CreateTaskButton', () => {
     expect(create).toHaveBeenCalledTimes(1)
     expect(create.mock.calls[0][0]).toBe('Combined Batch')
     expect(create.mock.calls[0][1]).toHaveLength(2)
+  })
+
+  describe('dropping a .cvlabel file', () => {
+    beforeEach(() => {
+      // .cvlabel parsing goes through virtualFilesFromExtractedZip (window.zip/fileUtils),
+      // a different pipeline than the plain-image drop path's filesToSamples - this
+      // installs the fuller fake filesystem those need, layered on top of the getFileSize/
+      // getScratchPreviewUri/deleteDirectory stubs the outer beforeEach already set up for
+      // the Create Task modal's own sample list and cleanup.
+      installFakeFileSystem()
+      window.system = {
+        ...window.system,
+        getScratchPreviewUri,
+        deleteDirectory
+      } as unknown as typeof window.system
+    })
+
+    it('drops straight into the label-mapping step, skipping the picker', async () => {
+      const file = await makeCvLabelFile(
+        'French Batch.cvlabel',
+        [{ id: 'l1', name: 'Texte' }],
+        oneCvLabelSample
+      )
+      renderWithProviders(<CreateTaskButton project={projectWithLabel} create={vi.fn()} />)
+
+      dropFiles([file])
+
+      expect(await screen.findByRole('dialog', { name: 'Import .cvlabel' })).toBeInTheDocument()
+      expect(await screen.findByText('Texte')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('Text')).toBeInTheDocument()
+    })
+
+    it('prefills the Create Task modal from the file name and mapped samples', async () => {
+      const file = await makeCvLabelFile(
+        'French Batch.cvlabel',
+        [{ id: 'l1', name: 'Texte' }],
+        oneCvLabelSample
+      )
+      const create = vi.fn().mockResolvedValue(undefined)
+      renderWithProviders(<CreateTaskButton project={projectWithLabel} create={create} />)
+
+      dropFiles([file])
+      await screen.findByRole('dialog', { name: 'Import .cvlabel' })
+      fireEvent.click(await screen.findByRole('button', { name: 'Import' }))
+
+      expect(await screen.findByRole('dialog', { name: 'Create Task' })).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveValue('French Batch')
+      expect(await screen.findByText('photo-one')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+      expect(create).toHaveBeenCalledTimes(1)
+      expect(create.mock.calls[0][0]).toBe('French Batch')
+      expect(create.mock.calls[0][1]).toHaveLength(1)
+      expect(create.mock.calls[0][1][0].annotations[0].labelId).toBe('l1')
+    })
+
+    it('closes without opening Create Task when the cv-label wizard is dismissed', async () => {
+      const file = await makeCvLabelFile(
+        'French Batch.cvlabel',
+        [{ id: 'l1', name: 'Texte' }],
+        oneCvLabelSample
+      )
+      renderWithProviders(<CreateTaskButton project={projectWithLabel} create={vi.fn()} />)
+
+      dropFiles([file])
+      await screen.findByRole('dialog', { name: 'Import .cvlabel' })
+      // The drop lands straight on the mapping step (no Cancel button there, only on the
+      // picker step it skips) - dismissing via Escape exercises the modal's own onClose,
+      // same as a user closing it any other way once past that first step.
+      fireEvent.keyDown(document.body, { key: 'Escape', code: 'Escape' })
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: 'Import .cvlabel' })).not.toBeInTheDocument()
+      })
+      expect(screen.queryByRole('dialog', { name: 'Create Task' })).not.toBeInTheDocument()
+    })
   })
 })

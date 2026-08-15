@@ -21,6 +21,11 @@ const project: IProject = {
 
 const manifestJson = (labels: unknown[], samples: unknown[]) => JSON.stringify({ labels, samples })
 
+// Mantine's Dropzone renders a real <input type=file> under the hood and reacts to it the
+// same way it would a drop - same interaction pattern as PlainImagesImporterComponent's
+// own tests, which drive the equivalent Dropzone this way.
+const getFileInput = () => document.querySelector('input[type=file]') as HTMLInputElement
+
 const makeCvLabelFile = async (labels: unknown[], samples: unknown[], images: string[]) => {
   const zip = new JSZip()
   zip.file('manifest.json', manifestJson(labels, samples))
@@ -55,7 +60,7 @@ describe('CvLabelImporterComponent', () => {
       <CvLabelImporterComponent project={project} onComplete={vi.fn()} onCancel={vi.fn()} />
     )
 
-    fireEvent.change(screen.getByTestId('cvlabel-file-input'), { target: { files: [file] } })
+    fireEvent.change(getFileInput(), { target: { files: [file] } })
 
     await screen.findByText('Whatever')
     expect(screen.getByText('car')).toBeInTheDocument()
@@ -83,10 +88,53 @@ describe('CvLabelImporterComponent', () => {
       <CvLabelImporterComponent project={project} onComplete={vi.fn()} onCancel={vi.fn()} />
     )
 
-    fireEvent.change(screen.getByTestId('cvlabel-file-input'), { target: { files: [file] } })
+    fireEvent.change(getFileInput(), { target: { files: [file] } })
 
     await screen.findByText('truck')
     expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled()
+  })
+
+  it('lets the user explicitly Ignore an unmatched label, enabling Import and dropping its annotations', async () => {
+    const file = await makeCvLabelFile(
+      [{ id: 'no-match', name: 'truck' }],
+      [
+        {
+          id: 's1',
+          name: 'photo-one',
+          split: 'train',
+          annotations: [{ id: 'a1', type: 'box', labelId: 'no-match', points: [] }],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          imageFile: 'images/s1.jpg'
+        }
+      ],
+      ['images/s1.jpg']
+    )
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <CvLabelImporterComponent project={project} onComplete={onComplete} onCancel={vi.fn()} />
+    )
+
+    fireEvent.change(getFileInput(), { target: { files: [file] } })
+    await screen.findByText('truck')
+
+    // Mantine's Select doesn't re-fire onChange for clicking the already-displayed
+    // option, so go via a real label first to prove a genuine value change, then back
+    // to Ignore - both of which are real transitions and should each fire onChange.
+    fireEvent.click(screen.getByDisplayValue('Ignore'))
+    fireEvent.click(await screen.findByText('Person'))
+    expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled()
+
+    fireEvent.click(screen.getByDisplayValue('Person'))
+    fireEvent.click(await screen.findByText('Ignore'))
+    expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const samples = onComplete.mock.calls[0][0]
+    expect(samples).toHaveLength(1)
+    expect(samples[0].annotations).toHaveLength(0)
   })
 
   it('imports with the resolved mapping and calls onComplete', async () => {
@@ -110,7 +158,7 @@ describe('CvLabelImporterComponent', () => {
       <CvLabelImporterComponent project={project} onComplete={onComplete} onCancel={vi.fn()} />
     )
 
-    fireEvent.change(screen.getByTestId('cvlabel-file-input'), { target: { files: [file] } })
+    fireEvent.change(getFileInput(), { target: { files: [file] } })
     await screen.findByText('Human')
 
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
@@ -132,10 +180,10 @@ describe('CvLabelImporterComponent', () => {
       <CvLabelImporterComponent project={project} onComplete={vi.fn()} onCancel={vi.fn()} />
     )
 
-    fireEvent.change(screen.getByTestId('cvlabel-file-input'), { target: { files: [file] } })
+    fireEvent.change(getFileInput(), { target: { files: [file] } })
 
     await waitFor(() => {
-      expect(screen.getByTestId('cvlabel-file-input')).toBeInTheDocument()
+      expect(getFileInput()).toBeInTheDocument()
     })
     expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument()
   })

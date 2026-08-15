@@ -1,9 +1,10 @@
-import { useRef, useState, type ChangeEvent, type FC } from 'react'
-import { Button, Group, Loader, Progress, ScrollArea, Select, Stack, Text } from '@mantine/core'
+import { useCallback, useEffect, useRef, useState, type FC } from 'react'
+import { Button, Group, Loader, Progress, Stack, Text } from '@mantine/core'
+import { Dropzone, MIME_TYPES, type FileWithPath } from '@mantine/dropzone'
 import toast from 'react-hot-toast'
 import { FaFileZipper } from 'react-icons/fa6'
 import type { SampleImporterComponentProps } from '../../types'
-import { ZIndex } from '@renderer/zIndex'
+import { LabelMapper } from '../../LabelMapper'
 import { findLabelIdById, findLabelIdByName } from '../matchLabel'
 import { virtualFilesFromExtractedZip } from '../virtualFileSystem'
 import {
@@ -20,14 +21,24 @@ type WizardState =
   | { step: 'mapping'; classes: CvLabelClass[]; pairs: CvLabelPair[] }
   | { step: 'importing'; progress: number }
 
-export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
+type CvLabelImporterComponentProps = SampleImporterComponentProps & {
+  /** Skips the drop/browse step and feeds this file straight into parsing, as if it had
+   *  just been dropped - lets a caller that already has the file in hand (e.g. the Tasks
+   *  page's own full-screen drop target, see CreateTaskButton.tsx) land the user directly
+   *  on the label-mapping step instead of making them drop it again inside this wizard. */
+  initialFile?: FileWithPath
+}
+
+export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
   project,
   onComplete,
-  onCancel
+  onCancel,
+  initialFile
 }) => {
-  const [state, setState] = useState<WizardState>({ step: 'select-source' })
-  const [labelByClassId, setLabelByClassId] = useState<Map<string, string>>(new Map())
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [state, setState] = useState<WizardState>(
+    initialFile ? { step: 'parsing' } : { step: 'select-source' }
+  )
+  const [labelByClassId, setLabelByClassId] = useState<Map<string, string | null>>(new Map())
   const scratchDirRef = useRef<string | null>(null)
 
   const ensureScratchDir = async (): Promise<string> => {
@@ -37,45 +48,62 @@ export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
     return scratchDirRef.current
   }
 
-  const handleFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+  const handleFileSelected = useCallback(
+    async (files: FileWithPath[]) => {
+      const file = files[0]
+      if (!file) return
 
-    setState({ step: 'parsing' })
-    try {
-      const scratchDir = await ensureScratchDir()
-      const files = await virtualFilesFromExtractedZip(file, scratchDir)
-      const found = await findCvLabelManifest(files)
-      if (!found) {
-        toast.error('No manifest.json found - is this a .cvlabel file?')
+      setState({ step: 'parsing' })
+      try {
+        const scratchDir = await ensureScratchDir()
+        const extractedFiles = await virtualFilesFromExtractedZip(file, scratchDir)
+        const found = await findCvLabelManifest(extractedFiles)
+        if (!found) {
+          toast.error('No manifest.json found - is this a .cvlabel file?')
+          setState({ step: 'select-source' })
+          return
+        }
+
+        const pairs = findCvLabelPairs(found.manifest, found.dir, extractedFiles)
+        if (pairs.length === 0) {
+          toast.error('No samples found in this file')
+          setState({ step: 'select-source' })
+          return
+        }
+
+        setLabelByClassId(
+          new Map(
+            found.manifest.labels.map((label) => [
+              label.id,
+              findLabelIdById(project.labels, label.id) ??
+                findLabelIdByName(project.labels, label.name)
+            ]) as [string, string | undefined][]
+          ) as Map<string, string | null>
+        )
+        setState({ step: 'mapping', classes: found.manifest.labels, pairs })
+      } catch (error) {
+        console.error(error)
+        toast.error('Failed to read the file')
         setState({ step: 'select-source' })
-        return
       }
+    },
+    [project]
+  )
 
-      const pairs = findCvLabelPairs(found.manifest, found.dir, files)
-      if (pairs.length === 0) {
-        toast.error('No samples found in this file')
-        setState({ step: 'select-source' })
-        return
-      }
-
-      setLabelByClassId(
-        new Map(
-          found.manifest.labels.map((label) => [
-            label.id,
-            findLabelIdById(project.labels, label.id) ??
-              findLabelIdByName(project.labels, label.name)
-          ]) as [string, string | undefined][]
-        ) as Map<string, string>
-      )
-      setState({ step: 'mapping', classes: found.manifest.labels, pairs })
-    } catch (error) {
-      console.error(error)
-      toast.error('Failed to read the file')
-      setState({ step: 'select-source' })
+  // Mirrors what the Dropzone's own onDrop would do with this same file - runs once per
+  // distinct initialFile (a new drop passes a new File instance, so this naturally re-fires
+  // for each one) rather than on every render, which handleFileSelected alone would cause
+  // if depended on directly given it's recreated whenever `project` changes. Deferred a
+  // microtask out rather than called directly: handleFileSelected's first statement is a
+  // synchronous setState (the same immediate "parsing" flip the Dropzone's own onDrop
+  // relies on), which react-hooks flags as a cascading-render risk when it runs straight
+  // in an effect body - the lazy initial state above already shows "parsing" on the very
+  // first paint, so this deferral costs nothing visible.
+  useEffect(() => {
+    if (initialFile) {
+      void Promise.resolve().then(() => handleFileSelected([initialFile]))
     }
-  }
+  }, [initialFile, handleFileSelected])
 
   const runImport = async () => {
     if (state.step !== 'mapping') return
@@ -102,7 +130,7 @@ export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
     return (
       <Stack gap="lg">
         <Text size="sm" c="dimmed">
-          Select a <code>.cvlabel</code> file exported from this app.
+          Drop a <code>.cvlabel</code> file exported from this app, or click to browse.
         </Text>
         {state.step === 'parsing' ? (
           <Group justify="center" py="xl">
@@ -112,18 +140,24 @@ export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
             </Text>
           </Group>
         ) : (
-          <Button leftSection={<FaFileZipper />} onClick={() => fileInputRef.current?.click()}>
-            Choose File
-          </Button>
+          <Dropzone
+            // .cvlabel has no registered OS mime type, so a dropped file typically
+            // reports an empty File.type - matching it as a zip by extension (the
+            // Accept map's array side) is what actually lets it through, not the mime key.
+            accept={{ [MIME_TYPES.zip]: ['.cvlabel', '.zip'] }}
+            multiple={false}
+            onDrop={(files) => handleFileSelected(files)}
+          >
+            <Group justify="center" gap="xl" mih={160} style={{ pointerEvents: 'none' }}>
+              <Stack align="center" gap={4}>
+                <FaFileZipper size={28} opacity={0.6} />
+                <Text size="sm" c="dimmed">
+                  Drop a .cvlabel file here, or click to browse
+                </Text>
+              </Stack>
+            </Group>
+          </Dropzone>
         )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".cvlabel,.zip"
-          data-testid="cvlabel-file-input"
-          style={{ display: 'none' }}
-          onChange={handleFileSelected}
-        />
         <Group justify="flex-end">
           <Button variant="subtle" onClick={onCancel}>
             Cancel
@@ -158,39 +192,22 @@ export const CvLabelImporterComponent: FC<SampleImporterComponentProps> = ({
           This project has no labels yet - add one before importing.
         </Text>
       )}
-      <ScrollArea style={{ maxHeight: 260 }} type="always" scrollbars="y">
-        <Stack gap="sm">
-          {classes.map((cvLabelClass) => (
-            <Group key={cvLabelClass.id} wrap="nowrap">
-              <Text size="sm" flex={1} truncate>
-                {cvLabelClass.name}
-              </Text>
-              <Select
-                flex={1}
-                data={project.labels.map((label) => ({ value: label.id, label: label.name }))}
-                value={labelByClassId.get(cvLabelClass.id) ?? null}
-                onChange={(value) => {
-                  if (!value) return
-                  setLabelByClassId((current) => new Map(current).set(cvLabelClass.id, value))
-                }}
-                // This importer lives inside ImportSamplesModal - without an explicit
-                // zIndex above the modal's own, this dropdown renders behind the modal
-                // body and can't be clicked.
-                comboboxProps={{ zIndex: ZIndex.actionModalContent }}
-                disabled={!hasProjectLabels}
-                allowDeselect={false}
-              />
-            </Group>
-          ))}
-        </Stack>
-      </ScrollArea>
+      <LabelMapper
+        items={classes}
+        options={project.labels}
+        mapping={labelByClassId}
+        onChange={(id, value) => setLabelByClassId((current) => new Map(current).set(id, value))}
+        disabled={!hasProjectLabels}
+      />
       <Group justify="flex-end">
         <Button variant="outline" onClick={() => setState({ step: 'select-source' })}>
           Back
         </Button>
         <Button
           onClick={runImport}
-          disabled={!hasProjectLabels || classes.some((c) => !labelByClassId.get(c.id))}
+          disabled={
+            !hasProjectLabels || classes.some((c) => labelByClassId.get(c.id) === undefined)
+          }
         >
           Import
         </Button>

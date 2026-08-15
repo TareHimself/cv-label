@@ -11,7 +11,7 @@ import {
   ScrollArea
 } from '@mantine/core'
 import { styled } from '@linaria/react'
-import { Dropzone, IMAGE_MIME_TYPE, type FileWithPath } from '@mantine/dropzone'
+import { Dropzone, IMAGE_MIME_TYPE, MIME_TYPES, type FileWithPath } from '@mantine/dropzone'
 import { FC, memo, useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { IoMdAdd } from 'react-icons/io'
@@ -19,9 +19,28 @@ import { MdDeleteOutline } from 'react-icons/md'
 import { INewSample, IProject } from '@shared/types'
 import { AsyncButton } from '@renderer/components/AsyncButton'
 import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
+import { CvLabelImporterComponent } from '@renderer/components/sampleIO/importers/cvlabel/CvLabelImporterComponent'
 import { filesToSamples } from '@renderer/components/sampleIO/importers/filesToSamples'
 import { folderNameFromDroppedFiles, groupFilesByTopFolder } from '@renderer/utils'
 import { ZIndex } from '@renderer/zIndex'
+
+const CVLABEL_EXTENSION = /\.cvlabel$/i
+
+/** The dropped file's own name, minus the .cvlabel extension - mirrors
+ *  folderNameFromDroppedFiles' role for the image-drop path (both just seed the Create
+ *  Task modal's name field; the user can still rename before creating). */
+const taskNameFromCvLabelFile = (file: FileWithPath) => file.name.replace(CVLABEL_EXTENSION, '')
+
+// Mantine's Dropzone only builds valid file-picker options (and skips a console warning)
+// from the record form of `accept` - a flat array gets turned into one made of the array
+// itself as keys, which breaks for an extension-only entry like .cvlabel that isn't a mime
+// type on its own. Every image mime type maps to no extra extensions (the mime key alone
+// is enough), .cvlabel is keyed under the generic zip mime since it has no real one of its
+// own - same association CvLabelImporterComponent's own Dropzone already uses.
+const DROP_ACCEPT: Record<string, string[]> = {
+  ...Object.fromEntries(IMAGE_MIME_TYPE.map((mimeType) => [mimeType, []])),
+  [MIME_TYPES.zip]: ['.cvlabel']
+}
 
 export type CreateTaskButtonProps = {
   project: IProject
@@ -171,6 +190,13 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
     groups: ImportQueueItem[]
   } | null>(null)
 
+  // A dropped .cvlabel file takes a different path than images: it needs a label-mapping
+  // step (its annotations reference label ids that may not match this project's), so it
+  // opens the same importer wizard used from "Add Samples" instead of going straight into
+  // startQueue. Once mapped, its onComplete lands in the exact same Create Task modal the
+  // image-drop path uses, pre-filled from the file's own name.
+  const [cvLabelDropFile, setCvLabelDropFile] = useState<FileWithPath | null>(null)
+
   // Once a choice is made, importQueue drives the Create Task modal through one item at
   // a time - Skip or Create both advance to the next. The close button means something
   // stronger: abandon the rest of the queue entirely, so it's confirmed separately.
@@ -286,10 +312,16 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
   return (
     <>
       <Dropzone.FullScreen
-        active={!isModalOpen}
+        active={!isModalOpen && cvLabelDropFile === null}
         loading={isDropProcessing}
-        accept={IMAGE_MIME_TYPE}
+        accept={DROP_ACCEPT}
         onDrop={(files) => {
+          const cvLabelFile = files.find((f) => CVLABEL_EXTENSION.test(f.name))
+          if (cvLabelFile) {
+            setCvLabelDropFile(cvLabelFile)
+            return
+          }
+
           const groups = groupFilesByTopFolder(files)
           if (groups.size > 1) {
             setPendingSplit({
@@ -305,6 +337,9 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
           <div>
             <Text size="xl" inline>
               Drop files or folders
+            </Text>
+            <Text size="sm" c="dimmed" inline mt={4} ta="center">
+              or a .cvlabel file
             </Text>
           </div>
         </Group>
@@ -343,6 +378,29 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
             </Button>
           </Group>
         </Stack>
+      </Modal>
+      <Modal
+        opened={cvLabelDropFile !== null}
+        onClose={() => setCvLabelDropFile(null)}
+        title="Import .cvlabel"
+        centered
+        closeOnClickOutside={false}
+        zIndex={ZIndex.actionModal}
+      >
+        {cvLabelDropFile && (
+          <CvLabelImporterComponent
+            project={project}
+            initialFile={cvLabelDropFile}
+            onComplete={(newSamples, scratchDir) => {
+              const name = taskNameFromCvLabelFile(cvLabelDropFile)
+              setCvLabelDropFile(null)
+              setSamples(newSamples)
+              setPendingScratchDirs((dirs) => [...dirs, scratchDir])
+              openModal(name)
+            }}
+            onCancel={() => setCvLabelDropFile(null)}
+          />
+        )}
       </Modal>
       <ImportSamplesModal
         opened={isImportOpen}
