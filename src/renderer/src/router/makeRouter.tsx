@@ -1,4 +1,12 @@
-import { Activity, type FC, type ReactNode } from 'react'
+import {
+  Activity,
+  createContext,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  type FC,
+  type ReactNode
+} from 'react'
 import { create, type UseBoundStore, type StoreApi } from 'zustand'
 import { makeUUID } from '@shared/utils'
 
@@ -31,6 +39,28 @@ export type RouterScreens<Routes extends RouteParamsMap> = {
   [K in keyof Routes]: FC<Routes[K] extends undefined ? Record<string, never> : Routes[K]>
 }
 
+/** Identifies which stack entry a screen (and anything it renders) belongs to, so the
+ *  lifecycle hooks below can look up their own entry's visibility. Provided by
+ *  `makeRouterOutlet` around each `<Activity>`'s children. */
+type RouteContextValue = { key: string }
+
+export type RouterHandle<Routes extends RouteParamsMap> = {
+  navigate: <K extends keyof Routes>(...args: NavigateArgs<Routes, K>) => void
+  back: () => void
+  useRouterStore: RouterStore<Routes>
+  /** True iff this screen's stack entry is currently the top (visible) one. */
+  useIsRouteVisible: () => boolean
+  /** Runs `callback` when this screen becomes visible: on first mount, and again every
+   *  time its `<Activity>` subtree goes from hidden back to visible (Activity remounts
+   *  effects on that transition, so a plain mount effect already doubles as this). */
+  useOnRouteEnter: (callback: () => void) => void
+  /** Runs `callback` when this screen stops being visible: hidden by a `navigate()` past
+   *  it, or fully removed by `back()` (Activity tears down effects in both cases, so a
+   *  plain effect cleanup already doubles as this). */
+  useOnRouteLeave: (callback: () => void) => void
+  RouteContext: React.Context<RouteContextValue | null>
+}
+
 /**
  * Builds a stack-based navigator's data/actions: screens are pushed on top of each other
  * and stay mounted (see `makeRouterOutlet`) so state like scroll position survives going
@@ -41,7 +71,9 @@ export type RouterScreens<Routes extends RouteParamsMap> = {
  * other page's component to get them, which would create a circular dependency between
  * this module and the pages themselves. Pair with `makeRouterOutlet` to render the stack.
  */
-export const makeRouter = <Routes extends RouteParamsMap>(...initial: AnyNavigateArgs<Routes>) => {
+export const makeRouter = <Routes extends RouteParamsMap>(
+  ...initial: AnyNavigateArgs<Routes>
+): RouterHandle<Routes> => {
   const toEntry = (args: AnyNavigateArgs<Routes>): StackEntry<Routes> => {
     const [screen, params] = args
     return { key: makeUUID(), screen, params: params as Routes[keyof Routes] }
@@ -61,7 +93,49 @@ export const makeRouter = <Routes extends RouteParamsMap>(...initial: AnyNavigat
     useRouterStore.setState((s) => (s.stack.length <= 1 ? s : { stack: s.stack.slice(0, -1) }))
   }
 
-  return { navigate, back, useRouterStore }
+  const RouteContext = createContext<RouteContextValue | null>(null)
+
+  const useOwnRouteKey = (): string => {
+    const ctx = useContext(RouteContext)
+    if (ctx === null) {
+      throw new Error(
+        'Router lifecycle hooks (useIsRouteVisible/useOnRouteEnter/useOnRouteLeave) must be ' +
+          "used within a screen rendered by this router's RouterOutlet."
+      )
+    }
+    return ctx.key
+  }
+
+  const useIsRouteVisible = (): boolean => {
+    const key = useOwnRouteKey()
+    return useRouterStore((s) => s.stack[s.stack.length - 1]?.key === key)
+  }
+
+  const useOnRouteEnter = (callback: () => void): void => {
+    useOwnRouteKey()
+    const onEnter = useEffectEvent(callback)
+    useEffect(() => {
+      onEnter()
+    }, [])
+  }
+
+  const useOnRouteLeave = (callback: () => void): void => {
+    useOwnRouteKey()
+    const onLeave = useEffectEvent(callback)
+    useEffect(() => {
+      return () => onLeave()
+    }, [])
+  }
+
+  return {
+    navigate,
+    back,
+    useRouterStore,
+    useIsRouteVisible,
+    useOnRouteEnter,
+    useOnRouteLeave,
+    RouteContext
+  }
 }
 
 /**
@@ -72,9 +146,11 @@ export const makeRouter = <Routes extends RouteParamsMap>(...initial: AnyNavigat
  * assembles them (e.g. `App.tsx`), rather than being reachable from the pages themselves.
  */
 export const makeRouterOutlet = <Routes extends RouteParamsMap>(
-  useRouterStore: RouterStore<Routes>,
+  router: RouterHandle<Routes>,
   screens: RouterScreens<Routes>
 ) => {
+  const { useRouterStore, RouteContext } = router
+
   return function RouterOutlet(): ReactNode {
     const stack = useRouterStore((s) => s.stack)
     const topKey = stack[stack.length - 1]?.key
@@ -87,7 +163,9 @@ export const makeRouterOutlet = <Routes extends RouteParamsMap>(
           name={String(entry.screen)}
           mode={entry.key === topKey ? 'visible' : 'hidden'}
         >
-          <Screen {...(entry.params ?? {})} />
+          <RouteContext.Provider value={{ key: entry.key }}>
+            <Screen {...(entry.params ?? {})} />
+          </RouteContext.Provider>
         </Activity>
       )
     })
