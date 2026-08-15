@@ -76,6 +76,20 @@ test.describe('Projects page', () => {
     await expect(window.getByText('Yield Sign', { exact: true })).toBeVisible()
   })
 
+  test('adds a new label to an existing project via the edit dialog', async ({
+    projectsPage,
+    window
+  }) => {
+    await projectsPage.createProject('Street Signs', ['Stop Sign'])
+
+    await projectsPage.addLabels('Street Signs', ['Speed Limit'])
+
+    // The row's own label badges (LabelTags) reflect the newly-added label directly -
+    // the original label is still there too, untouched.
+    await expect(window.getByText('Speed Limit')).toBeVisible()
+    await expect(window.getByText('Stop Sign')).toBeVisible()
+  })
+
   test('checkboxes only appear after entering select mode, and clicking a row selects it instead of navigating', async ({
     projectsPage
   }) => {

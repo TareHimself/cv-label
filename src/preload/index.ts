@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import {
   IDataStore,
   IStoreManager,
+  IAppDataStore,
   ISystem,
   IPCKeys,
   IZip,
@@ -30,6 +31,13 @@ const storeApi: IDataStore = {
   updateTasks: wrap(IPCKeys.Store_UpdateTasks),
   deleteTasks: wrap(IPCKeys.Store_DeleteTasks),
 
+  getTagsForProject: wrap(IPCKeys.Store_GetTagsForProject),
+  createTag: wrap(IPCKeys.Store_CreateTag),
+  updateTags: wrap(IPCKeys.Store_UpdateTags),
+  deleteTags: wrap(IPCKeys.Store_DeleteTags),
+  addTagsToTasks: wrap(IPCKeys.Store_AddTagsToTasks),
+  removeTagsFromTasks: wrap(IPCKeys.Store_RemoveTagsFromTasks),
+
   getSamplesForTask: wrap(IPCKeys.Store_GetSamplesForTask),
   getSamples: wrap(IPCKeys.Store_GetSamples),
   createSamples: wrap(IPCKeys.Store_CreateSamples),
@@ -41,16 +49,19 @@ const storeApi: IDataStore = {
   updateAnnotations: wrap(IPCKeys.Store_UpdateAnnotations),
   deleteAnnotations: wrap(IPCKeys.Store_DeleteAnnotations),
 
-  getAnnotators: wrap(IPCKeys.Store_GetAnnotators),
-  createAnnotator: wrap(IPCKeys.Store_CreateAnnotator),
-  deleteAnnotators: wrap(IPCKeys.Store_DeleteAnnotators),
-
   replacePoints: wrap(IPCKeys.Store_ReplacePoints)
 }
 
 const storeManagerApi: IStoreManager = {
   listStores: wrap(IPCKeys.Store_List),
   useStore: wrap(IPCKeys.Store_UseStore)
+}
+
+const appStoreApi: IAppDataStore = {
+  getAnnotators: wrap(IPCKeys.App_GetAnnotators),
+  createAnnotator: wrap(IPCKeys.App_CreateAnnotator),
+  updateAnnotators: wrap(IPCKeys.App_UpdateAnnotators),
+  deleteAnnotators: wrap(IPCKeys.App_DeleteAnnotators)
 }
 
 const systemApi: ISystem = {
@@ -93,6 +104,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('store', storeApi)
     contextBridge.exposeInMainWorld('storeManager', storeManagerApi)
+    contextBridge.exposeInMainWorld('appStore', appStoreApi)
     contextBridge.exposeInMainWorld('system', systemApi)
     contextBridge.exposeInMainWorld('zip', zipApi)
     contextBridge.exposeInMainWorld('exportApi', exportApi)
@@ -107,6 +119,8 @@ if (process.contextIsolated) {
   window.store = storeApi
   // @ts-ignore (define in dts)
   window.storeManager = storeManagerApi
+  // @ts-ignore (define in dts)
+  window.appStore = appStoreApi
   // @ts-ignore (define in dts)
   window.system = systemApi
   // @ts-ignore (define in dts)

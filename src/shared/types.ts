@@ -34,7 +34,7 @@ export type BoundaryResult<T> =
 
 export const enum AnnotationType {
   Box = 'box',
-  Mask = 'mask'
+  Polygon = 'polygon'
 }
 export interface IPoint {
   id: string
@@ -54,17 +54,35 @@ export interface IProject {
   labels: ILabel[]
 }
 
-/** Renames the project and/or existing labels - does not add or remove labels, since
- *  removing one that's already used by an annotation would violate a foreign key. */
+/** Renames the project, edits existing labels, and can add new labels (an id not
+ *  already on the project is inserted rather than treated as a rename) - existing
+ *  labels still can't be removed here, since one already used by an annotation would
+ *  violate a foreign key. */
 export interface IProjectUpdate {
   id: IProject['id']
   name?: string
-  labels?: Pick<ILabel, 'id' | 'name'>[]
+  labels?: Pick<ILabel, 'id' | 'name' | 'color'>[]
+}
+
+export interface ITag {
+  id: string
+  name: string
+}
+
+export interface ITagUpdate {
+  id: ITag['id']
+  name?: string
 }
 
 export interface ITask {
   id: string
   name: string
+  /** Optional since not every code path that returns an ITask computes these (e.g.
+   *  updateTasks, which only renames - its result is never read for progress display,
+   *  only getTasksForProject/createTask populate them). Absent, not 0, when unknown. */
+  sampleCount?: number
+  completedSampleCount?: number
+  tags?: ITag[]
 }
 
 export interface ITaskUpdate {
@@ -102,6 +120,10 @@ export interface ISampleUpdate extends Partial<OmitV2<ISample, 'annotations' | '
   id: ISample['id']
 }
 
+/** Store-agnostic and project-agnostic connection info for an external annotator server -
+ *  see main/appStore.ts. Neither its label vocabulary nor any mapping against a project's
+ *  labels is ever persisted - both are fetched/built live and held only in renderer memory
+ *  (see hooks/useAnnotatorRuntime.ts, api/ExternalAnnotator.ts). */
 export interface INewAnnotator {
   id: string
   name: string
@@ -110,6 +132,10 @@ export interface INewAnnotator {
 }
 
 export interface IAnnotator extends INewAnnotator {}
+
+export interface IAnnotatorUpdate extends Partial<OmitV2<IAnnotator, 'id'>> {
+  id: IAnnotator['id']
+}
 
 export interface INewAnnotation {
   id: string
@@ -151,6 +177,20 @@ export interface IDataStore {
   updateTasks(updates: ITaskUpdate[]): Promise<ITask[]>
   deleteTasks(taskIds: string[]): Promise<boolean[]>
 
+  /** A project-global vocabulary managed from one place (ManageTagsModal) - typing only
+   *  happens here, when a tag is actually being created/renamed. Everywhere a tag gets
+   *  attached to a task, it's picked from this list by id, never typed. */
+  getTagsForProject(projectId: string): Promise<ITag[]>
+  createTag(projectId: string, id: string, name: string): Promise<ITag>
+  updateTags(updates: ITagUpdate[]): Promise<ITag[]>
+  deleteTags(tagIds: string[]): Promise<boolean[]>
+
+  /** Attaches/detaches existing tags (by id) to/from every task in taskIds - never a
+   *  per-task "replace the whole set" operation, so batch add/remove across differently-
+   *  tagged tasks doesn't require knowing each task's current tags up front. */
+  addTagsToTasks(taskIds: string[], tagIds: string[]): Promise<void>
+  removeTagsFromTasks(taskIds: string[], tagIds: string[]): Promise<void>
+
   getSamplesForTask(taskId: string): Promise<ISample[]>
   getSamples(sampleIds: string[]): Promise<ISample[]>
   createSamples(taskId: string, samples: INewSample[]): Promise<ISample[]>
@@ -162,17 +202,22 @@ export interface IDataStore {
   updateAnnotations(updates: IAnnotationUpdate[]): Promise<IAnnotation[]>
   deleteAnnotations(annotationsIds: string[]): Promise<boolean[]>
 
-  getAnnotators(projectId: string): Promise<IAnnotator[]>
+  replacePoints(annotationId: string, points: IPointReplacement[]): Promise<IPoint[]>
+}
+
+/** The always-on, store-agnostic counterpart to IDataStore - annotators live here instead
+ *  of in whichever IDataStore is currently active (see main/appStore.ts), so main routes
+ *  App_* IPC straight to a single fixed AppStore rather than through StoreOrchestrator. */
+export interface IAppDataStore {
+  getAnnotators(): Promise<IAnnotator[]>
   createAnnotator(
-    projectId: string,
     id: string,
     name: string,
     url: string,
     headers: Record<string, string>
   ): Promise<IAnnotator>
+  updateAnnotators(updates: IAnnotatorUpdate[]): Promise<IAnnotator[]>
   deleteAnnotators(annotatorIds: string[]): Promise<boolean[]>
-
-  replacePoints(annotationId: string, points: IPointReplacement[]): Promise<IPoint[]>
 }
 
 export type StoreDescriptor = { id: string; name: string }
@@ -257,6 +302,12 @@ export enum IPCKeys {
   Store_CreateTask = 'store-createTask',
   Store_UpdateTasks = 'store-updateTasks',
   Store_DeleteTasks = 'store-deleteTasks',
+  Store_GetTagsForProject = 'store-getTagsForProject',
+  Store_CreateTag = 'store-createTag',
+  Store_UpdateTags = 'store-updateTags',
+  Store_DeleteTags = 'store-deleteTags',
+  Store_AddTagsToTasks = 'store-addTagsToTasks',
+  Store_RemoveTagsFromTasks = 'store-removeTagsFromTasks',
   Store_GetSamplesForTask = 'store-getSamplesForTask',
   Store_GetSamples = 'store-getSamples',
   Store_CreateSamples = 'store-createSamples',
@@ -266,12 +317,15 @@ export enum IPCKeys {
   Store_CreateAnnotations = 'store-createAnnotations',
   Store_UpdateAnnotations = 'store-updateAnnotations',
   Store_DeleteAnnotations = 'store-deleteAnnotations',
-  Store_GetAnnotators = 'store-getAnnotators',
-  Store_CreateAnnotator = 'store-createAnnotator',
-  Store_DeleteAnnotators = 'store-deleteAnnotators',
   Store_ReplacePoints = 'store-replacePoints',
   Store_List = 'store-list',
   Store_UseStore = 'store-useStore',
+
+  // App (store-agnostic, always active - see main/appStore.ts)
+  App_GetAnnotators = 'app-getAnnotators',
+  App_CreateAnnotator = 'app-createAnnotator',
+  App_UpdateAnnotators = 'app-updateAnnotators',
+  App_DeleteAnnotators = 'app-deleteAnnotators',
 
   // System
   System_CreateTemporaryDirectory = 'system-createTemporaryDirectory',
@@ -307,6 +361,12 @@ export type IPCEvents = {
   [IPCKeys.Store_CreateTask]: IDataStore['createTask']
   [IPCKeys.Store_UpdateTasks]: IDataStore['updateTasks']
   [IPCKeys.Store_DeleteTasks]: IDataStore['deleteTasks']
+  [IPCKeys.Store_GetTagsForProject]: IDataStore['getTagsForProject']
+  [IPCKeys.Store_CreateTag]: IDataStore['createTag']
+  [IPCKeys.Store_UpdateTags]: IDataStore['updateTags']
+  [IPCKeys.Store_DeleteTags]: IDataStore['deleteTags']
+  [IPCKeys.Store_AddTagsToTasks]: IDataStore['addTagsToTasks']
+  [IPCKeys.Store_RemoveTagsFromTasks]: IDataStore['removeTagsFromTasks']
   [IPCKeys.Store_GetSamplesForTask]: IDataStore['getSamplesForTask']
   [IPCKeys.Store_GetSamples]: IDataStore['getSamples']
   [IPCKeys.Store_CreateSamples]: IDataStore['createSamples']
@@ -316,12 +376,15 @@ export type IPCEvents = {
   [IPCKeys.Store_CreateAnnotations]: IDataStore['createAnnotations']
   [IPCKeys.Store_UpdateAnnotations]: IDataStore['updateAnnotations']
   [IPCKeys.Store_DeleteAnnotations]: IDataStore['deleteAnnotations']
-  [IPCKeys.Store_GetAnnotators]: IDataStore['getAnnotators']
-  [IPCKeys.Store_CreateAnnotator]: IDataStore['createAnnotator']
-  [IPCKeys.Store_DeleteAnnotators]: IDataStore['deleteAnnotators']
   [IPCKeys.Store_ReplacePoints]: IDataStore['replacePoints']
   [IPCKeys.Store_List]: IStoreManager['listStores']
   [IPCKeys.Store_UseStore]: IStoreManager['useStore']
+
+  // App
+  [IPCKeys.App_GetAnnotators]: IAppDataStore['getAnnotators']
+  [IPCKeys.App_CreateAnnotator]: IAppDataStore['createAnnotator']
+  [IPCKeys.App_UpdateAnnotators]: IAppDataStore['updateAnnotators']
+  [IPCKeys.App_DeleteAnnotators]: IAppDataStore['deleteAnnotators']
 
   // System
   [IPCKeys.System_CreateTemporaryDirectory]: ISystem['createTemporaryDirectory']

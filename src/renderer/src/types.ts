@@ -4,11 +4,11 @@ import { OptimisticObject } from './util/optimistic_object'
 export enum LabelerMode {
   Select = 'select',
   CreateBox = 'create-box',
-  CreateMask = 'create-mask'
+  CreatePolygon = 'create-polygon'
 }
 
-type AnnotatorLabel = OmitV2<ILabel, 'color'>
-type AnnotatorPoint = OmitV2<IPoint, 'id'>
+export type AnnotatorLabel = OmitV2<ILabel, 'color'>
+export type AnnotatorPoint = OmitV2<IPoint, 'id'>
 
 export type AnnotatorInfoResponse = {
   labels: AnnotatorLabel[]

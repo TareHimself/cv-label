@@ -6,7 +6,10 @@ import { AsyncButton } from '@renderer/components/AsyncButton'
 import type { ArchiveManifest, ISample } from '@shared/types'
 import type { SampleExporterComponentProps } from '../../types'
 import { imageExtensionFromUri } from '../imageExtensionFromUri'
+import { exportBaseName } from '../exportBaseName'
 import { LabeledSegmentedControl } from '../../LabeledSegmentedControl'
+import { LabelMapper } from '../../LabelMapper'
+import { buildIncludedLabelsAndIndex } from '../labelRouting'
 import {
   buildCocoAnnotations,
   buildCocoCategories,
@@ -39,6 +42,9 @@ export const CocoExporterComponent = ({
   const [phase, setPhase] = useState<ExportPhase>('preparing')
   const [progress, setProgress] = useState(0)
   const [shape, setShape] = useState<CocoShapeMode>(CocoShapeMode.Native)
+  const [mapping, setMapping] = useState<Map<string, string | null>>(
+    new Map(project.labels.map((label) => [label.id, label.id]))
+  )
 
   useEffect(
     () =>
@@ -52,8 +58,14 @@ export const CocoExporterComponent = ({
     setPhase('preparing')
     setProgress(0)
     try {
-      const labelIdToCategoryId = new Map(project.labels.map((label, i) => [label.id, i + 1]))
-      const categories = buildCocoCategories(project.labels)
+      const { includedLabels, labelIdToIndex } = buildIncludedLabelsAndIndex(
+        project.labels,
+        mapping
+      )
+      const categories = buildCocoCategories(includedLabels)
+      const labelIdToCategoryId = new Map(
+        [...labelIdToIndex].map(([labelId, index]) => [labelId, index + 1])
+      )
 
       const samplesByTask = await Promise.all(tasks.map((task) => getSamplesForTask(task.id)))
       const samples = samplesByTask.flat()
@@ -104,7 +116,10 @@ export const CocoExporterComponent = ({
       }
 
       setPhase('exporting')
-      const saved = await window.exportApi.runExport(`${project.name}-coco-export.zip`, manifest)
+      const saved = await window.exportApi.runExport(
+        `${exportBaseName(project, tasks)}-coco-export.zip`,
+        manifest
+      )
 
       if (saved) {
         onComplete()
@@ -121,13 +136,21 @@ export const CocoExporterComponent = ({
         Exports {tasks.length} task{tasks.length === 1 ? '' : 's'} as a COCO-format zip, split into
         train/valid/test folders, each with its own images and <code>_annotations.coco.json</code>.
         Every annotation always gets a bbox; choose whether its segmentation is forced to boxes,
-        forced to polygons, or left as-is (a plain Box has none, a Mask keeps its real outline).
+        forced to polygons, or left as-is (a plain Box has none, a Polygon keeps its real outline).
       </Text>
       <LabeledSegmentedControl
         label="Shape"
         value={shape}
         options={COCO_SHAPE_OPTIONS}
         onChange={setShape}
+        disabled={isExporting}
+      />
+      <LabelMapper
+        items={project.labels}
+        options={project.labels}
+        mapping={mapping}
+        onChange={(id, value) => setMapping((current) => new Map(current).set(id, value))}
+        excludeLabel="Don't Export"
         disabled={isExporting}
       />
       {isExporting && (

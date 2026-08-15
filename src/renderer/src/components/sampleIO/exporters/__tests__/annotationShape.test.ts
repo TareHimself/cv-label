@@ -34,8 +34,8 @@ describe('exportShapePoints', () => {
       { id: 'p1', x: 300, y: 150 }
     ]
   }
-  const mask: Pick<IAnnotation, 'type' | 'points'> = {
-    type: AnnotationType.Mask,
+  const polygon: Pick<IAnnotation, 'type' | 'points'> = {
+    type: AnnotationType.Polygon,
     points: [
       { id: 'p0', x: 0, y: 0 },
       { id: 'p1', x: 10, y: 0 },
@@ -43,14 +43,14 @@ describe('exportShapePoints', () => {
     ]
   }
 
-  it('in Box mode, flattens both Box and Mask annotations to their bounding rectangle corners', () => {
+  it('in Box mode, flattens both Box and Polygon annotations to their bounding rectangle corners', () => {
     expect(exportShapePoints(box, ExportShape.Box)).toEqual([
       { x: 100, y: 50 },
       { x: 300, y: 50 },
       { x: 300, y: 150 },
       { x: 100, y: 150 }
     ])
-    expect(exportShapePoints(mask, ExportShape.Box)).toEqual([
+    expect(exportShapePoints(polygon, ExportShape.Box)).toEqual([
       { x: 0, y: 0 },
       { x: 10, y: 0 },
       { x: 10, y: 10 },
@@ -58,8 +58,8 @@ describe('exportShapePoints', () => {
     ])
   })
 
-  it('in Segment mode, keeps a Mask real outline but still boxes a Box (it has no other shape)', () => {
-    expect(exportShapePoints(mask, ExportShape.Segment)).toBe(mask.points)
+  it('in Segment mode, keeps a Polygon real outline but still boxes a Box (it has no other shape)', () => {
+    expect(exportShapePoints(polygon, ExportShape.Segment)).toBe(polygon.points)
     expect(exportShapePoints(box, ExportShape.Segment)).toEqual([
       { x: 100, y: 50 },
       { x: 300, y: 50 },

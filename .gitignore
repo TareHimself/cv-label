@@ -5,9 +5,11 @@ out
 .eslintcache
 *.log*
 store
+userData
 .env
 .env.*
 e2e/screenshots
 test-results
 playwright-report
 *.tsbuildinfo
+app

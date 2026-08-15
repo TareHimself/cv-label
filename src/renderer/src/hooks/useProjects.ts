@@ -62,13 +62,21 @@ export const useProjects = () => {
       queryClient.setQueryData<IProject[]>(projectsQueryKey, (current = []) =>
         current.map((project) => {
           if (project.id !== update.id) return project
+          const existingIds = new Set(project.labels.map((l) => l.id))
+          // A label id the project doesn't have yet is a new one being added (see
+          // IProjectUpdate), not a rename - append it rather than dropping it on the
+          // floor until the post-mutation refetch catches up.
+          const newLabels = (update.labels ?? []).filter((l) => !existingIds.has(l.id))
           return {
             ...project,
             name: update.name ?? project.name,
-            labels: project.labels.map((label) => {
-              const renamed = update.labels?.find((l) => l.id === label.id)
-              return renamed ? { ...label, name: renamed.name } : label
-            })
+            labels: [
+              ...project.labels.map((label) => {
+                const updated = update.labels?.find((l) => l.id === label.id)
+                return updated ? { ...label, name: updated.name, color: updated.color } : label
+              }),
+              ...newLabels
+            ]
           }
         })
       )
@@ -84,7 +92,7 @@ export const useProjects = () => {
   })
 
   const update = useCallback(
-    async (id: string, name: string, labels: Pick<ILabel, 'id' | 'name'>[]) => {
+    async (id: string, name: string, labels: Pick<ILabel, 'id' | 'name' | 'color'>[]) => {
       await updateMutateAsync({ id, name, labels })
     },
     [updateMutateAsync]

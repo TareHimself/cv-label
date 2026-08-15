@@ -51,6 +51,13 @@ export class TasksPage {
     return this.page.getByRole('button', { name: 'Export', exact: true })
   }
 
+  /** Every visible "Export" text on the page - the batch action bar's own button plus,
+   *  outside select mode only, a row's open context-menu entry. Callers assert a count
+   *  rather than presence, since the batch button alone already matches. */
+  get allExportTexts() {
+    return this.page.getByText('Export', { exact: true })
+  }
+
   /** The batch action bar's "Delete" button, visible once at least one task is selected. */
   get deleteSelectedButton() {
     return this.page.getByRole('button', { name: 'Delete', exact: true })
@@ -76,6 +83,22 @@ export class TasksPage {
 
   get renameDialog() {
     return this.page.getByRole('dialog', { name: 'Rename task' })
+  }
+
+  get manageTagsButton() {
+    return this.page.getByRole('button', { name: 'Manage Tags' })
+  }
+
+  get manageTagsDialog() {
+    return this.page.getByRole('dialog', { name: 'Manage Tags' })
+  }
+
+  get editTagsDialog() {
+    return this.page.getByRole('dialog', { name: 'Edit Tags' })
+  }
+
+  get batchTagsButton() {
+    return this.page.getByRole('button', { name: 'Tags', exact: true })
   }
 
   taskCheckbox(name: string) {
@@ -171,6 +194,42 @@ export class TasksPage {
     await this.exportDialog.waitFor({ state: 'hidden' })
   }
 
+  /** Exports a single task via its own context-menu "Export" entry - only offered
+   *  outside select mode. Otherwise the same save-dialog-stubbing caveat as exportTasks
+   *  applies. */
+  async exportTask(name: string) {
+    await this.row(name).click({ button: 'right' })
+    await this.page.getByText('Export', { exact: true }).click()
+    await this.exportDialog.waitFor()
+    await this.exportDialog.getByText('cv-label File').click()
+    await this.confirmExportButton.click()
+    await this.exportDialog.waitFor({ state: 'hidden' })
+  }
+
+  /** Copy Annotations is a routed page (not a modal, for width - see
+   *  CopyAnnotationsPage.tsx), so its own body content lives in the stack-router's usual
+   *  scroll container, distinguishing its in-page "Back" (destination picker, once in the
+   *  run step) from the page's top-bar "Back" (returns to this TasksPage). */
+  get copyAnnotationsContent() {
+    return this.page.getByTestId('basic-list-scroll-container').and(this.page.locator(':visible'))
+  }
+
+  /** Copies annotations from `sourceName`'s task into `destinationName`'s task via the
+   *  source task's own context-menu entry - picks the destination task, accepts the
+   *  default position-based sample mapping as-is, runs, then returns here (Done alone
+   *  doesn't leave the page - it returns to the destination picker for another run, same
+   *  as the auto-label modal's Done - so the top-bar Back is what navigates back). */
+  async copyAnnotations(sourceName: string, destinationName: string) {
+    await this.row(sourceName).click({ button: 'right' })
+    await this.page.getByText('Copy Annotations', { exact: true }).click()
+    await this.copyAnnotationsContent.getByPlaceholder('Select a task').click()
+    await this.page.getByRole('option', { name: destinationName }).click()
+    await this.copyAnnotationsContent.getByRole('button', { name: 'Continue' }).click()
+    await this.copyAnnotationsContent.getByRole('button', { name: 'Run' }).click()
+    await this.copyAnnotationsContent.getByRole('button', { name: 'Done' }).click()
+    await this.backButton.click()
+  }
+
   /** Selects the given tasks and deletes them all via the batch action bar. */
   async deleteSelectedTasks(names: string[]) {
     await this.selectTasks(names)
@@ -204,8 +263,58 @@ export class TasksPage {
 
   async rename(name: string, newName: string) {
     await this.row(name).click({ button: 'right' })
-    await this.page.getByText('Edit').click()
+    // Exact match - the row's context menu also has an "Edit Tags" item, which
+    // getByText('Edit') would otherwise match too (substring).
+    await this.page.getByText('Edit', { exact: true }).click()
     await this.renameDialog.getByLabel('Name').fill(newName)
     await this.renameDialog.getByRole('button', { name: 'Save' }).click()
+  }
+
+  /** Creates a project tag via the "Manage Tags" modal - the only place typing creates a
+   *  tag outright; everywhere else it's picked (or created inline) via the TagPicker
+   *  combobox. Leaves the modal open. */
+  async createTag(name: string) {
+    await this.manageTagsButton.click()
+    await this.manageTagsDialog.getByLabel('New tag').fill(name)
+    await this.manageTagsDialog.getByRole('button', { name: 'Add', exact: true }).click()
+    await this.manageTagsDialog.getByText(name).waitFor()
+  }
+
+  async closeManageTags() {
+    await this.manageTagsDialog.getByRole('button', { name: 'Close' }).click()
+  }
+
+  async openEditTags(taskName: string) {
+    await this.row(taskName).click({ button: 'right' })
+    await this.page.getByText('Edit Tags').click()
+    await this.editTagsDialog.waitFor()
+  }
+
+  /** Picks an existing tag by exact name from a TagPicker combobox inside the currently
+   *  open "Edit Tags" dialog. */
+  async pickExistingTag(comboboxLabel: string, tagName: string) {
+    await this.editTagsDialog.getByLabel(comboboxLabel).click()
+    await this.page.getByRole('option', { name: tagName, exact: true }).click()
+  }
+
+  /** Types a brand new tag name into a TagPicker combobox and clicks its "+ Create"
+   *  option, creating the tag and selecting it in one motion. */
+  async createTagInline(comboboxLabel: string, tagName: string) {
+    await this.editTagsDialog.getByLabel(comboboxLabel).fill(tagName)
+    await this.page.getByRole('option', { name: `+ Create "${tagName}"` }).click()
+  }
+
+  async saveTags() {
+    await this.editTagsDialog.getByRole('button', { name: 'Save' }).click()
+    await this.editTagsDialog.waitFor({ state: 'hidden' })
+  }
+
+  /** The tag badge shown on a task's own row (not the filter/picker dropdowns elsewhere
+   *  on the page) - scoped to the row's container via the shared Paper-styled Row. */
+  tagBadge(taskName: string, tagName: string) {
+    return this.page
+      .locator('.mantine-Paper-root')
+      .filter({ has: this.page.getByText(taskName, { exact: true }) })
+      .getByText(tagName, { exact: true })
   }
 }

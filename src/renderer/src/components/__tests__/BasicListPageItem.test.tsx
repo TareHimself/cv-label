@@ -49,6 +49,76 @@ describe('BasicListPageItem', () => {
     expect(onDelete).toHaveBeenCalledTimes(1)
   })
 
+  it('shows an Export option on right-click outside select mode, and calls onExport when chosen', () => {
+    const onExport = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onExport={onExport}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Export'))
+
+    expect(onExport).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the Export option in select mode', () => {
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onExport={vi.fn()}
+        selectMode
+        selected={false}
+        onSelectedChange={vi.fn()}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+
+    expect(screen.queryByText('Export')).not.toBeInTheDocument()
+  })
+
+  it('shows a Copy Annotations option on right-click outside select mode, and calls onCopyAnnotations when chosen', () => {
+    const onCopyAnnotations = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onCopyAnnotations={onCopyAnnotations}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Copy Annotations'))
+
+    expect(onCopyAnnotations).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the Copy Annotations option in select mode', () => {
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onCopyAnnotations={vi.fn()}
+        selectMode
+        selected={false}
+        onSelectedChange={vi.fn()}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+
+    expect(screen.queryByText('Copy Annotations')).not.toBeInTheDocument()
+  })
+
   it('does not show a context menu when onDelete is not provided', () => {
     renderWithProviders(
       <BasicListPageItem icon={<MdFolder />} title="Street Signs" onClick={vi.fn()} />
@@ -184,7 +254,29 @@ describe('BasicListPageItem', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
-  it('shows Select All/Above/Below on right-click when provided, and calls the right one', () => {
+  it('shows a single Select option on right-click outside select mode, and calls onSelect', () => {
+    const onSelect = vi.fn()
+    const onSelectAll = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onSelect={onSelect}
+        onSelectAll={onSelectAll}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+
+    expect(screen.queryByText('Select All')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Select'))
+
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(onSelectAll).not.toHaveBeenCalled()
+  })
+
+  it('shows Select All/Above/Below on right-click in select mode, and calls the right one', () => {
     const onSelectAll = vi.fn()
     const onSelectAbove = vi.fn()
     const onSelectBelow = vi.fn()
@@ -193,6 +285,9 @@ describe('BasicListPageItem', () => {
         icon={<MdFolder />}
         title="Street Signs"
         onClick={vi.fn()}
+        selectMode
+        selected={false}
+        onSelectedChange={vi.fn()}
         onSelectAll={onSelectAll}
         onSelectAbove={onSelectAbove}
         onSelectBelow={onSelectBelow}
@@ -207,6 +302,46 @@ describe('BasicListPageItem', () => {
     expect(onSelectBelow).not.toHaveBeenCalled()
   })
 
+  it('shows a Manage Annotators option on right-click and calls it when chosen', () => {
+    const onManageAnnotators = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onManageAnnotators={onManageAnnotators}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Manage Annotators'))
+
+    expect(onManageAnnotators).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows edit, manage annotators and delete together, and clicking one does not trigger the others', () => {
+    const onEdit = vi.fn()
+    const onManageAnnotators = vi.fn()
+    const onDelete = vi.fn()
+    renderWithProviders(
+      <BasicListPageItem
+        icon={<MdFolder />}
+        title="Street Signs"
+        onClick={vi.fn()}
+        onEdit={onEdit}
+        onManageAnnotators={onManageAnnotators}
+        onDelete={onDelete}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('Street Signs'))
+    fireEvent.click(screen.getByText('Manage Annotators'))
+
+    expect(onManageAnnotators).toHaveBeenCalledTimes(1)
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
   it('shows both edit/delete and select-helper items together in the context menu', () => {
     renderWithProviders(
       <BasicListPageItem
@@ -215,6 +350,9 @@ describe('BasicListPageItem', () => {
         onClick={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
+        selectMode
+        selected={false}
+        onSelectedChange={vi.fn()}
         onSelectAll={vi.fn()}
       />
     )

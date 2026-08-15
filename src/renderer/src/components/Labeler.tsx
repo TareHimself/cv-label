@@ -1,11 +1,23 @@
 import { styled } from '@linaria/react'
-import { LabelerStore, normalizeAnnotationPoints } from '@renderer/hooks/useLabeler'
+import {
+  axisMaskedMoveDelta,
+  BOX_CORNER_HANDLE_BOTTOM_LEFT,
+  BOX_CORNER_HANDLE_TOP_RIGHT,
+  BOX_EDGE_BOTTOM,
+  BOX_EDGE_LEFT,
+  BOX_EDGE_RIGHT,
+  BOX_EDGE_TOP,
+  LabelerStore,
+  normalizeAnnotationPoints
+} from '@renderer/hooks/useLabeler'
 import { LabelerMode } from '@renderer/types'
 import { AnnotationType, IAnnotation, IPoint, OmitV2 } from '@shared/types'
 import { PointerEventHandler, RefObject, useCallback, useEffect, useRef } from 'react'
 import { StoreApi, UseBoundStore } from 'zustand'
 import { ContextMenuItemOptions, useContextMenu } from 'mantine-contextmenu'
-import { MdDeleteOutline } from 'react-icons/md'
+import { MdContentCopy, MdDeleteOutline } from 'react-icons/md'
+import { BsBoundingBoxCircles } from 'react-icons/bs'
+import { PiPolygonLight } from 'react-icons/pi'
 import { tools } from './labeler/tools'
 import { PointerResult, type LabelerToolContext } from './labeler/types'
 
@@ -182,6 +194,22 @@ const drawSelectedHitHandles = (
   }
 
   if (selectedAnnotation.type === AnnotationType.Box) {
+    // Edge hit-test lines, drawn before the corner circles below so a corner's hit
+    // area wins over an overlapping edge at the same pixels.
+    const boxCorners = getBoxPoints(points)
+    const edgeSentinels = [BOX_EDGE_TOP, BOX_EDGE_RIGHT, BOX_EDGE_BOTTOM, BOX_EDGE_LEFT]
+    for (let i = 0; i < boxCorners.length; i++) {
+      const hitId = state.selectedAnnotationLineHitIds.getByValue(edgeSentinels[i])
+      if (hitId === undefined) continue
+      drawLine(
+        hitTestCtx,
+        boxCorners[i],
+        boxCorners[(i + 1) % boxCorners.length],
+        hitId,
+        HIT_TEST_LINE_WIDTH
+      )
+    }
+
     drawCircle(
       hitTestCtx,
       points[0],
@@ -196,6 +224,33 @@ const drawSelectedHitHandles = (
       CONTROL_POINT_CIRCLE_RADIUS,
       0
     )
+
+    // The 2 derived corners (top-right/bottom-left) - purely visual/hit-test handles,
+    // don't correspond to a real IPoint (see BOX_CORNER_HANDLE_TOP_RIGHT).
+    const topRightHitId = state.selectedAnnotationControlHitIds.getByValue(
+      BOX_CORNER_HANDLE_TOP_RIGHT
+    )
+    const bottomLeftHitId = state.selectedAnnotationControlHitIds.getByValue(
+      BOX_CORNER_HANDLE_BOTTOM_LEFT
+    )
+    if (topRightHitId !== undefined) {
+      drawCircle(
+        hitTestCtx,
+        { x: points[1].x, y: points[0].y },
+        topRightHitId,
+        CONTROL_POINT_CIRCLE_RADIUS,
+        0
+      )
+    }
+    if (bottomLeftHitId !== undefined) {
+      drawCircle(
+        hitTestCtx,
+        { x: points[0].x, y: points[1].y },
+        bottomLeftHitId,
+        CONTROL_POINT_CIRCLE_RADIUS,
+        0
+      )
+    }
     return
   }
 
@@ -286,6 +341,32 @@ const drawCreationPreview = (
   }
 }
 
+const HOVER_DIM_ALPHA = 0.55
+const HOVER_OUTLINE_WIDTH = 3
+
+/** Dims the whole canvas - since this runs on the annotation canvas layer (stacked above
+ *  the image canvas), it darkens both the image and every other annotation already drawn
+ *  this frame. Deliberately driven by "is the mouse anywhere over the AnnotationsDrawer",
+ *  not "is this specific row hovered": keying the dim itself off a single row would flash
+ *  off/on every time the cursor crosses the gap between two rows on its way from one to
+ *  another - this way the dim stays on continuously and only the cutout below moves. */
+const dimCanvas = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+  ctx.fillStyle = `rgba(0, 0, 0, ${HOVER_DIM_ALPHA})`
+  ctx.fillRect(0, 0, width, height)
+}
+
+/** Cuts a hole exactly matching a shape out of whatever's already been drawn (namely
+ *  dimCanvas's overlay) via a destination-out composite, exposing the image and that
+ *  shape's own fill/outline at full brightness underneath. */
+const cutoutShape = (ctx: CanvasRenderingContext2D, shapePoints: OmitV2<IPoint, 'id'>[]) => {
+  if (shapePoints.length < 2) return
+
+  const restoreComposite = ctx.globalCompositeOperation
+  ctx.globalCompositeOperation = 'destination-out'
+  drawPolygon(ctx, shapePoints, 'rgba(0, 0, 0, 1)', true)
+  ctx.globalCompositeOperation = restoreComposite
+}
+
 const drawCrosshair = (
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -371,6 +452,28 @@ const useLabelerContextMenu = (store: UseBoundStore<StoreApi<LabelerStore>>) => 
             })
           }
         }
+
+        menuOptions.push({
+          key: 'duplicate',
+          icon: <MdContentCopy size={16} />,
+          title: 'Duplicate',
+          onClick: () => store.getState().duplicateAnnotation(resolvedTargetAnnotation.id)
+        })
+
+        menuOptions.push({
+          key: 'convert-type',
+          icon:
+            resolvedTargetAnnotation.type === AnnotationType.Box ? (
+              <PiPolygonLight size={16} />
+            ) : (
+              <BsBoundingBoxCircles size={16} />
+            ),
+          title:
+            resolvedTargetAnnotation.type === AnnotationType.Box
+              ? 'Convert to Polygon'
+              : 'Convert to Box',
+          onClick: () => store.getState().convertAnnotationType(resolvedTargetAnnotation.id)
+        })
 
         menuOptions.push({
           key: 'delete',
@@ -634,13 +737,15 @@ const useCanvasDraw = (
 
       if (selectedAnnotation !== null && state.pointIdsBeingMoved !== null) {
         selectedAnnotation = structuredClone(selectedAnnotation)
-        const pointsBeingMoved = new Set(state.pointIdsBeingMoved ?? [])
-        const [dx, dy] = state.moveCurrent
         for (const point of selectedAnnotation.points) {
-          if (pointsBeingMoved.has(point.id)) {
-            point.x += dx
-            point.y += dy
-          }
+          const [dx, dy] = axisMaskedMoveDelta(
+            point.id,
+            state.pointIdsBeingMoved,
+            state.pointIdsBeingMovedAxis,
+            state.moveCurrent
+          )
+          point.x += dx
+          point.y += dy
         }
 
         selectedAnnotation = normalizeAnnotationPoints(selectedAnnotation)
@@ -669,7 +774,7 @@ const useCanvasDraw = (
                   }
                   break
 
-                case AnnotationType.Mask:
+                case AnnotationType.Polygon:
                   {
                     drawPolygon(hitTestCtx, points, hitId, true)
                   }
@@ -692,7 +797,7 @@ const useCanvasDraw = (
                 drawSelectedHitHandles(selectedAnnotation, hitTestCtx, state, points)
                 break
 
-              case AnnotationType.Mask:
+              case AnnotationType.Polygon:
                 drawSelectedHitHandles(selectedAnnotation, hitTestCtx, state, points)
                 break
             }
@@ -738,7 +843,7 @@ const useCanvasDraw = (
               }
               break
 
-            case AnnotationType.Mask:
+            case AnnotationType.Polygon:
               {
                 drawPolygon(
                   annotationCtx,
@@ -776,12 +881,24 @@ const useCanvasDraw = (
             case AnnotationType.Box:
               {
                 drawControlCircle(annotationCtx, points[0], CONTROL_POINT_CIRCLE_RADIUS)
-
                 drawControlCircle(annotationCtx, points[1], CONTROL_POINT_CIRCLE_RADIUS)
+
+                // Purely visual - the other 2 corners of the box, derived from the same
+                // 2 real points, so dragging them still only ever produces 2 real points.
+                drawControlCircle(
+                  annotationCtx,
+                  { x: points[1].x, y: points[0].y },
+                  CONTROL_POINT_CIRCLE_RADIUS
+                )
+                drawControlCircle(
+                  annotationCtx,
+                  { x: points[0].x, y: points[1].y },
+                  CONTROL_POINT_CIRCLE_RADIUS
+                )
               }
               break
 
-            case AnnotationType.Mask:
+            case AnnotationType.Polygon:
               {
                 for (const point of points) {
                   drawControlCircle(annotationCtx, point, CONTROL_POINT_CIRCLE_RADIUS)
@@ -792,6 +909,47 @@ const useCanvasDraw = (
         }
 
         drawCreationPreview(annotationCtx, state, xScale, yScale)
+
+        let hoveredAnnotation: IAnnotation | null = null
+        if (state.hoveredAnnotationId !== null) {
+          hoveredAnnotation =
+            selectedAnnotation?.id === state.hoveredAnnotationId
+              ? selectedAnnotation
+              : (state.sample
+                  ?.resolve()
+                  .annotations.resolve()
+                  [state.hoveredAnnotationId]?.resolve() ?? null)
+        }
+
+        if (state.isAnnotationsDrawerHovered) {
+          dimCanvas(annotationCtx, width, height)
+
+          if (hoveredAnnotation !== null) {
+            const hoveredPoints = transformPoints(
+              hoveredAnnotation.points,
+              state.imageRect.x,
+              state.imageRect.y,
+              xScale,
+              yScale
+            )
+            const spotlightShape =
+              hoveredAnnotation.type === AnnotationType.Box
+                ? getBoxPoints(hoveredPoints)
+                : hoveredPoints
+
+            cutoutShape(annotationCtx, spotlightShape)
+
+            // Re-draws the spotlighted annotation's outline crisp and undimmed on top of
+            // the cutout, thicker than normal so it reads clearly as the focused shape.
+            drawPolygon(
+              annotationCtx,
+              spotlightShape,
+              state.labelsMap[hoveredAnnotation.labelId]?.color ?? '#ffffff',
+              false,
+              HOVER_OUTLINE_WIDTH
+            )
+          }
+        }
 
         if (state.showHitTestDebugOverlay) {
           annotationCtx.globalAlpha = HIT_TEST_OVERLAY_ALPHA
@@ -804,7 +962,7 @@ const useCanvasDraw = (
     const crosshairCtx = crosshairCanvasElement.getContext('2d')
     if (crosshairCtx !== null) {
       crosshairCtx.clearRect(0, 0, width, height)
-      if (state.mode === LabelerMode.CreateBox || state.mode === LabelerMode.CreateMask) {
+      if (state.mode === LabelerMode.CreateBox || state.mode === LabelerMode.CreatePolygon) {
         drawCrosshair(crosshairCtx, state.mousePos[0], state.mousePos[1], width, height)
       }
     }

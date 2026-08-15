@@ -136,7 +136,7 @@ const isBboxRectangle = (
 /** Converts one COCO annotation to the labeler's point representation. A polygon
  *  `segmentation` that isn't just the bbox's own rectangle (i.e. it carries real shape
  *  information, unlike the rectangular segmentation this app's COCO exporter writes for
- *  Box annotations) becomes a Mask; everything else becomes a Box from `bbox`. */
+ *  Box annotations) becomes a Polygon; everything else becomes a Box from `bbox`. */
 export const cocoAnnotationToPoints = (
   annotation: RawCocoAnnotation
 ): { type: AnnotationType; points: IPoint[] } => {
@@ -146,7 +146,7 @@ export const cocoAnnotationToPoints = (
     for (let i = 0; i + 1 < polygon.length; i += 2) {
       points.push({ id: makeUUID(), x: polygon[i], y: polygon[i + 1] })
     }
-    return { type: AnnotationType.Mask, points }
+    return { type: AnnotationType.Polygon, points }
   }
 
   const [x, y, w, h] = annotation.bbox
@@ -161,7 +161,7 @@ export const cocoAnnotationToPoints = (
 
 const buildSampleFromCocoPair = async (
   pair: CocoImagePair,
-  categoryIdToLabelId: Map<number, string>,
+  categoryIdToLabelId: Map<number, string | null>,
   scratchDir: string
 ): Promise<INewSample> => {
   const imagePath = await resolveImagePath(pair.image, scratchDir)
@@ -169,7 +169,7 @@ const buildSampleFromCocoPair = async (
   const annotations: INewAnnotation[] = []
   for (const raw of pair.annotations) {
     const labelId = categoryIdToLabelId.get(raw.category_id)
-    if (labelId === undefined) continue
+    if (labelId === undefined || labelId === null) continue
     const { type, points } = cocoAnnotationToPoints(raw)
     annotations.push({ id: makeUUID(), type, labelId, points })
   }
@@ -188,7 +188,7 @@ const buildSampleFromCocoPair = async (
  *  for why this isn't parallelized. */
 export const cocoDatasetToSamples = async (
   pairs: CocoImagePair[],
-  categoryIdToLabelId: Map<number, string>,
+  categoryIdToLabelId: Map<number, string | null>,
   scratchDir: string,
   onProgress?: (completed: number, total: number) => void
 ): Promise<INewSample[]> => {

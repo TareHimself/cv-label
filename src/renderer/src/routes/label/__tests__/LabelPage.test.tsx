@@ -10,6 +10,10 @@ const setMode = vi.fn()
 const setLabelId = vi.fn()
 const selectAnnotation = vi.fn()
 const deleteAnnotation = vi.fn()
+const setHoveredAnnotation = vi.fn()
+const setAnnotationsDrawerHovered = vi.fn()
+const markAllDirty = vi.fn()
+const cancelPendingSampleLoad = vi.fn()
 
 vi.mock('@renderer/components/Labeler', () => ({
   Labeler: () => <div data-testid="labeler-stub" />
@@ -33,7 +37,11 @@ vi.mock('@renderer/hooks/useLabeler', () => ({
       setMode,
       setLabelId,
       selectAnnotation,
-      deleteAnnotation
+      deleteAnnotation,
+      setHoveredAnnotation,
+      setAnnotationsDrawerHovered,
+      markAllDirty,
+      cancelPendingSampleLoad
     }))
   })
 }))
@@ -47,10 +55,27 @@ vi.mock('@renderer/hooks/useAppStore', async () => {
   return { useAppStore }
 })
 
+// A Set, not a single ref: LabelPage and the AnnotationsDrawer it renders each register
+// their own useOnRouteLeave callback, so a single "last one wins" slot would let the
+// drawer's registration clobber the page's.
+const { onRouteEnterCallbacks, onRouteLeaveCallbacks } = vi.hoisted(() => ({
+  onRouteEnterCallbacks: new Set<() => void>(),
+  onRouteLeaveCallbacks: new Set<() => void>()
+}))
+
 vi.mock('@renderer/router/appRouter', () => ({
   navigate: vi.fn(),
-  back: vi.fn()
+  back: vi.fn(),
+  useOnRouteEnter: (callback: () => void) => {
+    onRouteEnterCallbacks.add(callback)
+  },
+  useOnRouteLeave: (callback: () => void) => {
+    onRouteLeaveCallbacks.add(callback)
+  }
 }))
+
+const fireRouteEnter = () => onRouteEnterCallbacks.forEach((callback) => callback())
+const fireRouteLeave = () => onRouteLeaveCallbacks.forEach((callback) => callback())
 
 import { LabelPage } from '../LabelPage'
 
@@ -77,6 +102,12 @@ beforeEach(() => {
   setSample.mockClear()
   setMode.mockClear()
   setLabelId.mockClear()
+  setHoveredAnnotation.mockClear()
+  setAnnotationsDrawerHovered.mockClear()
+  markAllDirty.mockClear()
+  cancelPendingSampleLoad.mockClear()
+  onRouteEnterCallbacks.clear()
+  onRouteLeaveCallbacks.clear()
 })
 
 describe('LabelPage', () => {
@@ -120,11 +151,10 @@ describe('LabelPage', () => {
     expect(scrollArea.style.maxWidth).toBeTruthy()
   })
 
-  it('shows the completed toggle for the current sample', () => {
+  it('shows a button reflecting the current sample completion state', () => {
     renderLabelPage()
 
-    expect(screen.getByText('In Progress')).toBeInTheDocument()
-    expect(screen.getByText('Completed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeInTheDocument()
   })
 
   it('opens the annotations drawer when the toggle button is clicked', async () => {
@@ -135,5 +165,22 @@ describe('LabelPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Annotations' }))
 
     expect(await screen.findByText('No annotations yet')).toBeInTheDocument()
+  })
+
+  it('forces a full repaint when the router reports this page becoming visible again', () => {
+    renderLabelPage()
+    markAllDirty.mockClear()
+
+    fireRouteEnter()
+
+    expect(markAllDirty).toHaveBeenCalled()
+  })
+
+  it('cancels an in-flight sample load when the router reports leaving the page', () => {
+    renderLabelPage()
+
+    fireRouteLeave()
+
+    expect(cancelPendingSampleLoad).toHaveBeenCalled()
   })
 })

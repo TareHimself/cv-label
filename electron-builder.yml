@@ -14,6 +14,8 @@ asarUnpack:
 extraResources:
   - from: drizzle
     to: drizzle
+  - from: drizzle-app
+    to: drizzle-app
 fileAssociations:
   - ext: cvlabel
     name: cv-label File

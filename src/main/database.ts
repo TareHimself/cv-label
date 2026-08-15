@@ -3,14 +3,13 @@ import {
   AnnotationType,
   ArchiveManifest,
   IAnnotation,
-  IAnnotator,
   IDataStore,
   INewAnnotation,
-  INewAnnotator,
   INewSample,
   IPoint,
   IProject,
   ISample,
+  ITag,
   ITask,
   LOCAL_STORE_ID,
   TrainingSplit
@@ -18,7 +17,7 @@ import {
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, count, eq, inArray } from 'drizzle-orm'
 import path from 'path'
 import fs from 'fs/promises'
 import { createReadStream, createWriteStream } from 'fs'
@@ -32,10 +31,6 @@ import { hashFile } from './utils_no_electron'
 import * as schema from './schema'
 
 console.log('Database loaded into worker', APP_PATH)
-declare global {
-  const APP_PATH: string
-  const MIGRATIONS_PATH: string
-}
 
 assert(APP_PATH !== undefined, 'APP_PATH global was not defined')
 assert(MIGRATIONS_PATH !== undefined, 'MIGRATIONS_PATH global was not defined')
@@ -410,10 +405,19 @@ const localStore: IDataStore = {
         for (const label of update.labels ?? []) {
           // Scoped to projectId as a defensive check - the renderer only ever sends a project's
           // own labels back, but this keeps a bad id from silently renaming a label in another project.
-          tx.update(schema.labels)
-            .set({ name: label.name })
+          const result = tx
+            .update(schema.labels)
+            .set({ name: label.name, color: label.color })
             .where(and(eq(schema.labels.id, label.id), eq(schema.labels.projectId, update.id)))
             .run()
+
+          // A label id the project doesn't have yet isn't a rename - it's a new label
+          // being added (EditProjectModal's "Add Label"), so insert it instead.
+          if (result.changes === 0) {
+            tx.insert(schema.labels)
+              .values({ id: label.id, name: label.name, color: label.color, projectId: update.id })
+              .run()
+          }
         }
 
         const project = tx.query.projects
@@ -442,11 +446,52 @@ const localStore: IDataStore = {
   },
 
   getTasksForProject: async (projectId) => {
-    return db
-      .select({ id: schema.tasks.id, name: schema.tasks.name })
+    // count(samples.id) skips the null produced by the left join for a task with no
+    // samples yet; count(samples.completedAt) counts only the non-null (completed) ones -
+    // both fall out of plain SQL COUNT-of-a-column semantics, no CASE/filter needed.
+    const taskRows = await db
+      .select({
+        id: schema.tasks.id,
+        name: schema.tasks.name,
+        sampleCount: count(schema.samples.id),
+        completedSampleCount: count(schema.samples.completedAt)
+      })
       .from(schema.tasks)
+      .leftJoin(schema.samples, eq(schema.samples.taskId, schema.tasks.id))
       .where(eq(schema.tasks.projectId, projectId))
+      .groupBy(schema.tasks.id)
       .orderBy(asc(schema.tasks.id))
+
+    if (taskRows.length === 0) {
+      return []
+    }
+
+    // A second, separate query rather than joining task_tags into the query above - that
+    // aggregate already GROUPs by task for the sample counts, and a many-to-many tags join
+    // would multiply rows before the GROUP BY and corrupt those counts.
+    const tagRows = await db
+      .select({
+        taskId: schema.taskTags.taskId,
+        id: schema.tags.id,
+        name: schema.tags.name
+      })
+      .from(schema.taskTags)
+      .innerJoin(schema.tags, eq(schema.taskTags.tagId, schema.tags.id))
+      .where(
+        inArray(
+          schema.taskTags.taskId,
+          taskRows.map((t) => t.id)
+        )
+      )
+
+    const tagsByTaskId = new Map<string, ITag[]>()
+    for (const row of tagRows) {
+      const list = tagsByTaskId.get(row.taskId) ?? []
+      list.push({ id: row.id, name: row.name })
+      tagsByTaskId.set(row.taskId, list)
+    }
+
+    return taskRows.map((task) => ({ ...task, tags: tagsByTaskId.get(task.id) ?? [] }))
   },
 
   updateTasks: async (updates) => {
@@ -475,13 +520,21 @@ const localStore: IDataStore = {
   },
 
   createTask: async (projectId, id, name, newSamples = []) => {
-    const task: ITask = { id, name }
+    // Newly created samples never carry a completedAt (INewSample has no such field -
+    // see cvLabelDatasetToSamples etc.), so completedSampleCount is always 0 here -
+    // cheaper than an extra aggregate query for a value we already know. A new task
+    // starts untagged.
+    const task: ITask = {
+      id,
+      name,
+      sampleCount: newSamples.length,
+      completedSampleCount: 0,
+      tags: []
+    }
 
     if (newSamples.length === 0) {
       db.transaction((tx) => {
-        tx.insert(schema.tasks)
-          .values({ ...task, projectId })
-          .run()
+        tx.insert(schema.tasks).values({ id, name, projectId }).run()
       })
       return task
     }
@@ -493,9 +546,7 @@ const localStore: IDataStore = {
     )
 
     const { insertedImagesIndex } = db.transaction((tx) => {
-      tx.insert(schema.tasks)
-        .values({ ...task, projectId })
-        .run()
+      tx.insert(schema.tasks).values({ id, name, projectId }).run()
       return insertSamplesWithImages(tx, task.id, newSamples, images)
     })
 
@@ -511,6 +562,77 @@ const localStore: IDataStore = {
       }
     })
     return taskIds.map(() => true)
+  },
+
+  getTagsForProject: async (projectId) => {
+    return db
+      .select({ id: schema.tags.id, name: schema.tags.name })
+      .from(schema.tags)
+      .where(eq(schema.tags.projectId, projectId))
+      .orderBy(asc(schema.tags.name))
+  },
+
+  createTag: async (projectId, id, name) => {
+    db.insert(schema.tags).values({ id, name, projectId }).run()
+    return { id, name }
+  },
+
+  updateTags: async (updates) => {
+    return db.transaction((tx) => {
+      return updates.map((update) => {
+        if (update.name !== undefined) {
+          tx.update(schema.tags)
+            .set({ name: update.name })
+            .where(eq(schema.tags.id, update.id))
+            .run()
+        }
+
+        const tag = tx
+          .select({ id: schema.tags.id, name: schema.tags.name })
+          .from(schema.tags)
+          .where(eq(schema.tags.id, update.id))
+          .get()
+
+        if (tag === undefined) {
+          throw new Error(`tag not found: ${update.id}`)
+        }
+
+        return tag
+      })
+    })
+  },
+
+  deleteTags: async (tagIds) => {
+    db.transaction((tx) => {
+      for (const id of tagIds) {
+        tx.delete(schema.tags).where(eq(schema.tags.id, id)).run()
+      }
+    })
+    return tagIds.map(() => true)
+  },
+
+  addTagsToTasks: async (taskIds, tagIds) => {
+    if (taskIds.length === 0 || tagIds.length === 0) return
+
+    db.transaction((tx) => {
+      for (const taskId of taskIds) {
+        for (const tagId of tagIds) {
+          tx.insert(schema.taskTags).values({ taskId, tagId }).onConflictDoNothing().run()
+        }
+      }
+    })
+  },
+
+  removeTagsFromTasks: async (taskIds, tagIds) => {
+    if (taskIds.length === 0 || tagIds.length === 0) return
+
+    db.transaction((tx) => {
+      tx.delete(schema.taskTags)
+        .where(
+          and(inArray(schema.taskTags.taskId, taskIds), inArray(schema.taskTags.tagId, tagIds))
+        )
+        .run()
+    })
   },
 
   getSamplesForTask: async (taskId) => {
@@ -704,41 +826,6 @@ const localStore: IDataStore = {
     return annotationsIds.map(() => true)
   },
 
-  getAnnotators: async (projectId) => {
-    const annotators = await db
-      .select({
-        id: schema.annotators.id,
-        name: schema.annotators.name,
-        url: schema.annotators.url,
-        headers: schema.annotators.headers
-      })
-      .from(schema.annotators)
-      .where(eq(schema.annotators.projectId, projectId))
-      .orderBy(asc(schema.annotators.id))
-
-    return annotators.map<IAnnotator>((a) => ({
-      ...a,
-      headers: JSON.parse(a.headers)
-    }))
-  },
-
-  createAnnotator: async (projectId, id, name, url, headers) => {
-    const newAnnotator: INewAnnotator = { id, name, url, headers }
-    db.insert(schema.annotators)
-      .values({ ...newAnnotator, headers: JSON.stringify(newAnnotator.headers), projectId })
-      .run()
-    return { ...newAnnotator }
-  },
-
-  deleteAnnotators: async (annotatorIds) => {
-    db.transaction((tx) => {
-      for (const id of annotatorIds) {
-        tx.delete(schema.annotators).where(eq(schema.annotators.id, id)).run()
-      }
-    })
-    return annotatorIds.map(() => true)
-  },
-
   replacePoints: async (annotationId, points) => {
     return db.transaction((tx) => {
       // Get current points for the annotation
@@ -839,6 +926,12 @@ export const {
   createTask,
   updateTasks,
   deleteTasks,
+  getTagsForProject,
+  createTag,
+  updateTags,
+  deleteTags,
+  addTagsToTasks,
+  removeTagsFromTasks,
   getSamplesForTask,
   getSamples,
   createSamples,
@@ -848,8 +941,5 @@ export const {
   createAnnotations,
   updateAnnotations,
   deleteAnnotations,
-  getAnnotators,
-  createAnnotator,
-  deleteAnnotators,
   replacePoints
 } = localStore

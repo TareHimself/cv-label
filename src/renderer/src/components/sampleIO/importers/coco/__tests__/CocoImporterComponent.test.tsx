@@ -114,6 +114,41 @@ describe('CocoImporterComponent', () => {
     expect(samples[0].annotations[0].labelId).toBe('l2')
   })
 
+  it('excludes a class marked Ignore, without blocking Import, and drops its annotations', async () => {
+    const onComplete = vi.fn()
+    renderWithProviders(
+      <CocoImporterComponent project={project} onComplete={onComplete} onCancel={vi.fn()} />
+    )
+
+    fireEvent.change(screen.getByTestId('coco-folder-input'), {
+      target: {
+        files: [
+          makeFile('img1.jpg', 'x'),
+          makeFile(
+            '_annotations.coco.json',
+            cocoJson(
+              [{ id: 1, file_name: 'img1.jpg' }],
+              [{ image_id: 1, category_id: 1, bbox: [0, 0, 10, 10] }],
+              [{ id: 1, name: 'person' }]
+            )
+          )
+        ]
+      }
+    })
+    await screen.findByText('person')
+
+    fireEvent.click(screen.getByDisplayValue('Person'))
+    fireEvent.click(await screen.findByText('Ignore'))
+    expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const samples = onComplete.mock.calls[0][0]
+    expect(samples).toHaveLength(1)
+    expect(samples[0].annotations).toHaveLength(0)
+  })
+
   it('shows an error and stays on the selection step when no images are found', async () => {
     renderWithProviders(
       <CocoImporterComponent project={project} onComplete={vi.fn()} onCancel={vi.fn()} />

@@ -146,7 +146,7 @@ describe('cocoAnnotationToPoints', () => {
     ])
   })
 
-  it('treats a real (non-rectangular) polygon segmentation as a Mask', () => {
+  it('treats a real (non-rectangular) polygon segmentation as a Polygon', () => {
     const result = cocoAnnotationToPoints({
       image_id: 1,
       category_id: 1,
@@ -154,7 +154,7 @@ describe('cocoAnnotationToPoints', () => {
       segmentation: [[0, 0, 10, 0, 5, 10]]
     })
 
-    expect(result.type).toBe(AnnotationType.Mask)
+    expect(result.type).toBe(AnnotationType.Polygon)
     expect(result.points).toEqual([
       { id: expect.any(String), x: 0, y: 0 },
       { id: expect.any(String), x: 10, y: 0 },

@@ -1,6 +1,6 @@
 import { PointerResult, type LabelerTool } from './types'
 
-export const createMaskTool: LabelerTool = {
+export const createPolygonTool: LabelerTool = {
   onPointerDown(ctx, pos) {
     ctx.store.getState().onConfirmPoint(pos.x, pos.y)
     return PointerResult.Consumed

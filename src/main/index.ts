@@ -2,11 +2,25 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { getAppPath } from './utils'
 
-// e2e runs get their own isolated userData dir so their single-instance lock
-// doesn't collide with a real dev/production instance sharing the default one.
-if (process.env.CV_LABEL_APP_PATH) {
-  app.setPath('userData', join(process.env.CV_LABEL_APP_PATH, 'userData'))
+// Ties Electron's own userData dir (session storage, GPU cache, and - most importantly -
+// the lock file requestSingleInstanceLock() below uses) to the same working directory
+// getAppPath() already scopes the sqlite database/images to, but only once packaged or
+// under an explicit override - plain `pnpm dev` keeps Electron's own default userData
+// location rather than dumping Chromium's session/cache/blob-storage files in the repo
+// root just for running from source. Must run before requestSingleInstanceLock() -
+// Electron reads userData to place its lock file at that point.
+//
+// This makes the single-instance lock per-working-directory rather than global: two
+// packaged instances pointed at the same working directory can't run concurrently
+// (they'd corrupt the same sqlite database), but separate copies of the app in different
+// folders - e.g. a portable install run from two locations - are treated as independent
+// instances and can run side by side. e2e runs always set CV_LABEL_APP_PATH to their own
+// isolated temp dir per run, so they get the same per-working-directory isolation too,
+// unaffected by whichever way the packaged/dev branch goes.
+if (app.isPackaged || process.env.CV_LABEL_APP_PATH) {
+  app.setPath('userData', join(getAppPath(), 'userData'))
 }
 
 function createWindow(): void {
@@ -103,6 +117,7 @@ if (!gotSingleInstanceLock) {
 
 // Ipc based modules
 import './store'
+import './appStore'
 import './zip'
 import './system'
 import './scratchProtocol'

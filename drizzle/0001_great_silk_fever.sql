@@ -1,0 +1,1 @@
+ALTER TABLE `annotators` ADD `labelMapping` text DEFAULT '{}' NOT NULL;

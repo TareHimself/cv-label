@@ -2,8 +2,8 @@ import { navigate } from '@renderer/router/appRouter'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { OptimisticObject } from '@renderer/util/optimistic_object'
-import { IAnnotation, INewSample, IProject, ITask } from '@shared/types'
+import { toOptimisticSample } from '@renderer/util/toOptimisticSample'
+import { INewSample, IProject, ITask } from '@shared/types'
 import { OptimisticSample } from '@renderer/types'
 
 export const useSamples = (project: IProject, task: ITask) => {
@@ -19,20 +19,7 @@ export const useSamples = (project: IProject, task: ITask) => {
   } = useQuery({
     queryKey: samplesQueryKey,
     queryFn: () =>
-      store.getSamplesForTask(task.id).then((a) =>
-        a.map((c) => {
-          const annotationsObj = c.annotations.reduce<{
-            [key: string]: OptimisticObject<IAnnotation>
-          }>((t, c) => {
-            return { ...t, [c.id]: new OptimisticObject(c) }
-          }, {})
-
-          return new OptimisticObject({
-            ...c,
-            annotations: new OptimisticObject(annotationsObj, true)
-          })
-        })
-      )
+      store.getSamplesForTask(task.id).then((samples) => samples.map(toOptimisticSample))
   })
 
   const loading = isLoading || isFetching

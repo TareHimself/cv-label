@@ -41,15 +41,15 @@ const rectangleCorners = (box: BoundingBox): { x: number; y: number }[] => [
 ]
 
 /** The polygon to export for an annotation under the given shape mode. In Segment mode a
- *  Mask keeps its real outline and a Box becomes its own 4 corners (a box has no shape
- *  beyond its rectangle). In Box mode every annotation - Mask included - is flattened to
- *  its bounding rectangle's corners, discarding a Mask's actual outline. Either way every
- *  annotation produces a usable shape, unlike formats that can only carry one kind. */
+ *  Polygon keeps its real outline and a Box becomes its own 4 corners (a box has no shape
+ *  beyond its rectangle). In Box mode every annotation - Polygon included - is flattened
+ *  to its bounding rectangle's corners, discarding a Polygon's actual outline. Either way
+ *  every annotation produces a usable shape, unlike formats that can only carry one kind. */
 export const exportShapePoints = (
   annotation: Pick<IAnnotation, 'type' | 'points'>,
   shape: ExportShape
 ): { x: number; y: number }[] => {
-  if (shape === ExportShape.Segment && annotation.type === AnnotationType.Mask) {
+  if (shape === ExportShape.Segment && annotation.type === AnnotationType.Polygon) {
     return annotation.points
   }
   return rectangleCorners(boundingBoxOf(annotation.points))

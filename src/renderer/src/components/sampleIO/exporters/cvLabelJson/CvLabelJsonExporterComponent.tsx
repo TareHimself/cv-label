@@ -6,6 +6,9 @@ import { AsyncButton } from '@renderer/components/AsyncButton'
 import type { ArchiveManifest } from '@shared/types'
 import type { SampleExporterComponentProps } from '../../types'
 import { imageExtensionFromUri } from '../imageExtensionFromUri'
+import { exportBaseName } from '../exportBaseName'
+import { LabelMapper } from '../../LabelMapper'
+import { buildIncludedLabelsAndIndex } from '../labelRouting'
 import { buildCvLabelManifest, cvLabelImagePath, type CvLabelManifestSample } from './buildCvLabel'
 
 // 'preparing' covers fetching samples and building the manifest, plus the native save
@@ -23,6 +26,9 @@ export const CvLabelJsonExporterComponent = ({
   const [isExporting, setIsExporting] = useState(false)
   const [phase, setPhase] = useState<ExportPhase>('preparing')
   const [progress, setProgress] = useState(0)
+  const [mapping, setMapping] = useState<Map<string, string | null>>(
+    new Map(project.labels.map((label) => [label.id, label.id]))
+  )
 
   useEffect(
     () =>
@@ -36,6 +42,8 @@ export const CvLabelJsonExporterComponent = ({
     setPhase('preparing')
     setProgress(0)
     try {
+      const { includedLabels } = buildIncludedLabelsAndIndex(project.labels, mapping)
+
       const samplesByTask = await Promise.all(tasks.map((task) => getSamplesForTask(task.id)))
       const samples = samplesByTask.flat()
 
@@ -52,7 +60,10 @@ export const CvLabelJsonExporterComponent = ({
           id: sample.id,
           name: sample.name,
           split: sample.split,
-          annotations: sample.annotations,
+          annotations: sample.annotations.flatMap((annotation) => {
+            const target = mapping.get(annotation.labelId)
+            return target ? [{ ...annotation, labelId: target }] : []
+          }),
           createdAt: sample.createdAt,
           width: sample.width,
           height: sample.height,
@@ -62,11 +73,14 @@ export const CvLabelJsonExporterComponent = ({
 
       manifest.textEntries.push({
         path: 'manifest.json',
-        content: buildCvLabelManifest(project.labels, manifestSamples)
+        content: buildCvLabelManifest(includedLabels, manifestSamples)
       })
 
       setPhase('exporting')
-      const saved = await window.exportApi.runExport(`${project.name}.cvlabel`, manifest)
+      const saved = await window.exportApi.runExport(
+        `${exportBaseName(project, tasks)}.cvlabel`,
+        manifest
+      )
 
       if (saved) {
         onComplete()
@@ -84,6 +98,14 @@ export const CvLabelJsonExporterComponent = ({
         file - a flat list of samples and their labels, independent of task structure. Re-importing
         works into any project via a label-mapping step.
       </Text>
+      <LabelMapper
+        items={project.labels}
+        options={project.labels}
+        mapping={mapping}
+        onChange={(id, value) => setMapping((current) => new Map(current).set(id, value))}
+        excludeLabel="Don't Export"
+        disabled={isExporting}
+      />
       {isExporting && (
         <Stack gap={4}>
           {phase === 'preparing' ? (

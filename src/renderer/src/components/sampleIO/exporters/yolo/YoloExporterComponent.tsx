@@ -6,8 +6,11 @@ import { AsyncButton } from '@renderer/components/AsyncButton'
 import type { ArchiveManifest } from '@shared/types'
 import type { SampleExporterComponentProps } from '../../types'
 import { imageExtensionFromUri } from '../imageExtensionFromUri'
+import { exportBaseName } from '../exportBaseName'
 import { ExportShape } from '../annotationShape'
 import { LabeledSegmentedControl } from '../../LabeledSegmentedControl'
+import { LabelMapper } from '../../LabelMapper'
+import { buildIncludedLabelsAndIndex } from '../labelRouting'
 import { buildYoloDataYaml, yoloImagePath, yoloLabelFileContent, yoloLabelPath } from './buildYolo'
 
 const YOLO_SHAPE_OPTIONS: SegmentedControlItem[] = [
@@ -31,6 +34,9 @@ export const YoloExporterComponent = ({
   const [phase, setPhase] = useState<ExportPhase>('preparing')
   const [progress, setProgress] = useState(0)
   const [shape, setShape] = useState<ExportShape>(ExportShape.Box)
+  const [mapping, setMapping] = useState<Map<string, string | null>>(
+    new Map(project.labels.map((label) => [label.id, label.id]))
+  )
 
   useEffect(
     () =>
@@ -44,7 +50,10 @@ export const YoloExporterComponent = ({
     setPhase('preparing')
     setProgress(0)
     try {
-      const labelIdToClassId = new Map(project.labels.map((label, id) => [label.id, id]))
+      const { includedLabels, labelIdToIndex: labelIdToClassId } = buildIncludedLabelsAndIndex(
+        project.labels,
+        mapping
+      )
 
       const samplesByTask = await Promise.all(tasks.map((task) => getSamplesForTask(task.id)))
       const samples = samplesByTask.flat()
@@ -70,10 +79,13 @@ export const YoloExporterComponent = ({
         })
       }
 
-      manifest.textEntries.push({ path: 'data.yaml', content: buildYoloDataYaml(project.labels) })
+      manifest.textEntries.push({ path: 'data.yaml', content: buildYoloDataYaml(includedLabels) })
 
       setPhase('exporting')
-      const saved = await window.exportApi.runExport(`${project.name}-yolo-export.zip`, manifest)
+      const saved = await window.exportApi.runExport(
+        `${exportBaseName(project, tasks)}-yolo-export.zip`,
+        manifest
+      )
 
       if (saved) {
         onComplete()
@@ -96,6 +108,14 @@ export const YoloExporterComponent = ({
         value={shape}
         options={YOLO_SHAPE_OPTIONS}
         onChange={setShape}
+        disabled={isExporting}
+      />
+      <LabelMapper
+        items={project.labels}
+        options={project.labels}
+        mapping={mapping}
+        onChange={(id, value) => setMapping((current) => new Map(current).set(id, value))}
+        excludeLabel="Don't Export"
         disabled={isExporting}
       />
       {isExporting && (

@@ -1,7 +1,15 @@
 import { styled } from '@linaria/react'
 import { Checkbox, Group, Paper, Skeleton, Text, ThemeIcon } from '@mantine/core'
 import type { FC, MouseEventHandler, ReactNode } from 'react'
-import { MdChevronRight, MdDeleteOutline, MdEdit } from 'react-icons/md'
+import {
+  MdChevronRight,
+  MdContentCopy,
+  MdDeleteOutline,
+  MdEdit,
+  MdLabel,
+  MdOutlineSmartToy
+} from 'react-icons/md'
+import { FaFileExport } from 'react-icons/fa'
 import { useContextMenu } from 'mantine-contextmenu'
 
 const ROW_PADDING = '14px 18px'
@@ -44,6 +52,15 @@ export type BasicListPageItemProps = {
   tags?: ReactNode
   onClick: () => void
   onEdit?: () => void
+  onManageAnnotators?: () => void
+  onAutoLabel?: () => void
+  onEditTags?: () => void
+  /** Exports just this item - only offered outside select mode, where batch export
+   *  (acting on the whole selection instead) takes over. */
+  onExport?: () => void
+  /** Copies this item's samples' annotations into another task - only offered outside
+   *  select mode, same as onExport (both are inherently single-source actions). */
+  onCopyAnnotations?: () => void
   onDelete?: () => void
   /** Whether the list is currently in select mode - while true, clicking the row
    *  anywhere (not just the checkbox) toggles selection instead of firing onClick, and
@@ -51,6 +68,10 @@ export type BasicListPageItemProps = {
   selectMode?: boolean
   selected?: boolean
   onSelectedChange?: (selected: boolean) => void
+  /** Enters select mode with just this item selected - the context menu's entry point
+   *  into selection outside select mode, where the All/Above/Below variants below
+   *  wouldn't yet make sense (there's no anchor item, and nothing else is selected). */
+  onSelect?: () => void
   /** Selects every currently visible (filtered) item. */
   onSelectAll?: () => void
   /** Selects this item and every visible item above it. */
@@ -66,10 +87,16 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   tags,
   onClick,
   onEdit,
+  onManageAnnotators,
+  onAutoLabel,
+  onEditTags,
+  onExport,
+  onCopyAnnotations,
   onDelete,
   selectMode,
   selected,
   onSelectedChange,
+  onSelect,
   onSelectAll,
   onSelectAbove,
   onSelectBelow
@@ -79,6 +106,42 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   const editDeleteItems = [
     ...(onEdit
       ? [{ key: 'edit', icon: <MdEdit size={16} />, title: 'Edit', onClick: onEdit }]
+      : []),
+    ...(onManageAnnotators
+      ? [
+          {
+            key: 'manage-annotators',
+            icon: <MdOutlineSmartToy size={16} />,
+            title: 'Manage Annotators',
+            onClick: onManageAnnotators
+          }
+        ]
+      : []),
+    ...(onAutoLabel
+      ? [
+          {
+            key: 'auto-label',
+            icon: <MdOutlineSmartToy size={16} />,
+            title: 'Auto-label',
+            onClick: onAutoLabel
+          }
+        ]
+      : []),
+    ...(onEditTags
+      ? [{ key: 'edit-tags', icon: <MdLabel size={16} />, title: 'Edit Tags', onClick: onEditTags }]
+      : []),
+    ...(onExport && !selectMode
+      ? [{ key: 'export', icon: <FaFileExport size={16} />, title: 'Export', onClick: onExport }]
+      : []),
+    ...(onCopyAnnotations && !selectMode
+      ? [
+          {
+            key: 'copy-annotations',
+            icon: <MdContentCopy size={16} />,
+            title: 'Copy Annotations',
+            onClick: onCopyAnnotations
+          }
+        ]
       : []),
     ...(onDelete
       ? [
@@ -92,15 +155,23 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
         ]
       : [])
   ]
-  const selectionItems = [
-    ...(onSelectAll ? [{ key: 'select-all', title: 'Select All', onClick: onSelectAll }] : []),
-    ...(onSelectAbove
-      ? [{ key: 'select-above', title: 'Select Above', onClick: onSelectAbove }]
-      : []),
-    ...(onSelectBelow
-      ? [{ key: 'select-below', title: 'Select Below', onClick: onSelectBelow }]
-      : [])
-  ]
+  // Outside select mode, the All/Above/Below variants have no anchor to make sense of yet
+  // (nothing else is selected) - a single generic "Select" entry (via onSelect) is the
+  // only selection action offered until the list is already in select mode, at which
+  // point the fuller batch-selection variants take over.
+  const selectionItems = selectMode
+    ? [
+        ...(onSelectAll ? [{ key: 'select-all', title: 'Select All', onClick: onSelectAll }] : []),
+        ...(onSelectAbove
+          ? [{ key: 'select-above', title: 'Select Above', onClick: onSelectAbove }]
+          : []),
+        ...(onSelectBelow
+          ? [{ key: 'select-below', title: 'Select Below', onClick: onSelectBelow }]
+          : [])
+      ]
+    : onSelect
+      ? [{ key: 'select', title: 'Select', onClick: onSelect }]
+      : []
   const contextMenuItems = [
     ...editDeleteItems,
     ...(editDeleteItems.length > 0 && selectionItems.length > 0 ? [{ key: 'divider' }] : []),

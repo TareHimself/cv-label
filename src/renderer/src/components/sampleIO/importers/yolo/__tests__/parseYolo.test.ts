@@ -250,7 +250,7 @@ describe('yoloDatasetToSamples', () => {
     expect(samples[0].annotations[0].points).toHaveLength(2)
   })
 
-  it('in Segmentation format, builds Mask annotations from polygon lines', async () => {
+  it('in Segmentation format, builds Polygon annotations from polygon lines', async () => {
     const files = [
       makeFile('img1.jpg', 'fake-image-bytes'),
       makeFile('img1.txt', '0 0.1 0.1 0.2 0.1 0.2 0.2')
@@ -266,7 +266,7 @@ describe('yoloDatasetToSamples', () => {
     )
 
     expect(samples[0].annotations).toHaveLength(1)
-    expect(samples[0].annotations[0].type).toBe(AnnotationType.Mask)
+    expect(samples[0].annotations[0].type).toBe(AnnotationType.Polygon)
     expect(samples[0].annotations[0].points).toHaveLength(3)
   })
 

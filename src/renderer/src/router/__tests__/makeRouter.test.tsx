@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { act, render, fireEvent, screen } from '@testing-library/react'
 import { useState, type FC } from 'react'
 import { makeRouter, makeRouterOutlet } from '../makeRouter'
 
@@ -8,23 +8,30 @@ type Routes = {
   detail: { id: string }
 }
 
-const Home: FC = () => {
-  const [count, setCount] = useState(0)
-  return (
-    <div>
-      <p>Home screen</p>
-      <p data-testid="home-count">{count}</p>
-      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
-    </div>
-  )
-}
-
-const Detail: FC<{ id: string }> = ({ id }) => <p>Detail screen: {id}</p>
-
 const setup = () => {
   const router = makeRouter<Routes>('home')
-  const RouterOutlet = makeRouterOutlet(router.useRouterStore, { home: Home, detail: Detail })
-  return { ...router, RouterOutlet }
+  const onHomeEnter = vi.fn()
+  const onHomeLeave = vi.fn()
+
+  const Home: FC = () => {
+    const [count, setCount] = useState(0)
+    const visible = router.useIsRouteVisible()
+    router.useOnRouteEnter(onHomeEnter)
+    router.useOnRouteLeave(onHomeLeave)
+    return (
+      <div>
+        <p>Home screen</p>
+        <p data-testid="home-count">{count}</p>
+        <p data-testid="home-visible">{String(visible)}</p>
+        <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+      </div>
+    )
+  }
+
+  const Detail: FC<{ id: string }> = ({ id }) => <p>Detail screen: {id}</p>
+
+  const RouterOutlet = makeRouterOutlet(router, { home: Home, detail: Detail })
+  return { ...router, RouterOutlet, onHomeEnter, onHomeLeave }
 }
 
 describe('makeRouter', () => {
@@ -101,5 +108,65 @@ describe('makeRouter', () => {
 
     expect(screen.getByText('Detail screen: second')).toBeInTheDocument()
     expect(screen.queryByText('Detail screen: first')).not.toBeInTheDocument()
+  })
+
+  it('useIsRouteVisible reflects whether this screen is the top of the stack', () => {
+    const { navigate, back, RouterOutlet } = setup()
+    render(<RouterOutlet />)
+
+    expect(screen.getByTestId('home-visible')).toHaveTextContent('true')
+
+    act(() => navigate('detail', { id: 'abc' }))
+    expect(screen.getByTestId('home-visible')).toHaveTextContent('false')
+
+    act(() => back())
+    expect(screen.getByTestId('home-visible')).toHaveTextContent('true')
+  })
+
+  it('useOnRouteEnter fires on mount and again when the screen becomes visible again', () => {
+    const { navigate, back, RouterOutlet, onHomeEnter } = setup()
+    render(<RouterOutlet />)
+    expect(onHomeEnter).toHaveBeenCalledTimes(1)
+
+    act(() => navigate('detail', { id: 'abc' }))
+    expect(onHomeEnter).toHaveBeenCalledTimes(1)
+
+    act(() => back())
+    expect(onHomeEnter).toHaveBeenCalledTimes(2)
+  })
+
+  it('useOnRouteLeave fires whenever the screen stops being visible, whether hidden or fully removed', () => {
+    const { navigate, back, RouterOutlet, onHomeLeave } = setup()
+    render(<RouterOutlet />)
+    expect(onHomeLeave).not.toHaveBeenCalled()
+
+    // Hidden by a screen pushed on top - still mounted, just not visible.
+    act(() => navigate('detail', { id: 'a' }))
+    expect(onHomeLeave).toHaveBeenCalledTimes(1)
+
+    // Becoming visible again shouldn't fire another leave.
+    act(() => back())
+    expect(onHomeLeave).toHaveBeenCalledTimes(1)
+
+    // Hidden again by a fresh "home" instance pushed on top.
+    act(() => navigate('home'))
+    expect(onHomeLeave).toHaveBeenCalledTimes(2)
+
+    // That fresh instance is fully removed by back() - also fires leave.
+    act(() => back())
+    expect(onHomeLeave).toHaveBeenCalledTimes(3)
+  })
+
+  it('throws when a lifecycle hook is used outside a routed screen', () => {
+    const router = makeRouter<Routes>('home')
+    const Rogue: FC = () => {
+      router.useIsRouteVisible()
+      return null
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(() => render(<Rogue />)).toThrow(/must be used within a screen/)
+
+    consoleError.mockRestore()
   })
 })

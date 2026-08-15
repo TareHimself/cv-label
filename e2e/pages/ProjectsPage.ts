@@ -120,6 +120,20 @@ export class ProjectsPage {
     await this.editDialog.getByRole('button', { name: 'Save' }).click()
   }
 
+  /** Opens the edit dialog for an existing project and adds one or more new labels via
+   *  "Add Label", leaving the project name and existing labels untouched. */
+  async addLabels(name: string, newLabelNames: string[]) {
+    await this.row(name).click({ button: 'right' })
+    await this.page.getByText('Edit').click()
+
+    for (const labelName of newLabelNames) {
+      await this.editDialog.getByRole('button', { name: 'Add Label' }).click()
+      await this.editDialog.getByPlaceholder('Label Name').last().fill(labelName)
+    }
+
+    await this.editDialog.getByRole('button', { name: 'Save' }).click()
+  }
+
   /** Enters select mode (if not already in it) and selects the given projects via
    *  their row checkboxes. */
   async selectProjects(names: string[]) {

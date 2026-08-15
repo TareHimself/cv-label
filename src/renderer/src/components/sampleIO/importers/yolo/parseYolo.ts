@@ -222,7 +222,7 @@ const resolveImagePathAndDimensions = async (
 
 const buildSampleFromYoloPair = async (
   pair: YoloImagePair,
-  classIdToLabelId: Map<number, string>,
+  classIdToLabelId: Map<number, string | null>,
   format: YoloLabelFormat,
   scratchDir: string
 ): Promise<INewSample> => {
@@ -234,10 +234,10 @@ const buildSampleFromYoloPair = async (
     if (format === YoloLabelFormat.Segmentation) {
       for (const polygon of parseYoloSegmentationLabelFile(text)) {
         const labelId = classIdToLabelId.get(polygon.classId)
-        if (labelId === undefined) continue
+        if (labelId === undefined || labelId === null) continue
         annotations.push({
           id: makeUUID(),
-          type: AnnotationType.Mask,
+          type: AnnotationType.Polygon,
           labelId,
           points: yoloPolygonToPoints(polygon, width, height)
         })
@@ -245,7 +245,7 @@ const buildSampleFromYoloPair = async (
     } else {
       for (const box of parseYoloLabelFile(text)) {
         const labelId = classIdToLabelId.get(box.classId)
-        if (labelId === undefined) continue
+        if (labelId === undefined || labelId === null) continue
         annotations.push({
           id: makeUUID(),
           type: AnnotationType.Box,
@@ -273,7 +273,7 @@ const buildSampleFromYoloPair = async (
  *  all-segmentation, so it's one choice for the whole import rather than inferred per line. */
 export const yoloDatasetToSamples = async (
   pairs: YoloImagePair[],
-  classIdToLabelId: Map<number, string>,
+  classIdToLabelId: Map<number, string | null>,
   format: YoloLabelFormat,
   scratchDir: string,
   onProgress?: (completed: number, total: number) => void

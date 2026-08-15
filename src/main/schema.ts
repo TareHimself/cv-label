@@ -1,24 +1,18 @@
 import { relations } from 'drizzle-orm'
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex
+} from 'drizzle-orm/sqlite-core'
 
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
   name: text('name').notNull()
 })
-
-export const annotators = sqliteTable(
-  'annotators',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    url: text('url').notNull(),
-    headers: text('headers').notNull(),
-    projectId: text('projectId')
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade', onUpdate: 'restrict' })
-  },
-  (table) => [index('idx_annotators_projectId').on(table.projectId)]
-)
 
 export const tasks = sqliteTable(
   'tasks',
@@ -30,6 +24,39 @@ export const tasks = sqliteTable(
       .references(() => projects.id, { onDelete: 'cascade', onUpdate: 'restrict' })
   },
   (table) => [index('idx_tasks_projectId').on(table.projectId)]
+)
+
+export const tags = sqliteTable(
+  'tags',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    projectId: text('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade', onUpdate: 'restrict' })
+  },
+  (table) => [
+    index('idx_tags_projectId').on(table.projectId),
+    // A project-global vocabulary, managed from one place (ManageTagsModal) - this is the
+    // DB-level guard against creating a literal duplicate name in the same project.
+    uniqueIndex('idx_tags_project_name').on(table.projectId, table.name)
+  ]
+)
+
+export const taskTags = sqliteTable(
+  'task_tags',
+  {
+    taskId: text('taskId')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade', onUpdate: 'restrict' }),
+    tagId: text('tagId')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade', onUpdate: 'restrict' })
+  },
+  (table) => [
+    primaryKey({ columns: [table.taskId, table.tagId] }),
+    index('idx_task_tags_tagId').on(table.tagId)
+  ]
 )
 
 export const labels = sqliteTable(
@@ -109,16 +136,23 @@ export const points = sqliteTable(
 export const projectsRelations = relations(projects, ({ many }) => ({
   labels: many(labels),
   tasks: many(tasks),
-  annotators: many(annotators)
-}))
-
-export const annotatorsRelations = relations(annotators, ({ one }) => ({
-  project: one(projects, { fields: [annotators.projectId], references: [projects.id] })
+  tags: many(tags)
 }))
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
   project: one(projects, { fields: [tasks.projectId], references: [projects.id] }),
-  samples: many(samples)
+  samples: many(samples),
+  taskTags: many(taskTags)
+}))
+
+export const tagsRelations = relations(tags, ({ one, many }) => ({
+  project: one(projects, { fields: [tags.projectId], references: [projects.id] }),
+  taskTags: many(taskTags)
+}))
+
+export const taskTagsRelations = relations(taskTags, ({ one }) => ({
+  task: one(tasks, { fields: [taskTags.taskId], references: [tasks.id] }),
+  tag: one(tags, { fields: [taskTags.tagId], references: [tags.id] })
 }))
 
 export const labelsRelations = relations(labels, ({ one }) => ({

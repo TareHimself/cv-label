@@ -18,6 +18,7 @@
     "build": "pnpm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps && electron-rebuild -f -w better-sqlite3",
     "db:generate": "drizzle-kit generate",
+    "db:generate:app": "drizzle-kit generate --config drizzle.app.config.ts",
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win": "pnpm run build && electron-builder --win",
     "test": "vitest",
@@ -45,6 +46,7 @@
     "mantine-contextmenu": "^8.3.13",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",
+    "react-virtuoso": "^4.18.11",
     "sharp": "^0.35.0",
     "tinycolor2": "^1.6.0",
     "uuid": "^13.0.2",
@@ -105,6 +107,10 @@
       {
         "from": "drizzle",
         "to": "drizzle"
+      },
+      {
+        "from": "drizzle-app",
+        "to": "drizzle-app"
       }
     ]
   }

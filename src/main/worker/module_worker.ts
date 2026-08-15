@@ -12,8 +12,6 @@ import { errorToString } from '../../shared/utils'
 if (isEntryFile(import.meta.url)) {
   for (const k of Object.keys(workerData)) {
     global[k] = workerData[k]
-
-    console.log('ADDING GLOBAL', k, workerData[k], global[k])
   }
 
   const respond = <T = unknown>(callRef: string, response: T) => {

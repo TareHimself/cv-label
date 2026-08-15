@@ -18,3 +18,8 @@ export const getMigrationsPath = () =>
   app.isPackaged
     ? path.join(process.resourcesPath, 'drizzle')
     : path.join(mainDir, '..', '..', 'drizzle')
+
+export const getAppMigrationsPath = () =>
+  app.isPackaged
+    ? path.join(process.resourcesPath, 'drizzle-app')
+    : path.join(mainDir, '..', '..', 'drizzle-app')
