@@ -10,6 +10,8 @@ import {
   Tooltip,
   VisuallyHidden
 } from '@mantine/core'
+import { useHotkeys } from '@mantine/hooks'
+import { AsyncButton } from '@renderer/components/AsyncButton'
 import { Labeler } from '@renderer/components/Labeler'
 import { useLabeler } from '@renderer/hooks/useLabeler'
 import { LabelerMode, OptimisticSample } from '@renderer/types'
@@ -21,7 +23,7 @@ import { MdFormatListBulleted } from 'react-icons/md'
 import { ILabel, IProject, ITask, OmitV2 } from '@shared/types'
 import { mod } from '@shared/utils'
 import { useAppStore } from '@renderer/hooks/useAppStore'
-import { back } from '@renderer/router/appRouter'
+import { back, useOnRouteEnter, useOnRouteLeave } from '@renderer/router/appRouter'
 import { AnnotationsDrawer } from './AnnotationsDrawer'
 
 const Container = styled.div`
@@ -95,12 +97,12 @@ const LabelerModeControl = ({ value, onChange, size = 'md' }: LabelerModeControl
         )
       },
       {
-        value: LabelerMode.CreateMask,
+        value: LabelerMode.CreatePolygon,
         label: (
-          <Tooltip label="Create Segments">
+          <Tooltip label="Create Polygon">
             <span>
               <PiPolygonLight size={ICON_SIZE} style={ICON_STYLE} />
-              <VisuallyHidden>Create Segments</VisuallyHidden>
+              <VisuallyHidden>Create Polygon</VisuallyHidden>
             </span>
           </Tooltip>
         )
@@ -176,39 +178,20 @@ const SelectedLabelControl = ({ labels, selectedLabelId, onChange }: SelectedLab
 
 type LabelingCompletedControlProps = {
   value: string | null
-  onChange: (newValue: string | null) => void
+  onChange: (newValue: string | null) => Promise<unknown>
 }
 
-const SAMPLE_COMPLETED_CONTROL_IN_PROGRESS = 'in-progress'
-const SAMPLE_COMPLETED_CONTROL_COMPLETED = 'completed'
-
-const SampleCompletedControl = ({ value, onChange }: LabelingCompletedControlProps) => (
-  <TextSegmentedControl
-    value={
-      value === null ? SAMPLE_COMPLETED_CONTROL_IN_PROGRESS : SAMPLE_COMPLETED_CONTROL_COMPLETED
-    }
-    onChange={(e) => {
-      switch (e) {
-        case SAMPLE_COMPLETED_CONTROL_COMPLETED:
-          onChange(new Date().toISOString())
-          break
-        case SAMPLE_COMPLETED_CONTROL_IN_PROGRESS:
-          onChange(null)
-          break
-      }
-    }}
-    data={[
-      {
-        value: SAMPLE_COMPLETED_CONTROL_IN_PROGRESS,
-        label: 'In Progress'
-      },
-      {
-        value: SAMPLE_COMPLETED_CONTROL_COMPLETED,
-        label: 'Completed'
-      }
-    ]}
-  />
-)
+const SampleCompletedControl = ({ value, onChange }: LabelingCompletedControlProps) => {
+  const isCompleted = value !== null
+  return (
+    <AsyncButton
+      variant="outline"
+      onClick={() => onChange(isCompleted ? null : new Date().toISOString())}
+    >
+      {isCompleted ? 'Mark In Progress' : 'Mark Complete'}
+    </AsyncButton>
+  )
+}
 
 type SampleSelectProps = {
   value: number
@@ -258,7 +241,7 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
   const onSampleCompletedChanged = useCallback(
     (sampleId: string, newValue: string | null) => {
       const sample = samples.find((c) => c.resolve().id === sampleId)
-      if (sample === undefined) return
+      if (sample === undefined) return Promise.resolve()
       const { commit, rollback } = sample.update({
         completedAt: newValue
       })
@@ -267,7 +250,7 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
       // Force a notify so selectors reading sample.resolve() (currentSampleId,
       // sampleCompletedAt) actually re-render.
       store.setState((s) => ({ ...s }))
-      useAppStore
+      return useAppStore
         .getState()
         .store.updateSamples([
           {
@@ -290,6 +273,22 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
   useLayoutEffect(() => {
     store.getState().setSample(samples[index])
   }, [index, samples, store])
+
+  // Force a full repaint on return: the canvas's own resize-detection normally covers
+  // becoming visible again, but that depends on measuring a bounding rect that Activity
+  // may not have finished restoring yet - an explicit markAllDirty() here is reliable.
+  useOnRouteEnter(() => store.getState().markAllDirty())
+  // Don't let a bitmap load started for this page keep running (and settling into a
+  // hidden store) after the user has already left it.
+  useOnRouteLeave(() => store.getState().cancelPendingSampleLoad())
+
+  // useHotkeys ignores INPUT/TEXTAREA/SELECT targets by default, so this doesn't fire
+  // while e.g. the sample index NumberInput below is focused.
+  useHotkeys([
+    ['mod+z', () => store.getState().undo()],
+    ['mod+shift+z', () => store.getState().redo()],
+    ['mod+d', () => store.getState().duplicateSelectedAnnotation()]
+  ])
 
   return (
     <Container>

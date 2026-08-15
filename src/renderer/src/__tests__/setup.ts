@@ -35,3 +35,18 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 // calls it when navigating options, which otherwise throws from an internal timeout well
 // after the triggering test has already finished.
 Element.prototype.scrollIntoView = vi.fn()
+
+// jsdom doesn't implement OffscreenCanvas; useLabeler's store creates one unconditionally
+// on init (for hit-testing) even in tests that never render a canvas.
+class OffscreenCanvasStub {
+  width: number
+  height: number
+  constructor(width: number, height: number) {
+    this.width = width
+    this.height = height
+  }
+  getContext() {
+    return null
+  }
+}
+vi.stubGlobal('OffscreenCanvas', OffscreenCanvasStub)

@@ -1,4 +1,5 @@
 import { clamp } from '@mantine/hooks'
+import { AnnotationType } from '@shared/types'
 import { PointerResult, type LabelerTool } from './types'
 
 const MAX_BITMAP_COORDINATE = 9_000_000
@@ -32,7 +33,13 @@ export const selectTool: LabelerTool = {
 
     let controlPointId = hit.controlPointId
     if (hit.lineControlPointId !== null) {
-      controlPointId = state.addControlPoint(hit.lineControlPointId, pos.x, pos.y) ?? null
+      // A Box only ever has 2 real points - its "lines" are edges, draggable to resize
+      // rather than a place to insert a new point (unlike a Polygon's lines).
+      if (state.selectedAnnotation.resolve().type === AnnotationType.Box) {
+        controlPointId = hit.lineControlPointId
+      } else {
+        controlPointId = state.addControlPoint(hit.lineControlPointId, pos.x, pos.y) ?? null
+      }
     }
 
     // Move a single control point.

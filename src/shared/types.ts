@@ -34,7 +34,7 @@ export type BoundaryResult<T> =
 
 export const enum AnnotationType {
   Box = 'box',
-  Mask = 'mask'
+  Polygon = 'polygon'
 }
 export interface IPoint {
   id: string
