@@ -1,6 +1,13 @@
 import { styled } from '@linaria/react'
 import { Flex, Space } from '@mantine/core'
-import { useLayoutEffect, useRef, type PropsWithChildren, type FC, type ReactNode } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  type PropsWithChildren,
+  type FC,
+  type ReactNode,
+  type RefObject
+} from 'react'
 
 const TopArea = styled.div`
   display: flex;
@@ -8,6 +15,20 @@ const TopArea = styled.div`
   width: 60%;
   max-width: 1000px;
   /* padding: 0% max(20%, 100px); */
+`
+
+// Shared by every list page's toolbar (Projects/Tasks/Samples): a left-hand action-button
+// group and a right-hand filter/search group. flex-wrap lets the right group drop to its
+// own line instead of being squeezed off-screen once the left group grows past one row
+// (e.g. select mode's batch action buttons) - TopArea's fixed width doesn't grow with them.
+export const BasicListPageTopBar = styled.div`
+  display: flex;
+  width: 100%;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 `
 
 const ContentArea = styled.div`
@@ -46,11 +67,28 @@ const ScrollContainer = styled.div`
 
 export type BasicListPageProps = {
   top: ReactNode
+  /** Lets a caller share this page's scroll element with something outside it - a
+   *  virtualizer (see VirtualizedItemList) needs the actual scrolling DOM node to measure
+   *  against, which this component otherwise keeps entirely to itself. Optional: a page
+   *  that isn't virtualizing its content doesn't need to provide one. */
+  scrollContainerRef?: RefObject<HTMLDivElement | null>
+  /** Relaxes the default 60%/1000px column cap to 90%/1400px - for a page whose content
+   *  genuinely needs more horizontal room than a plain list of rows (e.g.
+   *  CopyAnnotationsPage's side-by-side thumbnail/select mapping rows), rather than one
+   *  that's just a list and should stay narrow like Projects/Tasks/Samples. */
+  wide?: boolean
 }
 
-export const BasicListPage: FC<PropsWithChildren<BasicListPageProps>> = ({ children, top }) => {
-  const scrollRef = useRef<HTMLDivElement>(null)
+export const BasicListPage: FC<PropsWithChildren<BasicListPageProps>> = ({
+  children,
+  top,
+  scrollContainerRef,
+  wide
+}) => {
+  const ownScrollRef = useRef<HTMLDivElement>(null)
+  const scrollRef = scrollContainerRef ?? ownScrollRef
   const scrollTopRef = useRef(0)
+  const widthStyle = wide ? { width: '90%', maxWidth: 1400 } : undefined
 
   // Restores scrollTop on setup (mount, and the resetup that happens when this page's
   // <Activity> boundary goes from hidden back to visible - see the ScrollContainer comment).
@@ -66,7 +104,7 @@ export const BasicListPage: FC<PropsWithChildren<BasicListPageProps>> = ({ child
   return (
     <Container>
       <Flex direction={'column'} w={'100%'} h={'100%'} align={'center'}>
-        <TopArea>{top}</TopArea>
+        <TopArea style={widthStyle}>{top}</TopArea>
         <Space h="md" />
         <ScrollContainer
           ref={scrollRef}
@@ -80,7 +118,7 @@ export const BasicListPage: FC<PropsWithChildren<BasicListPageProps>> = ({ child
             scrollTopRef.current = el.scrollTop
           }}
         >
-          <ContentArea>{children}</ContentArea>
+          <ContentArea style={widthStyle}>{children}</ContentArea>
         </ScrollContainer>
       </Flex>
     </Container>
