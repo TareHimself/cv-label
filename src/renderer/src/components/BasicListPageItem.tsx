@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react'
 import { Checkbox, Group, Paper, Skeleton, Text, ThemeIcon } from '@mantine/core'
 import type { FC, MouseEventHandler, ReactNode } from 'react'
-import { MdChevronRight, MdDeleteOutline, MdEdit } from 'react-icons/md'
+import { MdChevronRight, MdDeleteOutline, MdEdit, MdOutlineSmartToy } from 'react-icons/md'
 import { useContextMenu } from 'mantine-contextmenu'
 
 const ROW_PADDING = '14px 18px'
@@ -44,6 +44,8 @@ export type BasicListPageItemProps = {
   tags?: ReactNode
   onClick: () => void
   onEdit?: () => void
+  onManageAnnotators?: () => void
+  onAutoLabel?: () => void
   onDelete?: () => void
   /** Whether the list is currently in select mode - while true, clicking the row
    *  anywhere (not just the checkbox) toggles selection instead of firing onClick, and
@@ -66,6 +68,8 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   tags,
   onClick,
   onEdit,
+  onManageAnnotators,
+  onAutoLabel,
   onDelete,
   selectMode,
   selected,
@@ -79,6 +83,26 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   const editDeleteItems = [
     ...(onEdit
       ? [{ key: 'edit', icon: <MdEdit size={16} />, title: 'Edit', onClick: onEdit }]
+      : []),
+    ...(onManageAnnotators
+      ? [
+          {
+            key: 'manage-annotators',
+            icon: <MdOutlineSmartToy size={16} />,
+            title: 'Manage Annotators',
+            onClick: onManageAnnotators
+          }
+        ]
+      : []),
+    ...(onAutoLabel
+      ? [
+          {
+            key: 'auto-label',
+            icon: <MdOutlineSmartToy size={16} />,
+            title: 'Auto-label',
+            onClick: onAutoLabel
+          }
+        ]
       : []),
     ...(onDelete
       ? [
