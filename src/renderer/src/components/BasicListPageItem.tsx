@@ -3,6 +3,7 @@ import { Checkbox, Group, Paper, Skeleton, Text, ThemeIcon } from '@mantine/core
 import type { FC, MouseEventHandler, ReactNode } from 'react'
 import {
   MdChevronRight,
+  MdContentCopy,
   MdDeleteOutline,
   MdEdit,
   MdLabel,
@@ -57,6 +58,9 @@ export type BasicListPageItemProps = {
   /** Exports just this item - only offered outside select mode, where batch export
    *  (acting on the whole selection instead) takes over. */
   onExport?: () => void
+  /** Copies this item's samples' annotations into another task - only offered outside
+   *  select mode, same as onExport (both are inherently single-source actions). */
+  onCopyAnnotations?: () => void
   onDelete?: () => void
   /** Whether the list is currently in select mode - while true, clicking the row
    *  anywhere (not just the checkbox) toggles selection instead of firing onClick, and
@@ -87,6 +91,7 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   onAutoLabel,
   onEditTags,
   onExport,
+  onCopyAnnotations,
   onDelete,
   selectMode,
   selected,
@@ -127,6 +132,16 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
       : []),
     ...(onExport && !selectMode
       ? [{ key: 'export', icon: <FaFileExport size={16} />, title: 'Export', onClick: onExport }]
+      : []),
+    ...(onCopyAnnotations && !selectMode
+      ? [
+          {
+            key: 'copy-annotations',
+            icon: <MdContentCopy size={16} />,
+            title: 'Copy Annotations',
+            onClick: onCopyAnnotations
+          }
+        ]
       : []),
     ...(onDelete
       ? [

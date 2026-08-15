@@ -7,6 +7,7 @@ export type AppRoutes = {
   tasks: { project: IProject }
   samples: { project: IProject; task: ITask }
   label: { project: IProject; task: ITask; samples: OptimisticSample[]; initial: number }
+  'copy-annotations': { project: IProject; sourceTask: ITask }
 }
 
 // No page components imported here on purpose - pages' hooks import navigate/back from
