@@ -1,19 +1,28 @@
-import { Badge, Button, Group, Modal, Stack, TextInput } from '@mantine/core'
-import type { IProject } from '@shared/types'
+import { Button, Flex, Group, Modal, ScrollArea, Stack, TextInput } from '@mantine/core'
+import type { ILabel, IProject } from '@shared/types'
 import { useState, type FC } from 'react'
-import tinycolor from 'tinycolor2'
 import { ZIndex } from '@renderer/zIndex'
 import { AsyncButton } from '@renderer/components/AsyncButton'
+import { ColorPicker } from '@renderer/components/ColorPicker'
+import { useArray } from '@renderer/hooks/useArray'
+import { randomHexColor } from '@shared/color'
+import { makeUUID } from '@shared/utils'
+import { MdDeleteOutline } from 'react-icons/md'
 
 export type EditProjectModalProps = {
   opened: boolean
   project: IProject | null
   onCancel: () => void
-  onConfirm: (name: string, labels: { id: string; name: string }[]) => Promise<unknown>
+  onConfirm: (
+    name: string,
+    labels: { id: string; name: string; color: string }[]
+  ) => Promise<unknown>
 }
 
-/** Only renames the project and its existing labels - adding/removing labels isn't
- *  supported here since a label already used by an annotation can't be deleted. Controlled
+/** Renames the project, edits existing labels (including their colors), and lets new
+ *  labels be added - existing labels still can't be removed here, since one already
+ *  used by an annotation can't be deleted. A label added (and not yet saved) in this
+ *  same session can be removed again freely, since nothing references it yet. Controlled
  *  by mounting with `key={project?.id}` so state resets when the target project changes. */
 export const EditProjectModal: FC<EditProjectModalProps> = ({
   opened,
@@ -22,20 +31,19 @@ export const EditProjectModal: FC<EditProjectModalProps> = ({
   onConfirm
 }) => {
   const [name, setName] = useState(project?.name ?? '')
-  const [labelNames, setLabelNames] = useState<Record<string, string>>(
-    Object.fromEntries((project?.labels ?? []).map((l) => [l.id, l.name]))
-  )
+  // Only ids the project already had when this modal opened are "existing" - anything
+  // added afterward stays removable for the rest of this session.
+  const [existingLabelIds] = useState(() => new Set((project?.labels ?? []).map((l) => l.id)))
+  // useArray mutates its initial array in place (push/splice/etc. act directly on the
+  // reference it's given) - a shallow copy here keeps that from reaching back into
+  // project.labels itself, which react-query still owns.
+  const labels = useArray<ILabel>((project?.labels ?? []).map((l) => ({ ...l })))
 
-  const labels = project?.labels ?? []
-  const canSave =
-    name.trim().length > 0 && labels.every((l) => (labelNames[l.id] ?? '').trim().length > 0)
+  const canSave = name.trim().length > 0 && labels.every((l) => l.name.trim().length > 0)
 
   const confirm = () => {
     if (!canSave) return Promise.resolve()
-    return onConfirm(
-      name.trim(),
-      labels.map((l) => ({ id: l.id, name: (labelNames[l.id] ?? l.name).trim() }))
-    )
+    return onConfirm(name.trim(), labels.resolve())
   }
 
   return (
@@ -53,28 +61,62 @@ export const EditProjectModal: FC<EditProjectModalProps> = ({
           onChange={(e) => setName(e.target.value)}
           data-autofocus
         />
+        <Flex justify="flex-end">
+          <Button
+            variant="outline"
+            onClick={() => {
+              labels.push({ id: makeUUID(), name: '', color: randomHexColor() })
+            }}
+          >
+            Add Label
+          </Button>
+        </Flex>
         {labels.length > 0 && (
-          <Stack gap="xs">
-            {labels.map((label) => (
-              <TextInput
-                key={label.id}
-                value={labelNames[label.id] ?? label.name}
-                onChange={(e) =>
-                  setLabelNames((current) => ({ ...current, [label.id]: e.target.value }))
-                }
-                leftSection={
-                  <Badge
-                    size="xs"
-                    circle
-                    style={{
-                      backgroundColor: label.color,
-                      color: tinycolor(label.color).isLight() ? '#000' : '#fff'
+          <ScrollArea style={{ maxHeight: 240 }} type="always" scrollbars="y">
+            <Stack gap="xs">
+              {labels.map((label) => (
+                <Flex key={label.id} align="center" gap="xs">
+                  <TextInput
+                    flex={1}
+                    placeholder="Label Name"
+                    required
+                    value={label.name}
+                    leftSection={
+                      <ColorPicker
+                        initial={label.color}
+                        style={{ width: 18, height: 18, borderRadius: '50%' }}
+                        onChange={(color) => {
+                          labels.mutate((arr) => {
+                            const item = arr.find((l) => l.id === label.id)
+                            if (item !== undefined) item.color = color
+                          })
+                        }}
+                      />
+                    }
+                    onChange={(e) => {
+                      labels.mutate((arr) => {
+                        const item = arr.find((l) => l.id === label.id)
+                        if (item !== undefined) item.name = e.target.value
+                      })
                     }}
                   />
-                }
-              />
-            ))}
-          </Stack>
+                  {!existingLabelIds.has(label.id) && (
+                    <Button
+                      aria-label={`Remove ${label.name.trim() || 'label'}`}
+                      variant="subtle"
+                      color="red"
+                      onClick={() => {
+                        const idx = labels.findIndex((l) => l.id === label.id)
+                        if (idx !== -1) labels.splice(idx, 1)
+                      }}
+                    >
+                      <MdDeleteOutline />
+                    </Button>
+                  )}
+                </Flex>
+              ))}
+            </Stack>
+          </ScrollArea>
         )}
         <Group justify="flex-end">
           <Button variant="outline" onClick={onCancel}>

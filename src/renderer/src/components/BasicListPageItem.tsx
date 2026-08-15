@@ -8,6 +8,7 @@ import {
   MdLabel,
   MdOutlineSmartToy
 } from 'react-icons/md'
+import { FaFileExport } from 'react-icons/fa'
 import { useContextMenu } from 'mantine-contextmenu'
 
 const ROW_PADDING = '14px 18px'
@@ -53,6 +54,9 @@ export type BasicListPageItemProps = {
   onManageAnnotators?: () => void
   onAutoLabel?: () => void
   onEditTags?: () => void
+  /** Exports just this item - only offered outside select mode, where batch export
+   *  (acting on the whole selection instead) takes over. */
+  onExport?: () => void
   onDelete?: () => void
   /** Whether the list is currently in select mode - while true, clicking the row
    *  anywhere (not just the checkbox) toggles selection instead of firing onClick, and
@@ -82,6 +86,7 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
   onManageAnnotators,
   onAutoLabel,
   onEditTags,
+  onExport,
   onDelete,
   selectMode,
   selected,
@@ -119,6 +124,9 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
       : []),
     ...(onEditTags
       ? [{ key: 'edit-tags', icon: <MdLabel size={16} />, title: 'Edit Tags', onClick: onEditTags }]
+      : []),
+    ...(onExport && !selectMode
+      ? [{ key: 'export', icon: <FaFileExport size={16} />, title: 'Export', onClick: onExport }]
       : []),
     ...(onDelete
       ? [
