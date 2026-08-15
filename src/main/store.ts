@@ -70,6 +70,17 @@ handleIpc(IPCKeys.Store_CreateTask, (...args) => orchestrator.current.createTask
 handleIpc(IPCKeys.Store_UpdateTasks, (...args) => orchestrator.current.updateTasks(...args))
 handleIpc(IPCKeys.Store_DeleteTasks, (...args) => orchestrator.current.deleteTasks(...args))
 
+handleIpc(IPCKeys.Store_GetTagsForProject, (...args) =>
+  orchestrator.current.getTagsForProject(...args)
+)
+handleIpc(IPCKeys.Store_CreateTag, (...args) => orchestrator.current.createTag(...args))
+handleIpc(IPCKeys.Store_UpdateTags, (...args) => orchestrator.current.updateTags(...args))
+handleIpc(IPCKeys.Store_DeleteTags, (...args) => orchestrator.current.deleteTags(...args))
+handleIpc(IPCKeys.Store_AddTagsToTasks, (...args) => orchestrator.current.addTagsToTasks(...args))
+handleIpc(IPCKeys.Store_RemoveTagsFromTasks, (...args) =>
+  orchestrator.current.removeTagsFromTasks(...args)
+)
+
 handleIpc(IPCKeys.Store_GetSamplesForTask, (...args) =>
   orchestrator.current.getSamplesForTask(...args)
 )
@@ -89,12 +100,6 @@ handleIpc(IPCKeys.Store_UpdateAnnotations, (...args) =>
 )
 handleIpc(IPCKeys.Store_DeleteAnnotations, (...args) =>
   orchestrator.current.deleteAnnotations(...args)
-)
-
-handleIpc(IPCKeys.Store_GetAnnotators, (...args) => orchestrator.current.getAnnotators(...args))
-handleIpc(IPCKeys.Store_CreateAnnotator, (...args) => orchestrator.current.createAnnotator(...args))
-handleIpc(IPCKeys.Store_DeleteAnnotators, (...args) =>
-  orchestrator.current.deleteAnnotators(...args)
 )
 
 handleIpc(IPCKeys.Store_ReplacePoints, (...args) => orchestrator.current.replacePoints(...args))

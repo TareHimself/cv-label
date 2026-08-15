@@ -2,7 +2,6 @@ import {
   IAnnotation,
   IAnnotationUpdate,
   IDataStore,
-  IAnnotator,
   INewAnnotation,
   ILabel,
   INewSample,
@@ -12,6 +11,8 @@ import {
   IProjectUpdate,
   ISample,
   ISampleUpdate,
+  ITag,
+  ITagUpdate,
   ITask,
   ITaskUpdate
 } from '@shared/types'
@@ -63,6 +64,30 @@ export class IpcDataStore implements IDataStore {
     return window.store.deleteTasks(taskIds)
   }
 
+  getTagsForProject(projectId: string): Promise<ITag[]> {
+    return window.store.getTagsForProject(projectId)
+  }
+
+  createTag(projectId: string, id: string, name: string): Promise<ITag> {
+    return window.store.createTag(projectId, id, name)
+  }
+
+  updateTags(updates: ITagUpdate[]): Promise<ITag[]> {
+    return window.store.updateTags(updates)
+  }
+
+  deleteTags(tagIds: string[]): Promise<boolean[]> {
+    return window.store.deleteTags(tagIds)
+  }
+
+  addTagsToTasks(taskIds: string[], tagIds: string[]): Promise<void> {
+    return window.store.addTagsToTasks(taskIds, tagIds)
+  }
+
+  removeTagsFromTasks(taskIds: string[], tagIds: string[]): Promise<void> {
+    return window.store.removeTagsFromTasks(taskIds, tagIds)
+  }
+
   getSamplesForTask(taskId: string): Promise<ISample[]> {
     return window.store.getSamplesForTask(taskId)
   }
@@ -97,23 +122,6 @@ export class IpcDataStore implements IDataStore {
 
   deleteAnnotations(annotationsIds: string[]): Promise<boolean[]> {
     return window.store.deleteAnnotations(annotationsIds)
-  }
-
-  getAnnotators(projectId: string): Promise<IAnnotator[]> {
-    return window.store.getAnnotators(projectId)
-  }
-
-  createAnnotator(
-    projectId: string,
-    id: string,
-    name: string,
-    url: string,
-    headers: Record<string, string>
-  ): Promise<IAnnotator> {
-    return window.store.createAnnotator(projectId, id, name, url, headers)
-  }
-  deleteAnnotators(externalAnnotatorIds: string[]): Promise<boolean[]> {
-    return window.store.deleteAnnotators(externalAnnotatorIds)
   }
 
   replacePoints(annotationId: string, points: IPointReplacement[]): Promise<IPoint[]> {

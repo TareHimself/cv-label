@@ -16,6 +16,27 @@ export const checkBoundaryResult = <T>(result: Promise<BoundaryResult<T>>) =>
 
 export const mod = (x: number, m: number) => ((x % m) + m) % m
 
+// Chunk size for the fallback path below - comfortably under engines' call-stack-depth
+// limit for a spread argument list, so a multi-megabyte image still encodes without
+// blowing the stack the way `btoa(String.fromCharCode(...bytes))` would in one shot.
+const CHUNK_SIZE = 0x8000
+
+/** Encodes raw bytes as base64, preferring the native `Uint8Array.prototype.toBase64`
+ *  (Electron's renderer has it, but this app's test/dev Node doesn't always) - the
+ *  fallback builds the binary string one chunk at a time before a single `btoa()` call,
+ *  for the same reason: `btoa(String.fromCharCode(...bytes))` in one shot blows the call
+ *  stack on a multi-megabyte image. */
+export const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer)
+  if (typeof bytes.toBase64 === 'function') return bytes.toBase64()
+
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK_SIZE))
+  }
+  return btoa(binary)
+}
+
 export const errorToString = (error: unknown) => {
   if (error instanceof Error) {
     return error.message

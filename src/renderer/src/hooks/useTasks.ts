@@ -21,11 +21,14 @@ export const useTasks = (project: IProject) => {
   const { mutateAsync } = useMutation({
     mutationFn: ({ id, name, samples }: { id: string; name: string; samples: INewSample[] }) =>
       store.createTask(project.id, id, name, samples),
-    onMutate: async ({ id, name }) => {
+    onMutate: async ({ id, name, samples }) => {
       await queryClient.cancelQueries({ queryKey: tasksQueryKey })
       const previousTasks = queryClient.getQueryData<ITask[]>(tasksQueryKey) ?? []
 
-      queryClient.setQueryData<ITask[]>(tasksQueryKey, (current = []) => [...current, { id, name }])
+      queryClient.setQueryData<ITask[]>(tasksQueryKey, (current = []) => [
+        ...current,
+        { id, name, sampleCount: samples.length, completedSampleCount: 0 }
+      ])
 
       return { previousTasks, optimisticId: id }
     },
@@ -122,5 +125,38 @@ export const useTasks = (project: IProject) => {
     [removeMutateAsync]
   )
 
-  return { items, create, open, update, remove, removeMany, isLoading }
+  // Tags are picked by id (see hooks/useTags.ts for the project's vocabulary) and
+  // attached/detached across a whole batch of task ids in one call (see
+  // IDataStore.addTagsToTasks) - simple invalidate-on-success here rather than granular
+  // optimistic patching, since tagging isn't perf-sensitive and the resulting per-task
+  // tag lists are easiest to just re-fetch.
+  const { mutateAsync: addTagsMutateAsync } = useMutation({
+    mutationFn: ({ taskIds, tagIds }: { taskIds: string[]; tagIds: string[] }) =>
+      store.addTagsToTasks(taskIds, tagIds),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksQueryKey })
+  })
+
+  const addTags = useCallback(
+    async (taskIds: string[], tagIds: string[]) => {
+      if (taskIds.length === 0 || tagIds.length === 0) return
+      await addTagsMutateAsync({ taskIds, tagIds })
+    },
+    [addTagsMutateAsync]
+  )
+
+  const { mutateAsync: removeTagsMutateAsync } = useMutation({
+    mutationFn: ({ taskIds, tagIds }: { taskIds: string[]; tagIds: string[] }) =>
+      store.removeTagsFromTasks(taskIds, tagIds),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksQueryKey })
+  })
+
+  const removeTags = useCallback(
+    async (taskIds: string[], tagIds: string[]) => {
+      if (taskIds.length === 0 || tagIds.length === 0) return
+      await removeTagsMutateAsync({ taskIds, tagIds })
+    },
+    [removeTagsMutateAsync]
+  )
+
+  return { items, create, open, update, remove, removeMany, addTags, removeTags, isLoading }
 }

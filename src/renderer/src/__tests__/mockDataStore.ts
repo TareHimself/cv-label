@@ -15,6 +15,13 @@ export const createMockDataStore = (): IDataStore => ({
   updateTasks: vi.fn().mockResolvedValue([]),
   deleteTasks: vi.fn().mockResolvedValue([]),
 
+  getTagsForProject: vi.fn().mockResolvedValue([]),
+  createTag: vi.fn(),
+  updateTags: vi.fn().mockResolvedValue([]),
+  deleteTags: vi.fn().mockResolvedValue([]),
+  addTagsToTasks: vi.fn().mockResolvedValue(undefined),
+  removeTagsFromTasks: vi.fn().mockResolvedValue(undefined),
+
   getSamplesForTask: vi.fn().mockResolvedValue([]),
   getSamples: vi.fn().mockResolvedValue([]),
   createSamples: vi.fn().mockResolvedValue([]),
@@ -25,10 +32,6 @@ export const createMockDataStore = (): IDataStore => ({
   createAnnotations: vi.fn().mockResolvedValue([]),
   updateAnnotations: vi.fn().mockResolvedValue([]),
   deleteAnnotations: vi.fn().mockResolvedValue([]),
-
-  getAnnotators: vi.fn().mockResolvedValue([]),
-  createAnnotator: vi.fn(),
-  deleteAnnotators: vi.fn().mockResolvedValue([]),
 
   replacePoints: vi.fn().mockResolvedValue([])
 })

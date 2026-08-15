@@ -8,6 +8,34 @@
       "when": 1785170896576,
       "tag": "0000_brief_silver_centurion",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785502659947,
+      "tag": "0001_great_silk_fever",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785714224005,
+      "tag": "0002_little_wild_child",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785717790383,
+      "tag": "0003_previous_rick_jones",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785721088642,
+      "tag": "0004_polite_nico_minoru",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,6 @@ import {
   ArchiveManifest,
   IAnnotation,
   IAnnotationUpdate,
-  IAnnotator,
   ILabel,
   INewAnnotation,
   INewSample,
@@ -17,6 +16,8 @@ import {
   IProjectUpdate,
   ISample,
   ISampleUpdate,
+  ITag,
+  ITagUpdate,
   ITask,
   ITaskUpdate
 } from '../shared/types'
@@ -75,6 +76,24 @@ export class LocalStore implements IMainDataStore {
   deleteTasks = async (taskIds: string[]): Promise<boolean[]> =>
     (await this.ensureWorker()).deleteTasks(taskIds)
 
+  getTagsForProject = async (projectId: string): Promise<ITag[]> =>
+    (await this.ensureWorker()).getTagsForProject(projectId)
+
+  createTag = async (projectId: string, id: string, name: string): Promise<ITag> =>
+    (await this.ensureWorker()).createTag(projectId, id, name)
+
+  updateTags = async (updates: ITagUpdate[]): Promise<ITag[]> =>
+    (await this.ensureWorker()).updateTags(updates)
+
+  deleteTags = async (tagIds: string[]): Promise<boolean[]> =>
+    (await this.ensureWorker()).deleteTags(tagIds)
+
+  addTagsToTasks = async (taskIds: string[], tagIds: string[]): Promise<void> =>
+    (await this.ensureWorker()).addTagsToTasks(taskIds, tagIds)
+
+  removeTagsFromTasks = async (taskIds: string[], tagIds: string[]): Promise<void> =>
+    (await this.ensureWorker()).removeTagsFromTasks(taskIds, tagIds)
+
   getSamplesForTask = async (taskId: string): Promise<ISample[]> =>
     (await this.ensureWorker()).getSamplesForTask(taskId)
 
@@ -103,21 +122,6 @@ export class LocalStore implements IMainDataStore {
 
   deleteAnnotations = async (annotationsIds: string[]): Promise<boolean[]> =>
     (await this.ensureWorker()).deleteAnnotations(annotationsIds)
-
-  getAnnotators = async (projectId: string): Promise<IAnnotator[]> =>
-    (await this.ensureWorker()).getAnnotators(projectId)
-
-  createAnnotator = async (
-    projectId: string,
-    id: string,
-    name: string,
-    annotatorUrl: string,
-    headers: Record<string, string>
-  ): Promise<IAnnotator> =>
-    (await this.ensureWorker()).createAnnotator(projectId, id, name, annotatorUrl, headers)
-
-  deleteAnnotators = async (annotatorIds: string[]): Promise<boolean[]> =>
-    (await this.ensureWorker()).deleteAnnotators(annotatorIds)
 
   replacePoints = async (annotationId: string, points: IPointReplacement[]): Promise<IPoint[]> =>
     (await this.ensureWorker()).replacePoints(annotationId, points)

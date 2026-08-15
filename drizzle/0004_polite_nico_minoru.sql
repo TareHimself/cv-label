@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `idx_tags_project_name` ON `tags` (`projectId`,`name`);
