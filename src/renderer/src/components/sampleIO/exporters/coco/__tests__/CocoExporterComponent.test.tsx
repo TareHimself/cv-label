@@ -69,7 +69,8 @@ describe('CocoExporterComponent', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
     expect(runExport).toHaveBeenCalledTimes(1)
     const [suggestedName, manifest] = runExport.mock.calls[0]
-    expect(suggestedName).toBe('Street Signs-coco-export.zip')
+    // A single task exported alone suggests that task's own name, not the project's.
+    expect(suggestedName).toBe('Batch 1-coco-export.zip')
     expect(manifest.imageEntries).toEqual([
       { path: 'train/s1.jpg', imageUri: 'cv-label-image://s1.jpg' }
     ])
@@ -92,6 +93,27 @@ describe('CocoExporterComponent', () => {
       ],
       categories: [{ id: 1, name: 'Stop Sign', supercategory: 'none' }]
     })
+  })
+
+  it('suggests the project name when exporting more than one task', async () => {
+    const onComplete = vi.fn()
+    const multipleTasks: ITask[] = [...tasks, { id: 't2', name: 'Batch 2' }]
+
+    renderWithProviders(
+      <CocoExporterComponent
+        project={project}
+        tasks={multipleTasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([sample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const [suggestedName] = runExport.mock.calls[0]
+    expect(suggestedName).toBe('Street Signs-coco-export.zip')
   })
 
   it('switches to Segments and gives a plain Box a synthesized rectangular segmentation', async () => {
@@ -120,13 +142,13 @@ describe('CocoExporterComponent', () => {
     expect(annotations[0].segmentation).toEqual([[10, 20, 110, 20, 110, 70, 10, 70]])
   })
 
-  it("switches to Bounding Boxes and discards a Mask annotation's real outline", async () => {
-    const maskSample: ISample = {
+  it("switches to Bounding Boxes and discards a Polygon annotation's real outline", async () => {
+    const polygonSample: ISample = {
       ...sample,
       annotations: [
         {
           id: 'a1',
-          type: AnnotationType.Mask,
+          type: AnnotationType.Polygon,
           labelId: 'l1',
           points: [
             { id: 'p0', x: 0, y: 0 },
@@ -142,7 +164,7 @@ describe('CocoExporterComponent', () => {
       <CocoExporterComponent
         project={project}
         tasks={tasks}
-        getSamplesForTask={vi.fn().mockResolvedValue([maskSample])}
+        getSamplesForTask={vi.fn().mockResolvedValue([polygonSample])}
         onComplete={onComplete}
         onCancel={vi.fn()}
       />
@@ -160,6 +182,113 @@ describe('CocoExporterComponent', () => {
 
     expect(annotations[0].bbox).toEqual([0, 0, 20, 10])
     expect(annotations[0].segmentation).toEqual([])
+  })
+
+  it("excludes a label marked Don't Export: its annotations and category are dropped, the image stays", async () => {
+    const twoLabelProject: IProject = {
+      id: 'p1',
+      name: 'Street Signs',
+      labels: [
+        { id: 'l1', name: 'Stop Sign', color: '#ff0000' },
+        { id: 'l2', name: 'Yield Sign', color: '#00ff00' }
+      ]
+    }
+    const twoLabelSample: ISample = {
+      ...sample,
+      annotations: [
+        ...sample.annotations,
+        {
+          id: 'a2',
+          type: AnnotationType.Box,
+          labelId: 'l2',
+          points: [
+            { id: 'p2', x: 0, y: 0 },
+            { id: 'p3', x: 5, y: 5 }
+          ]
+        }
+      ]
+    }
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <CocoExporterComponent
+        project={twoLabelProject}
+        tasks={tasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([twoLabelSample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByDisplayValue('Yield Sign'))
+    fireEvent.click(await screen.findByRole('option', { name: "Don't Export" }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const manifest = runExport.mock.calls[0][1]
+    expect(manifest.imageEntries).toEqual([
+      { path: 'train/s1.jpg', imageUri: 'cv-label-image://s1.jpg' }
+    ])
+    const { annotations, categories } = JSON.parse(
+      manifest.textEntries.find((e: { path: string }) => e.path === 'train/_annotations.coco.json')
+        .content
+    )
+    expect(categories).toEqual([{ id: 1, name: 'Stop Sign', supercategory: 'none' }])
+    expect(annotations).toHaveLength(1)
+    expect(annotations[0].category_id).toBe(1)
+  })
+
+  it('merges one label into another: both end up under a single category', async () => {
+    const twoLabelProject: IProject = {
+      id: 'p1',
+      name: 'Street Signs',
+      labels: [
+        { id: 'l1', name: 'Stop Sign', color: '#ff0000' },
+        { id: 'l2', name: 'Yield Sign', color: '#00ff00' }
+      ]
+    }
+    const twoLabelSample: ISample = {
+      ...sample,
+      annotations: [
+        ...sample.annotations,
+        {
+          id: 'a2',
+          type: AnnotationType.Box,
+          labelId: 'l2',
+          points: [
+            { id: 'p2', x: 0, y: 0 },
+            { id: 'p3', x: 5, y: 5 }
+          ]
+        }
+      ]
+    }
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <CocoExporterComponent
+        project={twoLabelProject}
+        tasks={tasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([twoLabelSample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByDisplayValue('Yield Sign'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Stop Sign' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const manifest = runExport.mock.calls[0][1]
+    const { annotations, categories } = JSON.parse(
+      manifest.textEntries.find((e: { path: string }) => e.path === 'train/_annotations.coco.json')
+        .content
+    )
+    expect(categories).toEqual([{ id: 1, name: 'Stop Sign', supercategory: 'none' }])
+    expect(annotations).toHaveLength(2)
+    expect(annotations.every((a: { category_id: number }) => a.category_id === 1)).toBe(true)
   })
 
   it('does not call onComplete when the user cancels the save dialog', async () => {

@@ -67,7 +67,8 @@ describe('YoloExporterComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
-    expect(runExport).toHaveBeenCalledWith('Street Signs-yolo-export.zip', {
+    // A single task exported alone suggests that task's own name, not the project's.
+    expect(runExport).toHaveBeenCalledWith('Batch 1-yolo-export.zip', {
       textEntries: [
         { path: 'labels/train/s1.txt', content: '0 0.500000 0.333333 0.500000 0.333333\n' },
         {
@@ -78,6 +79,27 @@ describe('YoloExporterComponent', () => {
       ],
       imageEntries: [{ path: 'images/train/s1.jpg', imageUri: 'cv-label-image://s1.jpg' }]
     })
+  })
+
+  it('suggests the project name when exporting more than one task', async () => {
+    const onComplete = vi.fn()
+    const multipleTasks: ITask[] = [...tasks, { id: 't2', name: 'Batch 2' }]
+
+    renderWithProviders(
+      <YoloExporterComponent
+        project={project}
+        tasks={multipleTasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([sample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const [suggestedName] = runExport.mock.calls[0]
+    expect(suggestedName).toBe('Street Signs-yolo-export.zip')
   })
 
   it('switches to Segments and exports the box as its own 4-corner polygon', async () => {
@@ -102,6 +124,113 @@ describe('YoloExporterComponent', () => {
       path: 'labels/train/s1.txt',
       content: '0 0.250000 0.166667 0.750000 0.166667 0.750000 0.500000 0.250000 0.500000\n'
     })
+  })
+
+  it("excludes a label marked Don't Export: its label line and data.yaml entry are dropped", async () => {
+    const twoLabelProject: IProject = {
+      id: 'p1',
+      name: 'Street Signs',
+      labels: [
+        { id: 'l1', name: 'Stop Sign', color: '#ff0000' },
+        { id: 'l2', name: 'Yield Sign', color: '#00ff00' }
+      ]
+    }
+    const twoLabelSample: ISample = {
+      ...sample,
+      annotations: [
+        ...sample.annotations,
+        {
+          id: 'a2',
+          type: AnnotationType.Box,
+          labelId: 'l2',
+          points: [
+            { id: 'p2', x: 0, y: 0 },
+            { id: 'p3', x: 40, y: 20 }
+          ]
+        }
+      ]
+    }
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <YoloExporterComponent
+        project={twoLabelProject}
+        tasks={tasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([twoLabelSample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByDisplayValue('Yield Sign'))
+    fireEvent.click(await screen.findByRole('option', { name: "Don't Export" }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const manifest = runExport.mock.calls[0][1]
+    const labelEntry = manifest.textEntries.find(
+      (e: { path: string }) => e.path === 'labels/train/s1.txt'
+    )
+    expect(labelEntry.content.trim().split('\n')).toHaveLength(1)
+    expect(labelEntry.content).toMatch(/^0 /)
+    const dataYaml = manifest.textEntries.find((e: { path: string }) => e.path === 'data.yaml')
+    expect(dataYaml.content).toContain('Stop Sign')
+    expect(dataYaml.content).not.toContain('Yield Sign')
+  })
+
+  it('merges one label into another: both label lines share a single class id', async () => {
+    const twoLabelProject: IProject = {
+      id: 'p1',
+      name: 'Street Signs',
+      labels: [
+        { id: 'l1', name: 'Stop Sign', color: '#ff0000' },
+        { id: 'l2', name: 'Yield Sign', color: '#00ff00' }
+      ]
+    }
+    const twoLabelSample: ISample = {
+      ...sample,
+      annotations: [
+        ...sample.annotations,
+        {
+          id: 'a2',
+          type: AnnotationType.Box,
+          labelId: 'l2',
+          points: [
+            { id: 'p2', x: 0, y: 0 },
+            { id: 'p3', x: 40, y: 20 }
+          ]
+        }
+      ]
+    }
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <YoloExporterComponent
+        project={twoLabelProject}
+        tasks={tasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([twoLabelSample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByDisplayValue('Yield Sign'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Stop Sign' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const manifest = runExport.mock.calls[0][1]
+    const labelEntry = manifest.textEntries.find(
+      (e: { path: string }) => e.path === 'labels/train/s1.txt'
+    )
+    const lines = labelEntry.content.trim().split('\n')
+    expect(lines).toHaveLength(2)
+    expect(lines.every((line: string) => line.startsWith('0 '))).toBe(true)
+    const dataYaml = manifest.textEntries.find((e: { path: string }) => e.path === 'data.yaml')
+    expect(dataYaml.content).toContain('Stop Sign')
+    expect(dataYaml.content).not.toContain('Yield Sign')
   })
 
   it('does not call onComplete when the user cancels the save dialog', async () => {

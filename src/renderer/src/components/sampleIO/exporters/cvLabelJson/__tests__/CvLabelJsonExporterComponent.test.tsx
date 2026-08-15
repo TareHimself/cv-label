@@ -61,7 +61,8 @@ describe('CvLabelJsonExporterComponent', () => {
     expect(getSamplesForTask).toHaveBeenCalledWith('t1')
     expect(runExport).toHaveBeenCalledTimes(1)
     const [suggestedName, manifest] = runExport.mock.calls[0]
-    expect(suggestedName).toBe('Street Signs.cvlabel')
+    // A single task exported alone suggests that task's own name, not the project's.
+    expect(suggestedName).toBe('Batch 1.cvlabel')
     expect(manifest.imageEntries).toEqual([
       { path: 'images/s1.png', imageUri: 'cv-label-image://s1.png' }
     ])
@@ -84,6 +85,115 @@ describe('CvLabelJsonExporterComponent', () => {
         }
       ]
     })
+  })
+
+  it('suggests the project name when exporting more than one task', async () => {
+    const onComplete = vi.fn()
+    const multipleTasks: ITask[] = [...tasks, { id: 't2', name: 'Batch 2' }]
+
+    renderWithProviders(
+      <CvLabelJsonExporterComponent
+        project={project}
+        tasks={multipleTasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([sample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const [suggestedName] = runExport.mock.calls[0]
+    expect(suggestedName).toBe('Street Signs.cvlabel')
+  })
+
+  it("excludes a label marked Don't Export: its annotations drop, the label list shrinks", async () => {
+    const twoLabelProject: IProject = {
+      id: 'p1',
+      name: 'Street Signs',
+      labels: [
+        { id: 'l1', name: 'Stop Sign', color: '#ff0000' },
+        { id: 'l2', name: 'Yield Sign', color: '#00ff00' }
+      ]
+    }
+    const twoLabelSample: ISample = {
+      ...sample,
+      annotations: [
+        ...sample.annotations,
+        { id: 'a2', type: AnnotationType.Box, labelId: 'l2', points: [] }
+      ]
+    }
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <CvLabelJsonExporterComponent
+        project={twoLabelProject}
+        tasks={tasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([twoLabelSample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByDisplayValue('Yield Sign'))
+    fireEvent.click(await screen.findByRole('option', { name: "Don't Export" }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const manifest = runExport.mock.calls[0][1]
+    const manifestJson = JSON.parse(
+      manifest.textEntries.find((e: { path: string }) => e.path === 'manifest.json').content
+    )
+    expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign' }])
+    expect(manifestJson.samples[0].annotations).toHaveLength(1)
+    expect(manifestJson.samples[0].annotations[0].labelId).toBe('l1')
+  })
+
+  it('merges one label into another: the merged annotation is remapped to the target', async () => {
+    const twoLabelProject: IProject = {
+      id: 'p1',
+      name: 'Street Signs',
+      labels: [
+        { id: 'l1', name: 'Stop Sign', color: '#ff0000' },
+        { id: 'l2', name: 'Yield Sign', color: '#00ff00' }
+      ]
+    }
+    const twoLabelSample: ISample = {
+      ...sample,
+      annotations: [
+        ...sample.annotations,
+        { id: 'a2', type: AnnotationType.Box, labelId: 'l2', points: [] }
+      ]
+    }
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <CvLabelJsonExporterComponent
+        project={twoLabelProject}
+        tasks={tasks}
+        getSamplesForTask={vi.fn().mockResolvedValue([twoLabelSample])}
+        onComplete={onComplete}
+        onCancel={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByDisplayValue('Yield Sign'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Stop Sign' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const manifest = runExport.mock.calls[0][1]
+    const manifestJson = JSON.parse(
+      manifest.textEntries.find((e: { path: string }) => e.path === 'manifest.json').content
+    )
+    expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign' }])
+    expect(manifestJson.samples[0].annotations).toHaveLength(2)
+    expect(
+      manifestJson.samples[0].annotations.every((a: { labelId: string }) => a.labelId === 'l1')
+    ).toBe(true)
   })
 
   it('does not call onComplete when the user cancels the save dialog', async () => {

@@ -4,7 +4,7 @@ import { boundingBoxOf, exportShapePoints, ExportShape, polygonArea } from '../a
 /** Unlike YOLO's fixed-column label lines, a COCO annotation entry can carry a bbox and
  *  an independent (optional) segmentation, so it supports a third choice beyond forcing
  *  every annotation to one shape: Native, which leaves each annotation's segmentation as
- *  whatever it actually has - none for a Box, its real outline for a Mask. */
+ *  whatever it actually has - none for a Box, its real outline for a Polygon. */
 export enum CocoShapeMode {
   Box = 'box',
   Segment = 'segment',
@@ -50,10 +50,11 @@ const cocoSegmentationFor = (
 
 /** Converts one sample's annotations to COCO annotation entries. `bbox` is always the
  *  annotation's own bounding box. `segmentation` depends on the mode: Box discards any
- *  shape entirely (pure detection data, even for a Mask); Segment gives every annotation
- *  a polygon (a Box's own 4 corners, synthesized, if it has no real one); Native leaves a
- *  Box with no segmentation (it never had one) and a Mask with its real outline. `area`
- *  uses the real polygon's area only when that's what's actually being exported. */
+ *  shape entirely (pure detection data, even for a Polygon); Segment gives every
+ *  annotation a polygon (a Box's own 4 corners, synthesized, if it has no real one);
+ *  Native leaves a Box with no segmentation (it never had one) and a Polygon with its
+ *  real outline. `area` uses the real polygon's area only when that's what's actually
+ *  being exported. */
 export const buildCocoAnnotations = (
   annotations: IAnnotation[],
   imageId: number,
@@ -69,7 +70,7 @@ export const buildCocoAnnotations = (
     if (categoryId === undefined) continue
 
     const box = boundingBoxOf(annotation.points)
-    const isRealPolygon = mode !== CocoShapeMode.Box && annotation.type === AnnotationType.Mask
+    const isRealPolygon = mode !== CocoShapeMode.Box && annotation.type === AnnotationType.Polygon
 
     result.push({
       id: nextAnnotationId(),

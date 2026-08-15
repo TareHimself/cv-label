@@ -37,7 +37,7 @@ describe('buildCocoAnnotations', () => {
     { id: 'p0', x: 10, y: 20 },
     { id: 'p1', x: 110, y: 70 }
   ])
-  const mask = makeAnnotation(AnnotationType.Mask, 'l1', [
+  const polygon = makeAnnotation(AnnotationType.Polygon, 'l1', [
     { id: 'p0', x: 0, y: 0 },
     { id: 'p1', x: 20, y: 0 },
     { id: 'p2', x: 20, y: 10 },
@@ -67,9 +67,9 @@ describe('buildCocoAnnotations', () => {
       ])
     })
 
-    it('keeps a Mask annotation as its own polygon, deriving bbox and area from it', () => {
+    it('keeps a Polygon annotation as its own polygon, deriving bbox and area from it', () => {
       const [entry] = buildCocoAnnotations(
-        [mask],
+        [polygon],
         1,
         new Map([['l1', 1]]),
         nextId(),
@@ -96,9 +96,9 @@ describe('buildCocoAnnotations', () => {
       expect(entry.segmentation).toEqual([])
     })
 
-    it('flattens a Mask annotation to its bounding box, discarding the real outline', () => {
+    it('flattens a Polygon annotation to its bounding box, discarding the real outline', () => {
       const [entry] = buildCocoAnnotations(
-        [mask],
+        [polygon],
         1,
         new Map([['l1', 1]]),
         nextId(),
@@ -125,9 +125,9 @@ describe('buildCocoAnnotations', () => {
       expect(entry.segmentation).toEqual([])
     })
 
-    it('keeps a Mask annotation as its real outline', () => {
+    it('keeps a Polygon annotation as its real outline', () => {
       const [entry] = buildCocoAnnotations(
-        [mask],
+        [polygon],
         1,
         new Map([['l1', 1]]),
         nextId(),

@@ -1,9 +1,9 @@
 import { useRef, useState, type ChangeEvent, type FC } from 'react'
-import { Button, Group, Loader, Progress, ScrollArea, Select, Stack, Text } from '@mantine/core'
+import { Button, Group, Loader, Progress, Stack, Text } from '@mantine/core'
 import toast from 'react-hot-toast'
 import { FaFileZipper, FaFolderOpen } from 'react-icons/fa6'
 import type { SampleImporterComponentProps } from '../../types'
-import { ZIndex } from '@renderer/zIndex'
+import { LabelMapper } from '../../LabelMapper'
 import { findLabelIdByName } from '../matchLabel'
 import {
   virtualFilesFromExtractedZip,
@@ -30,7 +30,7 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
   onCancel
 }) => {
   const [state, setState] = useState<WizardState>({ step: 'select-source' })
-  const [labelByClassId, setLabelByClassId] = useState<Map<number, string>>(new Map())
+  const [labelByClassId, setLabelByClassId] = useState<Map<number, string | null>>(new Map())
   const zipInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
   const scratchDirRef = useRef<string | null>(null)
@@ -63,7 +63,7 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
             c.id,
             findLabelIdByName(project.labels, c.name) ?? project.labels[0]?.id
           ]) as [number, string | undefined][]
-        ) as Map<number, string>
+        ) as Map<number, string | null>
       )
       setState({ step: 'mapping', classes, pairs })
     } catch (error) {
@@ -197,39 +197,22 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
           This project has no labels yet - add one before importing.
         </Text>
       )}
-      <ScrollArea style={{ maxHeight: 260 }} type="always" scrollbars="y">
-        <Stack gap="sm">
-          {classes.map((cocoClass) => (
-            <Group key={cocoClass.id} wrap="nowrap">
-              <Text size="sm" flex={1} truncate>
-                {cocoClass.name}
-              </Text>
-              <Select
-                flex={1}
-                data={project.labels.map((label) => ({ value: label.id, label: label.name }))}
-                value={labelByClassId.get(cocoClass.id) ?? null}
-                onChange={(value) => {
-                  if (!value) return
-                  setLabelByClassId((current) => new Map(current).set(cocoClass.id, value))
-                }}
-                // This importer lives inside ImportSamplesModal - without an explicit
-                // zIndex above the modal's own, this dropdown renders behind the modal
-                // body and can't be clicked.
-                comboboxProps={{ zIndex: ZIndex.actionModalContent }}
-                disabled={!hasProjectLabels}
-                allowDeselect={false}
-              />
-            </Group>
-          ))}
-        </Stack>
-      </ScrollArea>
+      <LabelMapper
+        items={classes}
+        options={project.labels}
+        mapping={labelByClassId}
+        onChange={(id, value) => setLabelByClassId((current) => new Map(current).set(id, value))}
+        disabled={!hasProjectLabels}
+      />
       <Group justify="flex-end">
         <Button variant="outline" onClick={() => setState({ step: 'select-source' })}>
           Back
         </Button>
         <Button
           onClick={runImport}
-          disabled={!hasProjectLabels || classes.some((c) => !labelByClassId.get(c.id))}
+          disabled={
+            !hasProjectLabels || classes.some((c) => labelByClassId.get(c.id) === undefined)
+          }
         >
           Import
         </Button>

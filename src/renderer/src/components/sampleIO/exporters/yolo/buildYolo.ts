@@ -17,10 +17,10 @@ export const buildYoloDataYaml = (labels: ILabel[]): string =>
   })
 
 /** One label line per annotation, normalized to [0,1]. In Box mode every annotation
- *  (Mask included) becomes a `class cx cy w h` bounding box; in Segment mode it becomes
- *  a `class x1 y1 x2 y2 ... xn yn` polygon - a Box's own 4 corners, or a Mask's real
- *  outline. Either way nothing is skipped, unlike the plain detection format's usual
- *  box-only restriction. */
+ *  (Polygon included) becomes a `class cx cy w h` bounding box; in Segment mode it
+ *  becomes a `class x1 y1 x2 y2 ... xn yn` polygon - a Box's own 4 corners, or a
+ *  Polygon's real outline. Either way nothing is skipped, unlike the plain detection
+ *  format's usual box-only restriction. */
 export const yoloLabelFileContent = (
   annotations: IAnnotation[],
   labelIdToClassId: Map<string, number>,

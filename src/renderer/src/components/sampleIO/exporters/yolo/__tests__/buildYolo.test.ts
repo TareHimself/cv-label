@@ -56,9 +56,9 @@ describe('yoloLabelFileContent in Box mode', () => {
     )
   })
 
-  it('flattens a Mask annotation to its own bounding box, rather than skipping it', () => {
+  it('flattens a Polygon annotation to its own bounding box, rather than skipping it', () => {
     const annotations = [
-      makeAnnotation(AnnotationType.Mask, 'l1', [
+      makeAnnotation(AnnotationType.Polygon, 'l1', [
         { id: 'p0', x: 0, y: 0 },
         { id: 'p1', x: 10, y: 0 },
         { id: 'p2', x: 10, y: 10 }
@@ -85,9 +85,9 @@ describe('yoloLabelFileContent in Segment mode', () => {
     ).toBe('0 0.250000 0.250000 0.750000 0.250000 0.750000 0.750000 0.250000 0.750000\n')
   })
 
-  it('keeps a Mask annotation as its real polygon', () => {
+  it('keeps a Polygon annotation as its real polygon', () => {
     const annotations = [
-      makeAnnotation(AnnotationType.Mask, 'l1', [
+      makeAnnotation(AnnotationType.Polygon, 'l1', [
         { id: 'p0', x: 0, y: 0 },
         { id: 'p1', x: 10, y: 0 },
         { id: 'p2', x: 10, y: 10 }

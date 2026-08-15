@@ -93,6 +93,35 @@ describe('YoloImporterComponent', () => {
     expect(samples[0].annotations[0].labelId).toBe('l2')
   })
 
+  it('excludes a class marked Ignore, without blocking Import, and drops its annotations', async () => {
+    const onComplete = vi.fn()
+    renderWithProviders(
+      <YoloImporterComponent project={project} onComplete={onComplete} onCancel={vi.fn()} />
+    )
+
+    fireEvent.change(screen.getByTestId('yolo-folder-input'), {
+      target: {
+        files: [
+          makeFile('img1.jpg', 'x'),
+          makeFile('img1.txt', '0 0.5 0.5 0.2 0.2'),
+          makeFile('classes.txt', 'person\n')
+        ]
+      }
+    })
+    await screen.findByText('person')
+
+    fireEvent.click(screen.getByDisplayValue('Person'))
+    fireEvent.click(await screen.findByText('Ignore'))
+    expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const samples = onComplete.mock.calls[0][0]
+    expect(samples).toHaveLength(1)
+    expect(samples[0].annotations).toHaveLength(0)
+  })
+
   it('shows an error and stays on the selection step when no images are found', async () => {
     renderWithProviders(
       <YoloImporterComponent project={project} onComplete={vi.fn()} onCancel={vi.fn()} />
