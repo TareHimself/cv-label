@@ -26,8 +26,8 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0(electron@39.8.10)
       '@linaria/core':
-        specifier: ^7.0.0
-        version: 7.0.0
+        specifier: ^8.2.0
+        version: 8.2.0
       '@linaria/react':
         specifier: ^7.0.1
         version: 7.0.1(react@19.2.4)
@@ -1390,6 +1390,10 @@ packages:
     resolution: {integrity: sha512-KRa5XaTNPLFoJawtQnt58tzdt9QrQsUL/u6yEsfYg3d0tcsTecpoHFhT4bPzwuZg9Hie7khTSFhEy+aY84Fo7A==}
     engines: {node: '>=20.0.0'}
 
+  '@linaria/core@8.2.0':
+    resolution: {integrity: sha512-WRY22fd56RjPp5qjV/umgTdu6k2+8PtKuLV9Z311NWZRnQ4lxi0ywKmY9X2ujKtUXk4i/H4Va0wuLhGBgyyxZw==}
+    engines: {node: '>=22.12.0'}
+
   '@linaria/react@7.0.1':
     resolution: {integrity: sha512-bPU6vqOxDHhFwf54a4Dbwjc/SPUz1b3BtMRLlp2bWJGeZ85TYf7Gb8Fb+HfTTb6w4EA6QOL0UzkQGlg0EHkqFw==}
     engines: {node: '>=20.0.0'}
@@ -1854,9 +1858,17 @@ packages:
     resolution: {integrity: sha512-g9hfcK9qNRd+3aJfvMS0b/ek/SH9mio1zeQrPciOBNpDtXkJxUEzBHLDCrTgPzV7GYu7MljKRv/CfPlHrP3t/w==}
     engines: {node: '>=20.0.0'}
 
+  '@wyw-in-js/processor-utils@2.4.0':
+    resolution: {integrity: sha512-Zc7XCCPE+g+Qo0HfQt7pYuyTGTk2PaZwpemzPmCxvRTWXOkLKoEp3lom0qrg89M+9MGRYQFalOgU/2H+wEipIw==}
+    engines: {node: '>=22.0.0'}
+
   '@wyw-in-js/shared@1.0.4':
     resolution: {integrity: sha512-lH29Vy1HVo+os8slxTP/E1qZ8Mo48WhzyYR8dDyplyI2qXwOGHqwkkFmuFI4q1/J3vf1i8v8k/+gkP1T5fNTZA==}
     engines: {node: '>=20.0.0'}
+
+  '@wyw-in-js/shared@2.4.0':
+    resolution: {integrity: sha512-yWYAg2LkuCRxp3wSpubFnPMiLEt0HUNq0Sdt5LKUKs0vdegCAK6dmAkBCh3A//8PP75N6XZ7eJ5FXxKae/bByw==}
+    engines: {node: '>=22.0.0'}
 
   '@wyw-in-js/transform@1.0.6':
     resolution: {integrity: sha512-fObTiuRgcOgl4K+cK1LuT+knCjbAWCoM/nrpHuFfwQqYLcUfM2WPFVvlXoTFxhI4svJrPBysmW7VryjwDYxEzw==}
@@ -2539,8 +2551,8 @@ packages:
   electron-to-chromium@1.5.286:
     resolution: {integrity: sha512-9tfDXhJ4RKFNerfjdCcZfufu49vg620741MNs26a9+bhLThdB+plgMeou98CAaHu/WATj2iHOOHTp1hWtABj2A==}
 
-  electron-to-chromium@1.5.406:
-    resolution: {integrity: sha512-hWH5ORBi3d0IipnMh7BN5GDTaAmrSSSWmznwt2zltdiRNEWoEQyTwF0FFSBxzHO7hLSRT6loQu3IQGV0wg/Tvg==}
+  electron-to-chromium@1.5.408:
+    resolution: {integrity: sha512-SLoprcYpJ/OH2v2ps0+N5biv9H4/KBT3+YmmDew64TwK5y9j2wv7pMOFY7IorVkyMtEyLSCRlXKLsNlakeAlPw==}
 
   electron-vite@5.0.0:
     resolution: {integrity: sha512-OHp/vjdlubNlhNkPkL/+3JD34ii5ov7M0GpuXEVdQeqdQ3ulvVR7Dg/rNBLfS5XPIFwgoBLDf9sjjrL+CuDyRQ==}
@@ -5800,6 +5812,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@linaria/core@8.2.0':
+    dependencies:
+      '@wyw-in-js/processor-utils': 2.4.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@linaria/react@7.0.1(react@19.2.4)':
     dependencies:
       '@emotion/is-prop-valid': 1.4.0
@@ -6301,7 +6319,21 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@wyw-in-js/processor-utils@2.4.0':
+    dependencies:
+      '@wyw-in-js/shared': 2.4.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@wyw-in-js/shared@1.0.4':
+    dependencies:
+      debug: 4.4.3
+      find-up: 5.0.0
+      minimatch: 9.0.9
+    transitivePeerDependencies:
+      - supports-color
+
+  '@wyw-in-js/shared@2.4.0':
     dependencies:
       debug: 4.4.3
       find-up: 5.0.0
@@ -6628,7 +6660,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.11.14
       caniuse-lite: 1.0.30001809
-      electron-to-chromium: 1.5.406
+      electron-to-chromium: 1.5.408
       node-releases: 2.0.53
       update-browserslist-db: 1.3.1(browserslist@4.28.8)
 
@@ -7021,7 +7053,7 @@ snapshots:
 
   electron-to-chromium@1.5.286: {}
 
-  electron-to-chromium@1.5.406: {}
+  electron-to-chromium@1.5.408: {}
 
   electron-vite@5.0.0(vite@7.3.6(@types/node@22.19.11)(jiti@2.6.1)(sugarss@5.0.1(postcss@8.5.16))(tsx@4.23.0)(yaml@2.9.0)):
     dependencies:
