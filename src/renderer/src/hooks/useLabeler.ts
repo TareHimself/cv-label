@@ -284,6 +284,8 @@ type LabelerStoreActions = {
   setMode: (mode: LabelerMode) => void
   setLabelId: (labelId: string) => void
   selectAnnotation: (id: string | null) => void
+  /** Escape: deselects, or else drops back to Select mode. */
+  cancelActiveAction: () => void
   onMouseMove: (x: number, y: number) => void
   onConfirmPoint: (x: number, y: number) => void
   onConfirmAnnotationCreation: (discardLivePoint?: boolean) => void
@@ -1007,6 +1009,17 @@ export const useLabeler = (labels: ILabel[]) => {
               // some default, since there's nothing meaningful to switch it to.
               ...(annotation !== null ? { selectedLabelId: annotation.resolve().labelId } : {})
             })
+          },
+          cancelActiveAction: () => {
+            const state = get()
+            if (state.selectedAnnotation !== null) {
+              state.selectAnnotation(null)
+              return
+            }
+
+            if (state.mode !== LabelerMode.Select) {
+              state.setMode(LabelerMode.Select)
+            }
           },
           onConfirmPoint: (x: number, y: number) => {
             const state = get()
