@@ -4,17 +4,35 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    # pnpm's minimumReleaseAge policy (see package.json's packageManager, pnpm 11+)
-    # rejects installing any lockfile entry published in the last 24h. Without a
-    # cooldown, Dependabot routinely resolves to versions still inside that window
-    # (it bumps to whatever's newest the moment it runs), so `pnpm install
-    # --frozen-lockfile` fails in CI before anything else even runs. A 2-day
-    # cooldown gives a comfortable margin so Dependabot never proposes a version pnpm
-    # would refuse.
+    # Groups match in order - keeps coupled sibling packages bumped together, not drifting apart.
+    groups:
+      playwright:
+        patterns:
+          - "playwright"
+          - "@playwright/test"
+      linaria:
+        patterns:
+          - "@linaria/*"
+          - "@wyw-in-js/*"
+      # Majors stay ungrouped here - those are the ones worth reviewing individually.
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    # Security updates bypass this entirely and stay instant - this is just for routine bumps.
     cooldown:
-      default-days: 2
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    cooldown:
+      default-days: 7

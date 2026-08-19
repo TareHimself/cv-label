@@ -12,10 +12,11 @@ import {
 } from '@mantine/core'
 import { useHotkeys } from '@mantine/hooks'
 import { AsyncButton } from '@renderer/components/AsyncButton'
+import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { Labeler } from '@renderer/components/Labeler'
 import { useLabeler } from '@renderer/hooks/useLabeler'
 import { LabelerMode, OptimisticSample } from '@renderer/types'
-import { useCallback, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { IoMdArrowBack } from 'react-icons/io'
 import { PiHandPalmBold, PiPolygonLight } from 'react-icons/pi'
 import { BsBoundingBoxCircles } from 'react-icons/bs'
@@ -233,6 +234,7 @@ export type LabelPageProps = {
 export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
   const [index, setIndex] = useState(initial)
   const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState(false)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const { store } = useLabeler(project.labels)
   const mode = store((s) => s.mode)
   const selecteLabelId = store((s) => s.selectedLabelId)
@@ -282,13 +284,81 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
   // hidden store) after the user has already left it.
   useOnRouteLeave(() => store.getState().cancelPendingSampleLoad())
 
+  const goToSample = useCallback(
+    (delta: number) => setIndex((i) => mod(i + delta, samples.length)),
+    [samples.length]
+  )
+
+  const hotkeys = useMemo<Parameters<typeof useHotkeys>[0]>(
+    () => [
+      ['mod+z', () => store.getState().undo()],
+      ['mod+shift+z', () => store.getState().redo()],
+      ['mod+d', () => store.getState().duplicateSelectedAnnotation()],
+      [
+        'delete',
+        () => {
+          if (!isDeleteConfirmOpen && store.getState().selectedAnnotation !== null) {
+            setIsDeleteConfirmOpen(true)
+          }
+        }
+      ],
+      [
+        'backspace',
+        () => {
+          if (!isDeleteConfirmOpen && store.getState().selectedAnnotation !== null) {
+            setIsDeleteConfirmOpen(true)
+          }
+        }
+      ],
+      // Let Modal's own onClose handle Escape while the delete confirmation is open.
+      ['escape', () => !isDeleteConfirmOpen && store.getState().cancelActiveAction()],
+      ['1', () => store.getState().setMode(LabelerMode.Select)],
+      ['2', () => store.getState().setMode(LabelerMode.CreateBox)],
+      ['3', () => store.getState().setMode(LabelerMode.CreatePolygon)],
+      ['arrowleft', () => goToSample(-1)],
+      ['arrowright', () => goToSample(1)],
+      [
+        'space',
+        () => {
+          if (currentSampleId !== null) {
+            onSampleCompletedChanged(
+              currentSampleId,
+              sampleCompletedAt === null ? new Date().toISOString() : null
+            )
+          }
+        }
+      ]
+    ],
+    [
+      store,
+      isDeleteConfirmOpen,
+      goToSample,
+      currentSampleId,
+      sampleCompletedAt,
+      onSampleCompletedChanged
+    ]
+  )
+
   // useHotkeys ignores INPUT/TEXTAREA/SELECT targets by default, so this doesn't fire
   // while e.g. the sample index NumberInput below is focused.
-  useHotkeys([
-    ['mod+z', () => store.getState().undo()],
-    ['mod+shift+z', () => store.getState().redo()],
-    ['mod+d', () => store.getState().duplicateSelectedAnnotation()]
-  ])
+  useHotkeys(hotkeys)
+
+  useEffect(() => {
+    // event.button 3/4 are the mouse's back/forward side buttons - preventDefault on
+    // mousedown, which is where Electron/Chromium's own back/forward would otherwise fire.
+    const onMouseDown = (event: MouseEvent) => {
+      if (isDeleteConfirmOpen) return
+      if (event.button === 3) {
+        event.preventDefault()
+        goToSample(-1)
+      } else if (event.button === 4) {
+        event.preventDefault()
+        goToSample(1)
+      }
+    }
+    document.documentElement.addEventListener('mousedown', onMouseDown)
+    return () => document.documentElement.removeEventListener('mousedown', onMouseDown)
+  }, [goToSample, isDeleteConfirmOpen])
 
   return (
     <Container>
@@ -313,6 +383,16 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
         store={store}
         opened={isAnnotationsDrawerOpen}
         onClose={() => setIsAnnotationsDrawerOpen(false)}
+      />
+      <ConfirmDeleteModal
+        opened={isDeleteConfirmOpen}
+        entityName="annotation"
+        undoable
+        onCancel={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          store.getState().deleteSelectedAnnotation()
+          return Promise.resolve()
+        }}
       />
       <Flex style={{ position: 'absolute', bottom: 20, left: 20 }} gap={'md'}>
         <LabelerModeControl value={mode} onChange={(e) => store.getState().setMode(e)} />

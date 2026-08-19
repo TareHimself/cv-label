@@ -43,6 +43,24 @@ describe('ConfirmDeleteModal', () => {
     ).toBeInTheDocument()
   })
 
+  it('swaps in an undo hint when undoable is set', () => {
+    renderWithProviders(
+      <ConfirmDeleteModal
+        opened
+        entityName="annotation"
+        undoable
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    )
+
+    expect(
+      screen.getByText(
+        'Are you sure you want to delete this annotation? You can undo this with Ctrl+Z.'
+      )
+    ).toBeInTheDocument()
+  })
+
   it('calls only onCancel when Cancel is clicked', () => {
     const onCancel = vi.fn()
     const onConfirm = vi.fn()
