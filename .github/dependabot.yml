@@ -4,8 +4,17 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Groups match in order - keeps coupled sibling packages bumped together, not drifting apart.
     groups:
-      # Majors stay ungrouped - those are the ones worth reviewing individually.
+      playwright:
+        patterns:
+          - "playwright"
+          - "@playwright/test"
+      linaria:
+        patterns:
+          - "@linaria/*"
+          - "@wyw-in-js/*"
+      # Majors stay ungrouped here - those are the ones worth reviewing individually.
       minor-and-patch:
         applies-to: version-updates
         update-types:
