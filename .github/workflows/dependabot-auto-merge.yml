@@ -22,14 +22,12 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      # Approving as github-actions[bot], not dependabot[bot], so this isn't a self-approval.
-      - name: Approve and enable auto-merge
+      # GITHUB_TOKEN can't submit PR approvals at all (GitHub blocks it outright), so this only enables auto-merge - no approval step.
+      - name: Enable auto-merge
         if: |
           steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
           steps.metadata.outputs.update-type == 'version-update:semver-patch'
-        run: |
-          gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

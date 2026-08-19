@@ -1,4 +1,4 @@
-name: Approve via comment
+name: Merge via comment
 
 on:
   issue_comment:
@@ -10,19 +10,18 @@ permissions:
 
 jobs:
   approve:
-    name: Approve and enable auto-merge
+    name: Enable auto-merge
     runs-on: ubuntu-latest
     # issue_comment skips pull_request's fork-token downgrade, so this must gate itself: only the repo owner, on their own PR.
+    # GITHUB_TOKEN also can't submit PR approvals at all (GitHub blocks it outright), so this only enables auto-merge - no approval step.
     if: |
       github.event.issue.pull_request != null &&
       github.event.comment.body == '/approve' &&
       github.event.comment.user.login == github.event.issue.user.login &&
       github.event.comment.author_association == 'OWNER'
     steps:
-      - name: Approve and enable auto-merge
-        run: |
-          gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+      - name: Enable auto-merge
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.issue.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
