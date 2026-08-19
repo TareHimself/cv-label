@@ -7,6 +7,8 @@ export type ConfirmDeleteModalProps = {
   opened: boolean
   entityName: string
   itemName?: string
+  /** True if the deletion can be undone (e.g. via Ctrl+Z). */
+  undoable?: boolean
   onCancel: () => void
   onConfirm: () => Promise<unknown>
 }
@@ -15,9 +17,11 @@ export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
   opened,
   entityName,
   itemName,
+  undoable = false,
   onCancel,
   onConfirm
 }) => {
+  const caveat = undoable ? 'You can undo this with Ctrl+Z.' : 'This cannot be undone.'
   return (
     <Modal
       opened={opened}
@@ -29,10 +33,10 @@ export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
       <Text size="sm">
         {itemName ? (
           <>
-            Are you sure you want to delete <b>{itemName}</b>? This cannot be undone.
+            Are you sure you want to delete <b>{itemName}</b>? {caveat}
           </>
         ) : (
-          `Are you sure you want to delete this ${entityName}? This cannot be undone.`
+          `Are you sure you want to delete this ${entityName}? ${caveat}`
         )}
       </Text>
       <Group justify="flex-end" mt="lg">

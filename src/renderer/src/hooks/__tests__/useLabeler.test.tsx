@@ -570,3 +570,38 @@ describe('useLabeler label picker sync', () => {
     expect(store.getState().selectedLabelId).toBe('l1')
   })
 })
+
+describe('useLabeler cancelActiveAction', () => {
+  it('deselects the current annotation, leaving the mode alone', () => {
+    const store = setup([annotationA])
+    act(() => {
+      store.getState().setMode(LabelerMode.Select)
+      store.getState().selectAnnotation('a1')
+    })
+
+    act(() => store.getState().cancelActiveAction())
+
+    expect(store.getState().selectedAnnotation).toBeNull()
+    expect(store.getState().mode).toBe(LabelerMode.Select)
+  })
+
+  it('drops out of a create mode back to Select when nothing is selected', () => {
+    const store = setup([])
+    act(() => store.getState().setMode(LabelerMode.CreatePolygon))
+
+    act(() => store.getState().cancelActiveAction())
+
+    expect(store.getState().mode).toBe(LabelerMode.Select)
+    expect(store.getState().annotationBeingCreated).toBeNull()
+  })
+
+  it('is a no-op in Select mode with nothing selected', () => {
+    const store = setup([])
+    act(() => store.getState().setMode(LabelerMode.Select))
+
+    act(() => store.getState().cancelActiveAction())
+
+    expect(store.getState().mode).toBe(LabelerMode.Select)
+    expect(store.getState().selectedAnnotation).toBeNull()
+  })
+})
