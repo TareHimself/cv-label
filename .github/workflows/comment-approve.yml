@@ -1,0 +1,28 @@
+name: Approve via comment
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  approve:
+    name: Approve and enable auto-merge
+    runs-on: ubuntu-latest
+    # issue_comment skips pull_request's fork-token downgrade, so this must gate itself: only the repo owner, on their own PR.
+    if: |
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/approve' &&
+      github.event.comment.user.login == github.event.issue.user.login &&
+      github.event.comment.author_association == 'OWNER'
+    steps:
+      - name: Approve and enable auto-merge
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.issue.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
