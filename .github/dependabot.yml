@@ -11,12 +11,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Also acts as a supply-chain-attack buffer - most malicious releases get caught within days.
+    # Security updates bypass this entirely and stay instant - this is just for routine bumps.
     cooldown:
-      default-days: 4
-      semver-major-days: 7
-      semver-minor-days: 4
-      semver-patch-days: 3
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -29,7 +26,4 @@ updates:
           - "minor"
           - "patch"
     cooldown:
-      default-days: 4
-      semver-major-days: 7
-      semver-minor-days: 4
-      semver-patch-days: 3
+      default-days: 7
