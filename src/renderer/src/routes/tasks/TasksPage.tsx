@@ -99,9 +99,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
   const [pendingEditTags, setPendingEditTags] = useState<ITask | null>(null)
   const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
-  // Covers both batch export (the toolbar button, acting on the current selection) and
-  // per-task export (the context menu's single-item entry, offered outside select mode) -
-  // one modal, whichever list of tasks last triggered it.
+  // One modal covers both batch export (toolbar button) and per-task export (context menu) - whichever list of tasks last triggered it.
   const [exportTarget, setExportTarget] = useState<ITask[] | null>(null)
   const [isBatchDeletePending, setIsBatchDeletePending] = useState(false)
   const [isBatchTagsOpen, setIsBatchTagsOpen] = useState(false)
@@ -116,9 +114,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
     [allTags]
   )
 
-  // Selected tasks stay visible even if a search or tag filter narrows the list below
-  // them, so batch actions never silently lose track of a selection the user can no
-  // longer see.
+  // Selected tasks stay visible even if a search/tag filter narrows the list below them.
   const filteredItems = useMemo(
     () =>
       items.filter((t) => {
@@ -149,8 +145,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
     setSelectedTaskIds(new Set())
   }
 
-  // Multiselect shouldn't still be armed when the user comes back to this page later -
-  // Activity preserves this state across a hide/show, so it has to be cleared explicitly.
+  // Activity preserves this state across a hide/show, so it needs clearing explicitly.
   useOnRouteLeave(exitSelectMode)
 
   const toggleSelected = (taskId: string, selected: boolean) => {
@@ -165,16 +160,13 @@ export const TasksPage = ({ project }: TasksPageProps) => {
     })
   }
 
-  // Enters select mode with just this one task selected - the context menu's "Select"
-  // entry point outside select mode (see selectAll/selectAbove/selectBelow below for the
-  // batch variants offered once already in select mode).
+  // The context menu's "Select" entry point outside select mode.
   const selectOnly = (taskId: string) => {
     setIsSelectMode(true)
     setSelectedTaskIds(new Set([taskId]))
   }
 
-  // Selection helpers operate on filteredItems (the currently visible/filtered list),
-  // not the full unfiltered task list, and all three enter select mode if not already in it.
+  // Operate on filteredItems, not the full unfiltered list, and all enter select mode if not already in it.
   const selectAll = () => {
     setIsSelectMode(true)
     setSelectedTaskIds(new Set(filteredItems.map((t) => t.id)))
@@ -190,9 +182,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
     setSelectedTaskIds(new Set(filteredItems.slice(index).map((t) => t.id)))
   }
 
-  // Fetches each task's samples fresh (this page never loads sample data otherwise) and
-  // opens the AnnotatorsModal run flow against all of them at once - lets a batch of tasks
-  // get auto-labeled without opening each one's Samples page individually.
+  // Fetches each task's samples fresh (never otherwise loaded here) and runs AnnotatorsModal against all of them at once.
   const runAutoLabelOn = async (tasksToRun: ITask[]) => {
     const samplesByTask = await Promise.all(tasksToRun.map((t) => store.getSamplesForTask(t.id)))
     setAutoLabelTarget({
@@ -405,9 +395,7 @@ export const TasksPage = ({ project }: TasksPageProps) => {
             items={filteredItems}
             getKey={(t) => t.id}
             scrollContainerRef={scrollContainerRef}
-            // Closer to a row with both a tag line and the progress line than the
-            // component's generic default (90) - every task row shows progress, and
-            // most show tags too.
+            // Closer to a row with both a tag line and progress line than the generic default (90).
             estimateSize={104}
             renderItem={(t, index) => (
               <BasicListPageItem
