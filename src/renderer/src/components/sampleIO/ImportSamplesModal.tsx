@@ -26,12 +26,9 @@ export type ImportSamplesModalProps = {
   opened: boolean
   project: IProject
   onClose: () => void
-  /** scratchDir is where the imported samples' image files live - onImported decides
-   *  when it's safe to delete it (immediately once persisted, or later if the caller only
-   *  stages samples for review before actually persisting them). */
+  /** scratchDir is where the imported samples' images live - onImported decides when it's safe to delete it. */
   onImported: (samples: INewSample[], scratchDir: string) => Promise<void>
-  /** Defaults to the standalone action-modal layer - pass ZIndex.nestedActionModal when
-   *  this is opened from within another already-open action modal (e.g. Create Task). */
+  /** Pass ZIndex.nestedActionModal when opened from within another already-open action modal (e.g. Create Task). */
   zIndex?: number
 }
 

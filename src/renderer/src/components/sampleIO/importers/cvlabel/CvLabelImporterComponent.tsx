@@ -22,10 +22,7 @@ type WizardState =
   | { step: 'importing'; progress: number }
 
 type CvLabelImporterComponentProps = SampleImporterComponentProps & {
-  /** Skips the drop/browse step and feeds this file straight into parsing, as if it had
-   *  just been dropped - lets a caller that already has the file in hand (e.g. the Tasks
-   *  page's own full-screen drop target, see CreateTaskButton.tsx) land the user directly
-   *  on the label-mapping step instead of making them drop it again inside this wizard. */
+  /** Skips the drop/browse step, feeding this file straight into parsing - for a caller (e.g. CreateTaskButton's own drop target) that already has the file in hand. */
   initialFile?: FileWithPath
 }
 

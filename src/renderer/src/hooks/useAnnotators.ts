@@ -2,10 +2,7 @@ import { useCallback } from 'react'
 import { makeUUID } from '@shared/utils'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 const ANNOTATORS_QUERY_KEY = ['annotators'] as const
-/** Annotators are store-agnostic and project-agnostic app-level data (see
- *  main/appStore.ts) - fetched straight off window.appStore rather than through
- *  useAppStore's pluggable IDataStore, the same way window.system/window.exportApi are
- *  called directly elsewhere without going through a zustand slice. */
+/** Annotators are store-agnostic app-level data (see main/appStore.ts) - fetched straight off window.appStore, not through useAppStore's pluggable IDataStore. */
 export const useAnnotators = () => {
   const queryClient = useQueryClient()
 
