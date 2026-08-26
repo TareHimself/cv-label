@@ -82,8 +82,7 @@ export const parseYoloLabelFile = (content: string): YoloBox[] => {
     )
 }
 
-/** Converts a normalized YOLO box into the labeler's 2-point (top-left, bottom-right)
- *  absolute-pixel box representation. */
+/** Converts a normalized YOLO box into the labeler's 2-point (top-left, bottom-right) absolute-pixel box. */
 export const yoloBoxToPoints = (
   box: YoloBox,
   imageWidth: number,

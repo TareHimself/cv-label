@@ -82,11 +82,6 @@ class WorkerModule {
   }
 }
 
-/**
- *
- * @param modulePath the fileurl to the module to load
- * @returns
- */
 export async function importWorkerModule<T = unknown>(
   modulePath: URL,
   globals: object = {}

@@ -51,12 +51,10 @@ export type AnnotationsDrawerProps = {
 const AnnotationTypeIcon = ({ type }: { type: AnnotationType }) =>
   type === AnnotationType.Box ? <BsBoundingBoxCircles size={14} /> : <PiPolygonLight size={14} />
 
-/** Groups annotations that don't resolve to a project label (e.g. the label was since
- *  deleted) - kept visible under their own group rather than dropped. */
+/** Groups annotations whose label was since deleted - kept visible under their own group rather than dropped. */
 const UNKNOWN_LABEL_GROUP = '__unknown__'
 
-/** Buckets annotations by label id, preserving each group's first-occurrence order in
- *  the underlying annotation list. */
+/** Buckets annotations by label id, preserving each group's first-occurrence order. */
 const groupByLabel = (annotations: IAnnotation[]): Map<string, IAnnotation[]> => {
   const groups = new Map<string, IAnnotation[]>()
   for (const annotation of annotations) {

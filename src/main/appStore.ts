@@ -5,10 +5,7 @@ import appDatabaseWorkerPath from './appDatabase?modulePath'
 import { IAnnotator, IAnnotatorUpdate, IAppDataStore, IPCKeys } from '../shared/types'
 import { handleIpc } from './ipc'
 
-/** The always-on, store-agnostic counterpart to LocalStore - annotators live in their own
- *  database, independent of whichever IDataStore is currently active (see
- *  storeOrchestrator.ts), so this is instantiated once and never registered with it.
- *  Lazily spawns its worker on first real use, same as LocalStore.ensureWorker(). */
+/** The always-on, store-agnostic counterpart to LocalStore - annotators live in their own database, instantiated once and never registered with storeOrchestrator. Lazily spawns its worker on first use. */
 export class AppStore implements IAppDataStore {
   #workerPromise?: Promise<typeof import('./appDatabase') & { terminate(): Promise<number> }>
 

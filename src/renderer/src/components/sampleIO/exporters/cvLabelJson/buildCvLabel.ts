@@ -4,9 +4,7 @@ export interface CvLabelManifestSample extends Omit<ISample, 'imageUri' | 'compl
   imageFile: string
 }
 
-/** A flat sample list plus a label list (id + name only, enough for an importer to match
- *  by id then name) - deliberately independent of task structure, so re-importing works
- *  into any project regardless of which tasks the samples originally came from. */
+/** A flat sample list plus a label list (id + name only) - independent of task structure, so re-importing works into any project regardless of original tasks. */
 export const buildCvLabelManifest = (labels: ILabel[], samples: CvLabelManifestSample[]): string =>
   JSON.stringify(
     {

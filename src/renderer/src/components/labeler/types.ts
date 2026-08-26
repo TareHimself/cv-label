@@ -4,11 +4,9 @@ import type { StoreApi, UseBoundStore } from 'zustand'
 export type Point = { x: number; y: number }
 
 export enum PointerResult {
-  /** The tool fully handled the gesture; suppress the default behavior (panning for
-   * a left-click, the contextmenu popup for a right-click). */
+  /** The tool fully handled the gesture; suppress the default behavior (pan/contextmenu). */
   Consumed = 'consumed',
-  /** Let the default behavior also run (e.g. deselecting still allows a drag on
-   * empty canvas to pan). */
+  /** Let the default behavior also run (e.g. deselecting still allows a pan drag). */
   Default = 'default'
 }
 

@@ -11,9 +11,7 @@ export type RenameModalProps = {
   onConfirm: (name: string) => Promise<unknown>
 }
 
-/** Controlled by mounting with a `key` tied to the item being renamed (e.g. `key={item?.id}`)
- *  so its internal input state resets whenever the target changes, instead of carrying over
- *  the previous item's in-progress edit. */
+/** Controlled by mounting with `key={item?.id}` so input state resets on target change, instead of carrying over the previous edit. */
 export const RenameModal: FC<RenameModalProps> = ({
   opened,
   entityName,

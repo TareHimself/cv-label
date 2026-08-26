@@ -3,13 +3,11 @@ import { useCallback, useRef, useState, type FC } from 'react'
 
 export type AsyncButtonProps = Omit<ButtonProps, 'loading'> & {
   onClick: () => Promise<unknown>
-  /** Mirrors the internal pending state up, for callers that also need to disable sibling
-   *  controls (e.g. a Cancel button or other inputs) while the async work is in flight. */
+  /** Mirrors the internal pending state up, for callers that also need to disable sibling controls while the async work is in flight. */
   onPendingChange?: (isPending: boolean) => void
 }
 
-/** Wraps Mantine's Button to guard against double-submit: ignores clicks while a previous
- *  onClick's promise is still pending, and shows Mantine's built-in loading state meanwhile. */
+/** Wraps Mantine's Button to guard against double-submit - ignores clicks while a previous onClick's promise is still pending. */
 export const AsyncButton: FC<AsyncButtonProps> = ({
   onClick,
   onPendingChange,
