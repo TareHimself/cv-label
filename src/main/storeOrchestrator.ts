@@ -1,8 +1,6 @@
 import { ArchiveManifest, IDataStore, StoreDescriptor } from '../shared/types'
 
-/** What main-only code (the export handler, the image protocol) needs beyond the
- *  renderer-visible IDataStore contract - kept out of the shared IDataStore interface
- *  since a renderer-side type has no business knowing about either concern. */
+/** What main-only code (export handler, image protocol) needs beyond IDataStore - kept out of the shared interface since a renderer-side type has no business knowing about it. */
 export interface IMainDataStore extends IDataStore {
   exportSamplesToArchive(
     destinationPath: string,
@@ -18,10 +16,7 @@ interface RegisteredStore {
   resolveImage: (imageId: string) => Promise<Response>
 }
 
-/** Owns every registered IDataStore and which one is "current" - the Store_* IPC handlers
- *  and the image:// protocol handler in main/store.ts both dispatch through this instead
- *  of a captured, hardcoded store reference. Re-reading `current` on every call means
- *  switching stores takes effect immediately for whatever's called next. */
+/** Owns every registered IDataStore and which is "current" - Store_* IPC and the image:// protocol handler dispatch through this, re-reading `current` each call so a switch takes effect immediately. */
 export class StoreOrchestrator {
   #stores = new Map<string, RegisteredStore>()
   #currentId?: string
