@@ -84,11 +84,7 @@ const STATUS_COMBO_BOX_OPTIONS: SegmentedControlItem[] = [
   }
 ]
 
-// Per-label annotation counts for one sample, e.g. "Stop Sign: 2" - ordered to match the
-// project's own label list rather than first-seen order, and coloured the same way
-// ProjectsPage's LabelTags colours a project's label badges (filled with the label's own
-// color, text contrast picked via tinycolor). A label with zero annotations on this
-// sample is omitted entirely rather than shown as "Label: 0".
+// Per-label annotation counts for one sample, e.g. "Stop Sign: 2" - ordered to match the project's label list, colored like ProjectsPage's LabelTags. A zero-count label is omitted, not shown as "Label: 0".
 const AnnotationLabelCounts = ({
   annotations,
   labels
@@ -277,15 +273,11 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
   const [pendingDelete, setPendingDelete] = useState<OptimisticSample | null>(null)
   const [pendingRename, setPendingRename] = useState<OptimisticSample | null>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
-  // A descriptor, not a frozen sample list - the modal can stay open across multiple runs
-  // (see AnnotatorsModal's "Done" button), so the samples it acts on must be re-derived
-  // from the live `items` on every render rather than snapshotted once at click time, or a
-  // second Run would see samples the first run just labeled as still unlabeled.
+  // A descriptor, not a frozen sample list - re-derived from live `items` every render, since the modal can stay open across multiple runs (AnnotatorsModal's "Done").
   const [autoLabelSelection, setAutoLabelSelection] = useState<'all' | string | null>(null)
   const canAutoLabel = annotators.length > 0
 
-  // Don't leave the auto-label modal armed to reopen against a stale target next time
-  // this page becomes visible - Activity preserves this state across a hide/show.
+  // Activity preserves this state across a hide/show, so it needs clearing explicitly.
   useOnRouteLeave(() => setAutoLabelSelection(null))
 
   const filteredItems = useMemo(
