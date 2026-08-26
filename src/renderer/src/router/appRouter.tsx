@@ -10,9 +10,7 @@ export type AppRoutes = {
   'copy-annotations': { project: IProject; sourceTask: ITask }
 }
 
-// No page components imported here on purpose - pages' hooks import navigate/back from
-// this module, so pulling in the page components here (which the RouterOutlet needs) would
-// create a cycle. See router/RouterOutlet.tsx for that half.
+// No page components imported here on purpose - pages' hooks import navigate/back from this module, so pulling in page components too would create a cycle. See RouterOutlet.tsx.
 export const appRouter = makeRouter<AppRoutes>('projects')
 export const {
   navigate,

@@ -23,10 +23,7 @@ import {
 } from '../shared/types'
 import { IMainDataStore } from './storeOrchestrator'
 
-/** The local/worker-backed IDataStore implementation. Lazily spawns its worker (which
- *  opens SQLite and runs migrations) on first real use instead of blocking app boot -
- *  `ensureWorker()` is memoized and self-healing, so there's no ordering requirement on
- *  `connect()` being called first. */
+/** The local/worker-backed IDataStore - lazily spawns its worker (opens SQLite, runs migrations) on first use instead of blocking app boot. ensureWorker() is memoized, no ordering requirement on connect() first. */
 export class LocalStore implements IMainDataStore {
   #workerPromise?: Promise<typeof import('./database') & { terminate(): Promise<number> }>
 

@@ -4,10 +4,7 @@ import { IPCKeys, SCRATCH_PROTOCOL_URL } from '../shared/types'
 import { makeUUID } from '../shared/utils'
 import { handleIpc } from './ipc'
 
-// Chromium parses a custom "standard" scheme's URL as scheme://host/path, same as
-// images://<id> - there's no way to put an arbitrary local path in that host position
-// (drive letters, colons and backslashes are invalid/mangled host content), so this maps
-// an opaque id to the real path server-side instead of encoding the path into the URL.
+// A raw path can't go in a custom scheme's host position (colons/backslashes are invalid there), so this maps an opaque id to the real path server-side instead.
 const scratchPathById = new Map<string, string>()
 
 handleIpc(IPCKeys.System_GetScratchPreviewUri, async (filePath) => {
@@ -16,11 +13,7 @@ handleIpc(IPCKeys.System_GetScratchPreviewUri, async (filePath) => {
   return `${SCRATCH_PROTOCOL_URL}://${id}`
 })
 
-// protocol.registerSchemesAsPrivileged is a single, global, call-once-per-app-lifetime
-// registration - a second call from a separate module (as this file used to make) is
-// silently dropped, so this scheme would never actually become privileged even though the
-// call itself doesn't throw. It's registered once, centrally, alongside images:// in
-// store.ts; this file only installs the handler, which has no such one-call restriction.
+// protocol.registerSchemesAsPrivileged is call-once-per-app-lifetime; a second call is silently dropped, so this scheme is registered once, centrally, in store.ts - this file only installs the handler.
 app.whenReady().then(() => {
   protocol.handle(SCRATCH_PROTOCOL_URL, async (req) => {
     try {

@@ -35,9 +35,7 @@ const isAnnotatorAnnotation = (value: unknown): value is AnnotatorAnnotation =>
   Array.isArray((value as AnnotatorAnnotation).points) &&
   (value as AnnotatorAnnotation).points.every(isAnnotatorPoint)
 
-/** Calls an annotator server's `/connect` route to fetch its own label vocabulary. The
- *  result is only ever held in memory while the user builds/edits a labelMapping - it's
- *  never persisted, so this needs to be called again any time the mapping UI reopens. */
+/** Calls an annotator server's `/connect` route for its label vocabulary - never persisted, so this must be called again any time the mapping UI reopens. */
 export const connectToAnnotator = async (
   url: string,
   headers: Record<string, string>
@@ -61,9 +59,7 @@ export const connectToAnnotator = async (
   return labels.filter(isAnnotatorLabel)
 }
 
-/** Resolves raw `/predict` output through an annotator's stored labelMapping into real
- *  INewAnnotations. A prediction whose labelId has no mapping (or maps to null/"ignore"),
- *  or that's otherwise malformed, is dropped and counted rather than guessed at. */
+/** Resolves raw `/predict` output through labelMapping into real INewAnnotations - an unmapped or malformed prediction is dropped and counted, never guessed at. */
 export const mapPredictionsToAnnotations = (
   predictions: unknown,
   labelMapping: Record<string, string | null>
@@ -113,10 +109,7 @@ export const mapPredictionsToAnnotations = (
   return { annotations, skipped }
 }
 
-/** Runs one sample through an annotator: reads its image bytes, POSTs them to /predict,
- *  and resolves the response through labelMapping - built live for the current run, never
- *  persisted (see hooks/useAnnotatorRuntime.ts). Throws on any network/parse failure so the
- *  caller can attribute the failure to this sample. */
+/** Runs one sample through an annotator: reads its image bytes, POSTs to /predict, resolves through labelMapping. Throws on any network/parse failure so the caller can attribute it to this sample. */
 export const runAnnotatorOnSample = async (
   annotator: IAnnotator,
   labelMapping: Record<string, string | null>,

@@ -6,9 +6,7 @@ import { LabelPage } from '@renderer/routes/label/LabelPage'
 import { makeRouterOutlet } from './makeRouter'
 import { appRouter, type AppRoutes } from './appRouter'
 
-// Only App.tsx should import this module: it pulls in every page component to build the
-// stack, and those pages' hooks import navigate/back from appRouter.tsx - importing this
-// file from anywhere reachable by a page would recreate that cycle.
+// Only App.tsx should import this - it pulls in every page component, and pages' hooks import navigate/back from appRouter.tsx, so importing this from a page would recreate that cycle.
 export const RouterOutlet = makeRouterOutlet<AppRoutes>(appRouter, {
   projects: ProjectsPage,
   tasks: TasksPage,

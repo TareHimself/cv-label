@@ -21,9 +21,7 @@ import tinycolor from 'tinycolor2'
 import { StoreApi, UseBoundStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 
-// Same hover-affordance convention as BasicListPageItem's Row: a plain background swap
-// on hover, layered with a stronger one for the selected row so hovering an
-// already-selected row still visibly reacts instead of looking inert.
+// Same hover convention as BasicListPageItem's Row - a stronger swap layered on the selected row so it still visibly reacts to hover.
 const AnnotationRow = styled(Group)`
   cursor: pointer;
   border-radius: var(--mantine-radius-sm);
@@ -51,12 +49,10 @@ export type AnnotationsDrawerProps = {
 const AnnotationTypeIcon = ({ type }: { type: AnnotationType }) =>
   type === AnnotationType.Box ? <BsBoundingBoxCircles size={14} /> : <PiPolygonLight size={14} />
 
-/** Groups annotations that don't resolve to a project label (e.g. the label was since
- *  deleted) - kept visible under their own group rather than dropped. */
+/** Groups annotations whose label was since deleted - kept visible under their own group rather than dropped. */
 const UNKNOWN_LABEL_GROUP = '__unknown__'
 
-/** Buckets annotations by label id, preserving each group's first-occurrence order in
- *  the underlying annotation list. */
+/** Buckets annotations by label id, preserving each group's first-occurrence order. */
 const groupByLabel = (annotations: IAnnotation[]): Map<string, IAnnotation[]> => {
   const groups = new Map<string, IAnnotation[]>()
   for (const annotation of annotations) {
@@ -81,17 +77,14 @@ export const AnnotationsDrawer: FC<AnnotationsDrawerProps> = ({ store, opened, o
   const labelsMap = store((s) => s.labelsMap)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
-  // Closing the drawer doesn't naturally fire a mouseleave on whatever was hovered when
-  // it closed - clear the canvas dim/spotlight explicitly so it doesn't linger.
+  // Closing the drawer doesn't fire a mouseleave on whatever was hovered - clear the dim explicitly so it doesn't linger.
   useEffect(() => {
     if (!opened) {
       store.getState().setAnnotationsDrawerHovered(false)
     }
   }, [opened, store])
 
-  // Same idea for leaving the Labeler page entirely while the drawer happened to be open -
-  // that also doesn't fire a mouseleave, and Activity would otherwise preserve the dim
-  // state until the user's mouse re-triggers it on return.
+  // Same idea for leaving the Labeler page entirely while the drawer was open.
   useOnRouteLeave(() => store.getState().setAnnotationsDrawerHovered(false))
 
   const toggleGroup = (key: string) =>

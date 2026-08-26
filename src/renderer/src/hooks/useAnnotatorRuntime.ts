@@ -20,10 +20,7 @@ type AnnotatorRuntimeActions = {
   forget: (annotatorId: string) => void
 }
 
-/** Deliberately plain in-memory state, not backed by any store/database - an annotator's
- *  label vocabulary and its mapping against a project's labels are only ever known once
- *  the app connects to it (see components/annotators/AnnotatorsModal.tsx), and both are
- *  discarded on reload rather than persisted anywhere. */
+/** Deliberately plain in-memory state, not backed by any store - an annotator's label vocabulary/mapping is only known once connected, and discarded on reload. */
 export const useAnnotatorRuntime = create<AnnotatorRuntimeState & AnnotatorRuntimeActions>(
   (set) => ({
     entries: {},

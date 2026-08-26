@@ -51,8 +51,7 @@ export const ProjectsPage = () => {
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
   const [isBatchDeletePending, setIsBatchDeletePending] = useState(false)
 
-  // Selected projects stay visible even if a search narrows the list below them, so
-  // batch actions never silently lose track of a selection the user can no longer see.
+  // Selected projects stay visible even if a search narrows the list below them.
   const filteredItems = useMemo(
     () =>
       items.filter(
@@ -69,8 +68,7 @@ export const ProjectsPage = () => {
     setSelectedProjectIds(new Set())
   }
 
-  // Multiselect shouldn't still be armed when the user comes back to this page later -
-  // Activity preserves this state across a hide/show, so it has to be cleared explicitly.
+  // Activity preserves this state across a hide/show, so it needs clearing explicitly.
   useOnRouteLeave(exitSelectMode)
 
   const toggleSelected = (projectId: string, selected: boolean) => {
@@ -85,16 +83,13 @@ export const ProjectsPage = () => {
     })
   }
 
-  // Enters select mode with just this one project selected - the context menu's "Select"
-  // entry point outside select mode (see selectAll/selectAbove/selectBelow below for the
-  // batch variants offered once already in select mode).
+  // The context menu's "Select" entry point outside select mode.
   const selectOnly = (projectId: string) => {
     setIsSelectMode(true)
     setSelectedProjectIds(new Set([projectId]))
   }
 
-  // Selection helpers operate on filteredItems (the currently visible/filtered list),
-  // not the full unfiltered project list, and all three enter select mode if not already.
+  // Operate on filteredItems, not the full unfiltered list, and all enter select mode if not already.
   const selectAll = () => {
     setIsSelectMode(true)
     setSelectedProjectIds(new Set(filteredItems.map((p) => p.id)))
@@ -220,8 +215,7 @@ export const ProjectsPage = () => {
             items={filteredItems}
             getKey={(p) => p.id}
             scrollContainerRef={scrollContainerRef}
-            // Closer to a row with a label badge line than the component's generic
-            // default (90) - most projects have at least one label.
+            // Closer to a row with a label badge line than the generic default (90) - most projects have at least one label.
             estimateSize={80}
             renderItem={(p, index) => (
               <BasicListPageItem

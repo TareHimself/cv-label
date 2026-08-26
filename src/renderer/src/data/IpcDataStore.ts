@@ -17,8 +17,7 @@ import {
   ITaskUpdate
 } from '@shared/types'
 
-/** A generic proxy to whatever IDataStore main currently has active - it doesn't know or
- *  care which backend that is, main's StoreOrchestrator handles that entirely. */
+/** A generic proxy to whatever IDataStore main currently has active - doesn't know or care which backend, StoreOrchestrator handles that entirely. */
 export class IpcDataStore implements IDataStore {
   connect(): Promise<void> {
     return window.store.connect()

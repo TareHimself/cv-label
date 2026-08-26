@@ -4,23 +4,17 @@ import { boundingBoxOf, exportShapePoints, ExportShape } from '../annotationShap
 
 export { ExportShape }
 
-/** Ultralytics-style data.yaml: split folders plus a 0-indexed classId -> name map,
- *  ordered the same way findYoloClasses would read it back on re-import. */
+/** Ultralytics-style data.yaml: split folders plus a 0-indexed classId -> name map, ordered the same way findYoloClasses reads it back on re-import. */
 export const buildYoloDataYaml = (labels: ILabel[]): string =>
   stringify({
     train: 'images/train',
     val: 'images/valid',
     test: 'images/test',
-    // A Map (rather than a plain object) keeps classId as a YAML int key instead of a
-    // quoted string, since Ultralytics indexes `names` by integer.
+    // A Map keeps classId as a YAML int key instead of a quoted string - Ultralytics indexes `names` by integer.
     names: new Map(labels.map((label, id) => [id, label.name]))
   })
 
-/** One label line per annotation, normalized to [0,1]. In Box mode every annotation
- *  (Polygon included) becomes a `class cx cy w h` bounding box; in Segment mode it
- *  becomes a `class x1 y1 x2 y2 ... xn yn` polygon - a Box's own 4 corners, or a
- *  Polygon's real outline. Either way nothing is skipped, unlike the plain detection
- *  format's usual box-only restriction. */
+/** One label line per annotation, normalized to [0,1]. Box mode always writes `class cx cy w h`; Segment mode writes `class x1 y1 ... xn yn` (a Box's own 4 corners, or a Polygon's real outline). */
 export const yoloLabelFileContent = (
   annotations: IAnnotation[],
   labelIdToClassId: Map<string, number>,

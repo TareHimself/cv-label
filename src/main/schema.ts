@@ -37,8 +37,7 @@ export const tags = sqliteTable(
   },
   (table) => [
     index('idx_tags_projectId').on(table.projectId),
-    // A project-global vocabulary, managed from one place (ManageTagsModal) - this is the
-    // DB-level guard against creating a literal duplicate name in the same project.
+    // DB-level guard against a literal duplicate tag name within the same project.
     uniqueIndex('idx_tags_project_name').on(table.projectId, table.name)
   ]
 )

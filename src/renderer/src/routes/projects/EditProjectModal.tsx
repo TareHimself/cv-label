@@ -19,11 +19,7 @@ export type EditProjectModalProps = {
   ) => Promise<unknown>
 }
 
-/** Renames the project, edits existing labels (including their colors), and lets new
- *  labels be added - existing labels still can't be removed here, since one already
- *  used by an annotation can't be deleted. A label added (and not yet saved) in this
- *  same session can be removed again freely, since nothing references it yet. Controlled
- *  by mounting with `key={project?.id}` so state resets when the target project changes. */
+/** Renames the project and edits/adds labels - can't remove an existing one (used by an annotation), but a not-yet-saved new one can be removed freely. Mount with `key={project?.id}` to reset state per project. */
 export const EditProjectModal: FC<EditProjectModalProps> = ({
   opened,
   project,
@@ -31,12 +27,9 @@ export const EditProjectModal: FC<EditProjectModalProps> = ({
   onConfirm
 }) => {
   const [name, setName] = useState(project?.name ?? '')
-  // Only ids the project already had when this modal opened are "existing" - anything
-  // added afterward stays removable for the rest of this session.
+  // Only ids the project had when this modal opened count as "existing" - anything added afterward stays removable.
   const [existingLabelIds] = useState(() => new Set((project?.labels ?? []).map((l) => l.id)))
-  // useArray mutates its initial array in place (push/splice/etc. act directly on the
-  // reference it's given) - a shallow copy here keeps that from reaching back into
-  // project.labels itself, which react-query still owns.
+  // useArray mutates its initial array in place - a shallow copy keeps that from reaching back into project.labels, which react-query still owns.
   const labels = useArray<ILabel>((project?.labels ?? []).map((l) => ({ ...l })))
 
   const canSave = name.trim().length > 0 && labels.every((l) => l.name.trim().length > 0)

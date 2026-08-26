@@ -15,10 +15,7 @@ export type TagPickerProps = {
   onCreate: (name: string) => Promise<ITag>
 }
 
-/** A single combobox that's both "pick an existing tag" (click, no typing needed) and
- *  "create a new one" (typing only reveals a "+ Create …" option when nothing matches -
- *  clicking that is what actually creates it, never automatic on Enter). Selected tags
- *  render as removable pills in the input itself, standard MultiSelect behavior. */
+/** One combobox that both picks an existing tag and creates a new one (typing reveals "+ Create …", but only clicking it creates - never automatic on Enter). */
 export const TagPicker: FC<TagPickerProps> = ({
   label,
   placeholder,
@@ -28,9 +25,7 @@ export const TagPicker: FC<TagPickerProps> = ({
   onCreate
 }) => {
   const [search, setSearch] = useState('')
-  // Bridges the gap between a tag being created and useTags' invalidate-triggered
-  // refetch landing - without this, the just-created pill would briefly show no label
-  // (allTags won't contain it yet).
+  // Bridges the gap before useTags' invalidate-triggered refetch lands - otherwise the just-created pill would briefly show no label.
   const [pendingNewTags, setPendingNewTags] = useState<ITag[]>([])
 
   const knownTags = [

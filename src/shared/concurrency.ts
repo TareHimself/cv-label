@@ -1,6 +1,4 @@
-/** Runs fn over items with at most `limit` in flight at once, preserving result order.
- *  Used to bound memory/file-handle usage for batches that can run into the thousands,
- *  instead of Promise.all-ing the whole batch at once. */
+/** Runs fn over items with at most `limit` in flight, preserving result order - bounds memory/file-handle usage instead of Promise.all-ing a batch that can run into the thousands. */
 export const mapWithConcurrency = async <T, R>(
   items: T[],
   limit: number,

@@ -26,17 +26,10 @@ import { ZIndex } from '@renderer/zIndex'
 
 const CVLABEL_EXTENSION = /\.cvlabel$/i
 
-/** The dropped file's own name, minus the .cvlabel extension - mirrors
- *  folderNameFromDroppedFiles' role for the image-drop path (both just seed the Create
- *  Task modal's name field; the user can still rename before creating). */
+/** The dropped file's name minus the .cvlabel extension - seeds the Create Task modal's name field, same role as folderNameFromDroppedFiles for the image-drop path. */
 const taskNameFromCvLabelFile = (file: FileWithPath) => file.name.replace(CVLABEL_EXTENSION, '')
 
-// Mantine's Dropzone only builds valid file-picker options (and skips a console warning)
-// from the record form of `accept` - a flat array gets turned into one made of the array
-// itself as keys, which breaks for an extension-only entry like .cvlabel that isn't a mime
-// type on its own. Every image mime type maps to no extra extensions (the mime key alone
-// is enough), .cvlabel is keyed under the generic zip mime since it has no real one of its
-// own - same association CvLabelImporterComponent's own Dropzone already uses.
+// Dropzone needs the record form of `accept` - .cvlabel has no real mime type, so it's keyed under the generic zip mime, same as CvLabelImporterComponent's own Dropzone.
 const DROP_ACCEPT: Record<string, string[]> = {
   ...Object.fromEntries(IMAGE_MIME_TYPE.map((mimeType) => [mimeType, []])),
   [MIME_TYPES.zip]: ['.cvlabel']
@@ -114,9 +107,7 @@ const SelectedSampleRow = memo(function SelectedSampleRow({
   )
 })
 
-/** Memoized so typing in the task name field (which lives in the same parent state as
- *  `samples`) doesn't re-render every imported sample's row, which was visibly laggy for
- *  a large import even before rows only held a scratch path rather than a full image. */
+/** Memoized so typing in the task name field doesn't re-render every imported sample's row - was visibly laggy for a large import otherwise. */
 const SampleList = memo(function SampleList({
   samples,
   onAddSamples,
@@ -182,31 +173,21 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
   const [taskName, setTaskName] = useState('')
   const [samples, setSamples] = useState<INewSample[]>([])
 
-  // When a drop spans more than one top-level folder, pendingSplit holds both the raw
-  // files (for the "one task" decline path) and the per-folder grouping (for "separate
-  // tasks"), while the confirm modal asks which the user wants.
+  // Holds both the raw files (for the "one task" decline path) and the per-folder grouping (for "separate tasks") when a drop spans multiple folders.
   const [pendingSplit, setPendingSplit] = useState<{
     allFiles: FileWithPath[]
     groups: ImportQueueItem[]
   } | null>(null)
 
-  // A dropped .cvlabel file takes a different path than images: it needs a label-mapping
-  // step (its annotations reference label ids that may not match this project's), so it
-  // opens the same importer wizard used from "Add Samples" instead of going straight into
-  // startQueue. Once mapped, its onComplete lands in the exact same Create Task modal the
-  // image-drop path uses, pre-filled from the file's own name.
+  // A dropped .cvlabel needs a label-mapping step, so it opens the same importer wizard "Add Samples" uses instead of going straight into startQueue.
   const [cvLabelDropFile, setCvLabelDropFile] = useState<FileWithPath | null>(null)
 
-  // Once a choice is made, importQueue drives the Create Task modal through one item at
-  // a time - Skip or Create both advance to the next. The close button means something
-  // stronger: abandon the rest of the queue entirely, so it's confirmed separately.
+  // Drives the Create Task modal through one queued item at a time - Skip/Create both advance; the close button abandons the whole queue instead.
   const [importQueue, setImportQueue] = useState<ImportQueueItem[]>([])
   const [importQueueIndex, setImportQueueIndex] = useState(0)
   const [isStopConfirmOpen, setIsStopConfirmOpen] = useState(false)
 
-  // Every scratch dir created while staging samples for this Create Task session (from
-  // direct drops or from "Add Samples" sub-imports) - swept once the session ends,
-  // whether that's a submitted task, a skipped item, or the modal being closed outright.
+  // Every scratch dir created this Create Task session - swept once the session ends, however it ends.
   const [, setPendingScratchDirs] = useState<string[]>([])
 
   const discardPendingScratchDirs = useCallback(() => {
@@ -262,8 +243,7 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
     [loadQueueItem]
   )
 
-  // Shared by both Skip and Create - either one is "done with this step," so both move
-  // on to the next queued folder, or close once there isn't one.
+  // Shared by Skip and Create - both move to the next queued folder, or close once there isn't one.
   const advanceQueue = () => {
     const nextIndex = importQueueIndex + 1
     if (nextIndex < importQueue.length) {
@@ -273,19 +253,14 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
       setIsModalOpen(false)
       setImportQueue([])
       setImportQueueIndex(0)
-      // Mantine's Modal keeps its content mounted and interactive during its close
-      // transition, so the Create button (still bound to the just-submitted item) stays
-      // clickable for a moment after this. Clearing samples/taskName here disables it
-      // immediately (empty name), rather than leaving a window to resubmit the same
-      // already-created samples and hit a UNIQUE constraint on their ids.
+      // Clears immediately (empty name disables Create) rather than leaving a window, during Mantine's close transition, to resubmit and hit a UNIQUE constraint.
       setSamples([])
       setTaskName('')
       discardPendingScratchDirs()
     }
   }
 
-  // The close button, once confirmed: unlike Skip, this abandons every remaining queued
-  // folder (not just the current one) rather than continuing to the next.
+  // Unlike Skip, this abandons every remaining queued folder, not just the current one.
   const stopQueue = () => {
     setIsStopConfirmOpen(false)
     setIsModalOpen(false)
@@ -450,7 +425,6 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
         <Stack gap={'lg'}>
           <TextInput
             label="Name"
-            // w={500}
             placeholder="Task Name"
             value={taskName}
             onChange={(e) => setTaskName(e.target.value)}

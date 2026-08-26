@@ -26,9 +26,7 @@ const COCO_SHAPE_OPTIONS: SegmentedControlItem[] = [
   { value: CocoShapeMode.Native, label: 'As Is' }
 ]
 
-// 'preparing' covers fetching samples and building the manifest, plus the native save
-// dialog (no progress events arrive during either) - without it the progress bar would
-// otherwise sit at 0% with nothing explaining why until the first image is archived.
+// 'preparing' covers fetching samples/building the manifest/the save dialog - no progress events arrive during any of that, so without it the bar would sit at 0% unexplained.
 type ExportPhase = 'preparing' | 'exporting'
 
 export const CocoExporterComponent = ({

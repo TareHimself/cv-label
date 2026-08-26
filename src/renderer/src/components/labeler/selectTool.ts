@@ -33,8 +33,7 @@ export const selectTool: LabelerTool = {
 
     let controlPointId = hit.controlPointId
     if (hit.lineControlPointId !== null) {
-      // A Box only ever has 2 real points - its "lines" are edges, draggable to resize
-      // rather than a place to insert a new point (unlike a Polygon's lines).
+      // A Box only ever has 2 real points - its "lines" are edges, draggable to resize, not a place to insert a new point.
       if (state.selectedAnnotation.resolve().type === AnnotationType.Box) {
         controlPointId = hit.lineControlPointId
       } else {

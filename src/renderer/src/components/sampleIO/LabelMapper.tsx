@@ -5,24 +5,19 @@ import { ZIndex } from '@renderer/zIndex'
 const EXCLUDE_VALUE = '__exclude__'
 
 export type LabelMapperProps<K extends string | number> = {
-  /** Rows to map - a source class/label for importers, or the project's own labels for
-   *  exporters (where `items` and `options` are the same list). */
+  /** Rows to map - a source class/label for importers, or the project's own labels for exporters (same list as `options` there). */
   items: { id: K; name: string }[]
   /** Selectable mapping targets - always the project's labels. */
   options: ILabel[]
-  /** `null` means the item is explicitly excluded; an item absent from the map means no
-   *  choice has been made yet (only meaningful where there's no auto-fill default). */
+  /** `null` means explicitly excluded; absent means no choice has been made yet. */
   mapping: Map<K, string | null>
   onChange: (id: K, target: string | null) => void
-  /** Label for the "don't include this" option - importers use the default "Ignore",
-   *  exporters pass "Don't Export". */
+  /** Label for the "don't include this" option - importers default to "Ignore", exporters pass "Don't Export". */
   excludeLabel?: string
   disabled?: boolean
 }
 
-/** One `Text` + `Select` row per item, letting each be mapped to one of `options` or
- *  excluded entirely. Shared by every importer (source class -> project label) and
- *  exporter (project label -> itself, another label to merge into, or excluded). */
+/** One `Text` + `Select` row per item, mapping it to one of `options` or excluding it - shared by every importer and exporter. */
 export const LabelMapper = <K extends string | number>({
   items,
   options,
@@ -46,9 +41,7 @@ export const LabelMapper = <K extends string | number>({
             ]}
             value={mapping.get(item.id) ?? EXCLUDE_VALUE}
             onChange={(value) => onChange(item.id, value === EXCLUDE_VALUE ? null : value)}
-            // These importers/exporters all live inside a modal - without an explicit
-            // zIndex above the modal's own, this dropdown renders behind the modal body
-            // and can't be clicked.
+            // These importers/exporters live inside a modal - without an explicit zIndex above it, this dropdown renders behind the modal body and can't be clicked.
             comboboxProps={{ zIndex: ZIndex.actionModalContent }}
             disabled={disabled}
             allowDeselect={false}

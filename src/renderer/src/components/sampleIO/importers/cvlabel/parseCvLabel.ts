@@ -40,11 +40,7 @@ const dirOf = (path: string) => {
   return idx === -1 ? '' : path.slice(0, idx + 1)
 }
 
-/** Reads this app's own .cvlabel export - a manifest.json (a label list plus a flat
- *  sample list, no task grouping) alongside the referenced images. `dir` is the folder
- *  manifest.json itself lives in, since `imageFile` paths are relative to it (matters if
- *  a zip tool wrapped the export in an extra top-level folder). Returns null if no valid
- *  manifest is found, so the caller can show a clear "not a .cvlabel file" error. */
+/** Reads this app's own .cvlabel export - a manifest.json plus referenced images. `dir` is manifest.json's own folder, since `imageFile` paths are relative to it. Null if no valid manifest is found. */
 export const findCvLabelManifest = async (
   files: VirtualFile[]
 ): Promise<{ manifest: CvLabelManifest; dir: string } | null> => {
@@ -67,9 +63,7 @@ export type CvLabelPair = {
   image: VirtualFile | null
 }
 
-/** Pairs each manifest sample with its referenced image file. A sample whose image is
- *  missing from the archive is kept with a null image and skipped when building samples,
- *  rather than failing the whole import. */
+/** Pairs each manifest sample with its referenced image file - a missing image is kept as null and skipped later, rather than failing the whole import. */
 export const findCvLabelPairs = (
   manifest: CvLabelManifest,
   dir: string,
@@ -82,12 +76,7 @@ export const findCvLabelPairs = (
   }))
 }
 
-/** Converts the whole archive to samples, one image at a time (not in parallel - see
- *  yoloDatasetToSamples for why). Every id (sample, annotation, point) is regenerated
- *  fresh rather than reusing the exported ones, so re-importing the same file twice - or
- *  into the project it came from - never collides with existing records. Each
- *  annotation's `labelId` is remapped via `labelIdToProjectLabelId`; annotations whose
- *  source label has no mapping are dropped. */
+/** Converts the whole archive to samples, one image at a time (see yoloDatasetToSamples). Every id is regenerated fresh so re-importing never collides with existing records; annotations with no label mapping are dropped. */
 export const cvLabelDatasetToSamples = async (
   pairs: CvLabelPair[],
   labelIdToProjectLabelId: Map<string, string | null>,

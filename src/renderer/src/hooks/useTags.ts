@@ -4,9 +4,7 @@ import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-/** A project's tag vocabulary - managed from one place (ManageTagsModal). Typing only
- *  ever happens here (create/rename); everywhere else a tag is attached to a task, it's
- *  picked from `items` by id. */
+/** A project's tag vocabulary - managed from one place (ManageTagsModal); elsewhere a tag is always picked from `items` by id. */
 export const useTags = (project: IProject) => {
   const store = useAppStore((s) => s.store)
   const queryClient = useQueryClient()
@@ -23,8 +21,7 @@ export const useTags = (project: IProject) => {
     [queryClient, tagsQueryKey]
   )
 
-  // A rename/delete changes what's embedded in each task's own `tags` field too - not
-  // needed for create, which can't affect any task's existing tags.
+  // A rename/delete changes what's embedded in each task's `tags` field too - not needed for create.
   const invalidateTasksToo = useCallback(
     () => queryClient.invalidateQueries({ queryKey: tasksQueryKey }),
     [queryClient, tasksQueryKey]

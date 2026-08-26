@@ -22,10 +22,7 @@ type WizardState =
   | { step: 'importing'; progress: number }
 
 type CvLabelImporterComponentProps = SampleImporterComponentProps & {
-  /** Skips the drop/browse step and feeds this file straight into parsing, as if it had
-   *  just been dropped - lets a caller that already has the file in hand (e.g. the Tasks
-   *  page's own full-screen drop target, see CreateTaskButton.tsx) land the user directly
-   *  on the label-mapping step instead of making them drop it again inside this wizard. */
+  /** Skips the drop/browse step, feeding this file straight into parsing - for a caller (e.g. CreateTaskButton's own drop target) that already has the file in hand. */
   initialFile?: FileWithPath
 }
 
@@ -90,15 +87,7 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
     [project]
   )
 
-  // Mirrors what the Dropzone's own onDrop would do with this same file - runs once per
-  // distinct initialFile (a new drop passes a new File instance, so this naturally re-fires
-  // for each one) rather than on every render, which handleFileSelected alone would cause
-  // if depended on directly given it's recreated whenever `project` changes. Deferred a
-  // microtask out rather than called directly: handleFileSelected's first statement is a
-  // synchronous setState (the same immediate "parsing" flip the Dropzone's own onDrop
-  // relies on), which react-hooks flags as a cascading-render risk when it runs straight
-  // in an effect body - the lazy initial state above already shows "parsing" on the very
-  // first paint, so this deferral costs nothing visible.
+  // Mirrors Dropzone's own onDrop for this file - re-fires per distinct initialFile instance. Deferred a microtask since handleFileSelected's synchronous setState would flag as a cascading-render risk called directly in the effect body.
   useEffect(() => {
     if (initialFile) {
       void Promise.resolve().then(() => handleFileSelected([initialFile]))
@@ -141,9 +130,7 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
           </Group>
         ) : (
           <Dropzone
-            // .cvlabel has no registered OS mime type, so a dropped file typically
-            // reports an empty File.type - matching it as a zip by extension (the
-            // Accept map's array side) is what actually lets it through, not the mime key.
+            // .cvlabel has no OS mime type, so File.type is typically empty - matching by extension is what actually lets it through, not the mime key.
             accept={{ [MIME_TYPES.zip]: ['.cvlabel', '.zip'] }}
             multiple={false}
             onDrop={(files) => handleFileSelected(files)}

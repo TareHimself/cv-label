@@ -36,9 +36,7 @@ type Step =
   | { step: 'run'; annotator: IAnnotator; samples: OptimisticSample[] }
   | { step: 'edit'; annotator: IAnnotator; name: string; url: string; headerRows: HeaderRow[] }
 
-/** Best-effort mapping by matching an annotator's label names against a project's own -
- *  never persisted, only used to seed the in-memory mapping the first time an annotator
- *  runs against a given project (see useAnnotatorRuntime.ts). */
+/** Best-effort mapping by matching label names - never persisted, only seeds the in-memory mapping the first time an annotator runs against a project. */
 const guessMapping = (
   labels: AnnotatorLabel[],
   project: IProject
@@ -67,8 +65,7 @@ type AnnotatorFormFieldsProps = {
   onChange: (value: AnnotatorFieldsValue) => void
 }
 
-/** Name/URL/headers fields - shared between the "Add Annotator" form and the settings/cog
- *  "edit" screen, which differ only in what they do with the result (create vs. update). */
+/** Name/URL/headers fields - shared between the "Add Annotator" form and the settings/cog "edit" screen, which differ only in what they do with the result. */
 const AnnotatorFormFields: FC<AnnotatorFormFieldsProps> = ({ value, onChange }) => (
   <>
     <TextInput
@@ -152,9 +149,7 @@ type AnnotatorMappingFieldsProps = {
   onChangeMapping: (labelId: string, value: string) => void
 }
 
-/** The per-label "map to a project label, or Ignore" editor - shared between the pre-run
- *  review screen and the settings/cog "edit" screen, both of which just read/write the
- *  same in-memory (annotatorId, projectId) mapping via different entry points. */
+/** The per-label "map to a project label, or Ignore" editor - shared between the pre-run review screen and the settings/cog "edit" screen. */
 const AnnotatorMappingFields: FC<AnnotatorMappingFieldsProps> = ({
   project,
   labels,
@@ -199,21 +194,13 @@ type AnnotatorRunStepProps = {
   project: IProject
   samples: OptimisticSample[]
   annotator: IAnnotator
-  /** Owned by the parent (not this component) so it survives this component's own
-   *  mount/unmount as the modal steps back and forth, and so a run that should start
-   *  immediately (a mapping was already known) can be kicked off from the click handler
-   *  that made that call, rather than this component re-deriving the same decision in a
-   *  mount effect - see AnnotatorsModal's own startRun. */
+  /** Owned by the parent so it survives this component's own mount/unmount, letting a run that should start immediately be kicked off from the same click handler - see AnnotatorsModal's startRun. */
   run: ReturnType<typeof useRunAnnotator>['run']
   progress: RunAnnotatorProgress
   isRunning: boolean
-  /** Whether a run has been kicked off at all - distinct from isRunning (flips back once
-   *  finished) and from progress.total (legitimately 0 when every sample was already
-   *  labeled), so this is the only reliable "show progress vs. show the mapping editor"
-   *  signal. See useRunAnnotator's own hasRun for why it isn't derived from progress. */
+  /** Whether a run has been kicked off at all - the only reliable "show progress vs. show the mapping editor" signal (isRunning flips back, progress.total can be legitimately 0). */
   hasRun: boolean
-  /** Also used by the post-run "Done" button - returns to the annotator list rather than
-   *  closing the whole modal, so the user can run another annotator without reopening it. */
+  /** Also used by the post-run "Done" button - returns to the annotator list rather than closing the whole modal. */
   onBack: () => void
 }
 
@@ -231,9 +218,7 @@ const AnnotatorRunStep: FC<AnnotatorRunStepProps> = ({
   const setMapping = useAnnotatorRuntime((s) => s.setMapping)
   const mapping = entry?.mappingByProjectId[project.id] ?? {}
 
-  // Fires exactly on a running -> finished transition, never on mount - wasRunning starts
-  // false regardless of whether a run was already under way when this component mounted,
-  // so an in-progress run finishing is the only thing that can flip it from true to false.
+  // Fires exactly on a running -> finished transition, never on mount.
   const wasRunning = useRef(false)
   useEffect(() => {
     if (wasRunning.current && !isRunning) {
@@ -301,10 +286,7 @@ const AnnotatorRunStep: FC<AnnotatorRunStepProps> = ({
 export type AnnotatorsModalProps = {
   opened: boolean
   project: IProject
-  /** Only passed when there's something to run against - when absent, the modal is
-   *  management-only (no per-row Run action), e.g. ProjectsPage's context-menu entry.
-   *  Usually a single task (a samples-page run), but a batch run kicked off from the
-   *  Tasks page can pass several at once. */
+  /** Only passed when there's something to run against - absent means management-only (e.g. ProjectsPage's context-menu entry). Usually one task, but a Tasks-page batch run can pass several. */
   tasks?: ITask[]
   samples?: OptimisticSample[]
   onClose: () => void
@@ -321,16 +303,13 @@ export const AnnotatorsModal: FC<AnnotatorsModalProps> = ({
   const activate = useAnnotatorRuntime((s) => s.activate)
   const setMapping = useAnnotatorRuntime((s) => s.setMapping)
   const forget = useAnnotatorRuntime((s) => s.forget)
-  // Owned here rather than by AnnotatorRunStep so a run whose mapping is already known can
-  // be kicked off directly from the click that decided that (see startRun below), instead
-  // of threading an "autoStart" flag through the Step union for a mount effect to interpret.
+  // Owned here, not AnnotatorRunStep, so a run whose mapping is already known can start directly from the click that decided that - see startRun below.
   const taskIds = useMemo(() => tasks?.map((t) => t.id) ?? [], [tasks])
   const { run, reset: resetRun, progress, isRunning, hasRun } = useRunAnnotator(taskIds)
   const [step, setStep] = useState<Step>({ step: 'list' })
   const [wasOpened, setWasOpened] = useState(opened)
   const [pendingDelete, setPendingDelete] = useState<IAnnotator | null>(null)
-  // Only meaningful while step.step === 'edit' - read unconditionally (selector itself
-  // branches) since hooks can't be called conditionally.
+  // Only meaningful while step.step === 'edit' - read unconditionally since hooks can't be conditional.
   const editRuntimeEntry = useAnnotatorRuntime((s) =>
     step.step === 'edit' ? s.entries[step.annotator.id] : undefined
   )
@@ -371,9 +350,7 @@ export const AnnotatorsModal: FC<AnnotatorsModalProps> = ({
     }
   }
 
-  /** Connects (if this annotator hasn't been activated yet this session) and seeds a
-   *  best-effort mapping for the current project (if one isn't already known) - shared by
-   *  the Run and settings/cog flows, which differ only in what they do once activated. */
+  /** Connects (if not yet activated this session) and seeds a best-effort mapping - shared by the Run and settings/cog flows, which differ only in what they do once activated. */
   const ensureActivated = async (annotator: IAnnotator): Promise<AnnotatorLabel[] | undefined> => {
     let labels = useAnnotatorRuntime.getState().entries[annotator.id]?.labels
     if (labels === undefined) {
@@ -399,8 +376,7 @@ export const AnnotatorsModal: FC<AnnotatorsModalProps> = ({
   const startRun = async (annotator: IAnnotator) => {
     if (tasks === undefined || tasks.length === 0 || samples === undefined) return
 
-    // Captured before ensureActivated seeds a fresh guess - only a mapping that was
-    // already known (not one just guessed by this very call) should skip the review step.
+    // Captured before ensureActivated seeds a fresh guess - only an already-known mapping skips the review step.
     const hadMapping =
       useAnnotatorRuntime.getState().entries[annotator.id]?.mappingByProjectId[project.id] !==
       undefined
@@ -408,17 +384,12 @@ export const AnnotatorsModal: FC<AnnotatorsModalProps> = ({
     const labels = await ensureActivated(annotator)
     if (labels === undefined) return
 
-    // Clears out whatever an earlier run in this same modal session left behind - run/
-    // progress/isRunning live in this component now, not remounted fresh per visit to the
-    // 'run' step, so a stale finished (or in-progress) state would otherwise leak into the
-    // next one, however it starts.
+    // Clears whatever an earlier run in this same modal session left behind - run/progress/isRunning aren't remounted fresh per visit to the 'run' step.
     resetRun()
     setStep({ step: 'run', annotator, samples })
 
     if (hadMapping) {
-      // Not awaited on purpose: this only needs to kick the run off, the same way the
-      // manual "Run" button does - blocking here would keep the list row's own Run button
-      // spinning for the whole run instead of just the connect step above.
+      // Not awaited on purpose - blocking here would keep the list row's own Run button spinning for the whole run.
       const mapping =
         useAnnotatorRuntime.getState().entries[annotator.id]?.mappingByProjectId[project.id] ?? {}
       void run(annotator, mapping, samples)
@@ -450,9 +421,7 @@ export const AnnotatorsModal: FC<AnnotatorsModalProps> = ({
     }
 
     const headers = headerRowsToRecord(step.headerRows)
-    // A changed URL means a possibly different service - the cached labels/mapping for
-    // the old one are no longer trustworthy, so drop them and let the next Run/edit
-    // reconnect fresh.
+    // A changed URL means a possibly different service - drop cached labels/mapping and reconnect fresh.
     if (url !== step.annotator.url) {
       forget(step.annotator.id)
     }

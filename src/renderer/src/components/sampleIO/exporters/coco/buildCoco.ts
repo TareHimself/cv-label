@@ -1,10 +1,7 @@
 import { AnnotationType, IAnnotation, ILabel } from '@shared/types'
 import { boundingBoxOf, exportShapePoints, ExportShape, polygonArea } from '../annotationShape'
 
-/** Unlike YOLO's fixed-column label lines, a COCO annotation entry can carry a bbox and
- *  an independent (optional) segmentation, so it supports a third choice beyond forcing
- *  every annotation to one shape: Native, which leaves each annotation's segmentation as
- *  whatever it actually has - none for a Box, its real outline for a Polygon. */
+/** COCO can carry an independent optional segmentation alongside a bbox, so unlike YOLO there's a third mode: Native, leaving each annotation's segmentation as whatever it actually has. */
 export enum CocoShapeMode {
   Box = 'box',
   Segment = 'segment',
@@ -34,8 +31,7 @@ export type CocoCategory = {
   supercategory: string
 }
 
-/** COCO category ids are conventionally 1-indexed (0 is reserved in some tools for a
- *  background/superclass placeholder). */
+/** COCO category ids are conventionally 1-indexed (0 is reserved in some tools for a background/superclass placeholder). */
 export const buildCocoCategories = (labels: ILabel[]): CocoCategory[] =>
   labels.map((label, index) => ({ id: index + 1, name: label.name, supercategory: 'none' }))
 
@@ -48,13 +44,7 @@ const cocoSegmentationFor = (
   return [exportShapePoints(annotation, ExportShape.Segment).flatMap((p) => [p.x, p.y])]
 }
 
-/** Converts one sample's annotations to COCO annotation entries. `bbox` is always the
- *  annotation's own bounding box. `segmentation` depends on the mode: Box discards any
- *  shape entirely (pure detection data, even for a Polygon); Segment gives every
- *  annotation a polygon (a Box's own 4 corners, synthesized, if it has no real one);
- *  Native leaves a Box with no segmentation (it never had one) and a Polygon with its
- *  real outline. `area` uses the real polygon's area only when that's what's actually
- *  being exported. */
+/** `bbox` is always the bounding box. `segmentation` depends on mode: Box discards shape entirely, Segment synthesizes one for every annotation, Native leaves it as-is. `area` uses the real polygon area only when one is actually exported. */
 export const buildCocoAnnotations = (
   annotations: IAnnotation[],
   imageId: number,

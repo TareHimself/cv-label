@@ -35,12 +35,7 @@ const Container = styled.div`
   box-sizing: border-box;
 `
 
-// A plain native overflow container instead of Mantine's <ScrollArea>: pages here can be
-// hidden (not unmounted) by the stack router's <Activity> boundary. Neither ScrollArea's
-// JS-managed scrollbar nor the browser reliably keeps scrollTop through that: a flex child
-// with min-height:0 whose ancestor toggles display:none loses its scroll offset once shown
-// again, even though the DOM node itself survives. So scroll position is saved/restored
-// manually below instead of trusted to survive the hide/show cycle on its own.
+// A plain native overflow container, not Mantine's <ScrollArea> - neither it nor the browser reliably keeps scrollTop when this page's <Activity> hides it, so scroll position is saved/restored manually below.
 const ScrollContainer = styled.div`
   display: flex;
   flex: 1;
@@ -53,15 +48,9 @@ const ScrollContainer = styled.div`
 
 export type BasicListPageProps = {
   top: ReactNode
-  /** Lets a caller share this page's scroll element with something outside it - a
-   *  virtualizer (see VirtualizedItemList) needs the actual scrolling DOM node to measure
-   *  against, which this component otherwise keeps entirely to itself. Optional: a page
-   *  that isn't virtualizing its content doesn't need to provide one. */
+  /** Lets a caller share this page's scroll element with something outside it - a virtualizer (see VirtualizedItemList) needs the actual scrolling DOM node. */
   scrollContainerRef?: RefObject<HTMLDivElement | null>
-  /** Relaxes the default 60%/1000px column cap to 90%/1400px - for a page whose content
-   *  genuinely needs more horizontal room than a plain list of rows (e.g.
-   *  CopyAnnotationsPage's side-by-side thumbnail/select mapping rows), rather than one
-   *  that's just a list and should stay narrow like Projects/Tasks/Samples. */
+  /** Relaxes the default 60%/1000px column cap to 90%/1400px, for a page that genuinely needs more room than a plain list (e.g. CopyAnnotationsPage). */
   wide?: boolean
 }
 
@@ -76,11 +65,7 @@ export const BasicListPage: FC<PropsWithChildren<BasicListPageProps>> = ({
   const scrollTopRef = useRef(0)
   const widthStyle = wide ? { width: '90%', maxWidth: 1400 } : undefined
 
-  // Restores scrollTop on setup (mount, and the resetup that happens when this page's
-  // <Activity> boundary goes from hidden back to visible - see the ScrollContainer comment).
-  // The value itself is captured continuously via onScroll below rather than in this effect's
-  // cleanup: cleanup runs after the hide transition's DOM mutation (display:none) already
-  // applied, so by then scrollTop already reads back as the collapsed 0, not the real value.
+  // Restores scrollTop on mount/hidden->visible; captured via onScroll below since cleanup runs too late (scrollTop already reads 0 by then).
   useLayoutEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollTopRef.current
@@ -97,9 +82,7 @@ export const BasicListPage: FC<PropsWithChildren<BasicListPageProps>> = ({
           data-testid="basic-list-scroll-container"
           onScroll={(e) => {
             const el = e.currentTarget
-            // Hiding this page collapses it to 0x0 and fires a spurious scroll event with
-            // scrollTop 0 as a side effect - ignore that rather than clobbering the real
-            // last-known position with it.
+            // Hiding this page collapses it to 0x0 and fires a spurious scroll(0) - ignore it.
             if (el.clientHeight === 0) return
             scrollTopRef.current = el.scrollTop
           }}

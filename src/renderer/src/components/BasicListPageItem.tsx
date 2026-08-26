@@ -55,22 +55,16 @@ export type BasicListPageItemProps = {
   onManageAnnotators?: () => void
   onAutoLabel?: () => void
   onEditTags?: () => void
-  /** Exports just this item - only offered outside select mode, where batch export
-   *  (acting on the whole selection instead) takes over. */
+  /** Exports just this item - only offered outside select mode, where batch export takes over. */
   onExport?: () => void
-  /** Copies this item's samples' annotations into another task - only offered outside
-   *  select mode, same as onExport (both are inherently single-source actions). */
+  /** Copies this item's samples' annotations into another task - only offered outside select mode, same as onExport. */
   onCopyAnnotations?: () => void
   onDelete?: () => void
-  /** Whether the list is currently in select mode - while true, clicking the row
-   *  anywhere (not just the checkbox) toggles selection instead of firing onClick, and
-   *  the checkbox itself becomes visible. */
+  /** While true, clicking the row anywhere toggles selection instead of firing onClick, and the checkbox becomes visible. */
   selectMode?: boolean
   selected?: boolean
   onSelectedChange?: (selected: boolean) => void
-  /** Enters select mode with just this item selected - the context menu's entry point
-   *  into selection outside select mode, where the All/Above/Below variants below
-   *  wouldn't yet make sense (there's no anchor item, and nothing else is selected). */
+  /** Enters select mode with just this item selected - the context menu's entry point into selection when nothing else is selected yet. */
   onSelect?: () => void
   /** Selects every currently visible (filtered) item. */
   onSelectAll?: () => void
@@ -155,10 +149,7 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
         ]
       : [])
   ]
-  // Outside select mode, the All/Above/Below variants have no anchor to make sense of yet
-  // (nothing else is selected) - a single generic "Select" entry (via onSelect) is the
-  // only selection action offered until the list is already in select mode, at which
-  // point the fuller batch-selection variants take over.
+  // Outside select mode, All/Above/Below have no anchor to make sense of yet - just a generic "Select" entry until the list is already in select mode.
   const selectionItems = selectMode
     ? [
         ...(onSelectAll ? [{ key: 'select-all', title: 'Select All', onClick: onSelectAll }] : []),

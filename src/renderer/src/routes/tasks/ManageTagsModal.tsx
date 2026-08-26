@@ -14,9 +14,7 @@ export type ManageTagsModalProps = {
   onClose: () => void
 }
 
-/** The one place a project's tag vocabulary is created/renamed/deleted - typing only
- *  happens here (the "New tag" field); everywhere a tag gets attached to a task, it's
- *  picked from this list by id (see EditTaskTagsModal, BatchEditTagsModal). */
+/** The one place a project's tag vocabulary is created/renamed/deleted - elsewhere a tag is always picked from this list by id (see EditTaskTagsModal, BatchEditTagsModal). */
 export const ManageTagsModal: FC<ManageTagsModalProps> = ({ opened, project, onClose }) => {
   const { items, isLoading, create, rename, remove } = useTags(project)
   const [newName, setNewName] = useState('')

@@ -1,5 +1,4 @@
-// Import styles of packages that you've installed.
-// All packages except `@mantine/hooks` require styles imports
+// All packages except @mantine/hooks require a styles import.
 import '@mantine/core/styles.css'
 import '@mantine/dropzone/styles.css'
 import 'mantine-contextmenu/styles.css'

@@ -30,21 +30,13 @@ const INITIAL_PROGRESS: RunAnnotatorProgress = {
   failures: []
 }
 
-/** Runs an annotator over a set of samples, skipping any sample that already has at
- *  least one annotation - auto-labeling only ever targets unlabeled samples. Runs
- *  sequentially and keeps going past a per-sample failure so one bad image doesn't stop
- *  the rest of the batch. `taskIds` covers every task the passed-in samples were drawn
- *  from (usually one, but a batch run from the Tasks page can span several), so each of
- *  their sample caches gets invalidated once the run finishes. */
+/** Runs an annotator over samples, skipping any already-annotated one. Sequential, keeps going past a per-sample failure. `taskIds` covers every task the samples were drawn from, so each cache gets invalidated when the run finishes. */
 export const useRunAnnotator = (taskIds: string[]) => {
   const store = useAppStore((s) => s.store)
   const queryClient = useQueryClient()
   const [progress, setProgress] = useState<RunAnnotatorProgress>(INITIAL_PROGRESS)
   const [isRunning, setIsRunning] = useState(false)
-  // Distinct from isRunning (which flips back to false once the run finishes) and from
-  // progress.total (which is legitimately 0 when every sample was already labeled) - the
-  // only reliable way to tell "a run happened" from "nothing has run yet" is a flag that
-  // run() itself sets and only reset() clears.
+  // Distinct from isRunning (flips back once finished) and progress.total (legitimately 0 when already labeled) - only run()/reset() touch this.
   const [hasRun, setHasRun] = useState(false)
 
   const run = useCallback(
@@ -91,9 +83,7 @@ export const useRunAnnotator = (taskIds: string[]) => {
         }
       }
 
-      // Awaited before clearing isRunning (which enables "Done") - the caller can stay on
-      // this same modal and immediately Run again, so the sample list backing that next
-      // run must already reflect the annotations just created, not a stale pre-run snapshot.
+      // Awaited before clearing isRunning - an immediate re-Run must see the annotations just created, not a stale snapshot.
       await Promise.all(
         taskIds.map((taskId) =>
           queryClient.invalidateQueries({ queryKey: ['samples', taskId, store] })

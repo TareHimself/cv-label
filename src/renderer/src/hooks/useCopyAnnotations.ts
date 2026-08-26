@@ -36,13 +36,7 @@ const INITIAL_PROGRESS: CopyAnnotationsProgress = {
   failures: []
 }
 
-/** Copies each pair's source-sample annotations onto its destination sample, skipping a
- *  pair whose destination already has annotations (never overwrite manual work), whose
- *  source/destination dimensions differ (points are absolute pixel coordinates, so a
- *  verbatim copy is only correct when the images are the same size), or whose destination
- *  was already claimed by an earlier pair in this same run (first pair mapped to a given
- *  destination wins - prevents double-copying into it). Runs sequentially and keeps going
- *  past a per-pair failure, same as useRunAnnotator. */
+/** Copies source annotations onto each pair's destination, skipping one that's already labeled, has mismatched dimensions (points are absolute pixels), or was already claimed by an earlier pair this run. Sequential, keeps going past a per-pair failure. */
 export const useCopyAnnotations = (destinationTaskId: string) => {
   const store = useAppStore((s) => s.store)
   const queryClient = useQueryClient()

@@ -57,9 +57,7 @@ const makeImageUri = (id: string, extension: string) => {
   return `image://${LOCAL_STORE_ID}/${id}.${extension}`
 }
 
-/** Takes just the `<id>.<ext>` segment (the image:// URL's pathname, minus the leading
- *  slash) - the storeId/scheme parsing happens once, centrally, in the orchestrator's
- *  protocol.handle before this store is ever consulted. */
+/** Takes just the `<id>.<ext>` segment - storeId/scheme parsing happens once, centrally, in the orchestrator's protocol.handle before this store is ever consulted. */
 export const getImagePathForId = async (idWithExtension: string) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [id, _] = idWithExtension.split('.') as [string, string]
@@ -72,31 +70,20 @@ export const getImagePathForId = async (idWithExtension: string) => {
   return path.join(imagesPath, `${imageInfo.hash}.${imageInfo.extension}`)
 }
 
-/** A Node Readable can't cross the worker_threads postMessage boundary, so unlike every
- *  other export here this is never called through the RPC proxy from main - only from
- *  exportSamplesToArchive, in the same worker module. A future non-local IDataStore
- *  implementation would swap this for e.g. an HTTP GET response stream; nothing that
- *  consumes it needs to know which. */
+/** A Node Readable can't cross the worker_threads postMessage boundary - unlike everything else here, never called through the RPC proxy from main, only from exportSamplesToArchive in the same worker. */
 export const getImageStream = async (imageUri: string) => {
   const filePath = await getImagePathForId(new URL(imageUri).pathname.slice(1))
   return filePath === undefined ? undefined : createReadStream(filePath)
 }
 
-// How many image entries can be mid-append (file open, being read/compressed/written) at
-// once. archive.append() only queues an entry and returns immediately, so appending every
-// entry back to back with no bound would open one file descriptor per image up front -
-// fine for a handful of samples, but risks exhausting file descriptors (EMFILE) on
-// datasets with thousands of images. This bounds that to a fixed window instead of either
-// extreme (unbounded, or strictly one-at-a-time).
+// Bounds how many image entries can be mid-append at once - unbounded risks exhausting file descriptors (EMFILE) on large datasets.
 const DEFAULT_EXPORT_CONCURRENCY = 10
 
 export const exportSamplesToArchive = async (
   destinationPath: string,
   manifest: ArchiveManifest,
   concurrency: number = DEFAULT_EXPORT_CONCURRENCY,
-  // Must stay the last parameter: the worker-RPC layer detects a trailing function
-  // argument as an out-of-band progress callback (see main/worker/index.ts) and strips it
-  // before the call crosses into the worker.
+  // Must stay last - the worker-RPC layer detects a trailing function as a progress callback and strips it before crossing into the worker.
   onProgress?: (completed: number, total: number) => void
 ): Promise<void> => {
   const archive = archiver('zip', { zlib: { level: 9 } })
@@ -110,15 +97,11 @@ export const exportSamplesToArchive = async (
 
   archive.pipe(output)
 
-  // Progress is tracked against the manifest's own (fixed, known-upfront) entry count
-  // rather than archiver's own 'progress' event, which only reflects entries queued so far
-  // and would understate the real dataset size while entries are still being appended.
+  // Tracked against the manifest's fixed entry count, not archiver's own 'progress' event, which understates the total while entries are still being appended.
   const total = manifest.textEntries.length + manifest.imageEntries.length
   let completed = 0
 
-  // With several appends in flight at once, archiver's 'entry' event (fired per completed
-  // entry) can't be matched to the right pending promise by registration order - a single
-  // persistent listener correlates each event to its own append by name instead.
+  // With several appends in flight, archiver's 'entry' event can't be matched to the right pending promise by registration order - correlate by name instead.
   const pendingByName = new Map<string, () => void>()
   archive.on('entry', (entryData) => {
     const resolve = pendingByName.get(entryData.name)
@@ -170,8 +153,7 @@ function fetchSampleWithRelations(id: string) {
 // Row shape returned by the sample relational query above (id/image/annotations/points).
 type SampleWithRelationsRow = NonNullable<Awaited<ReturnType<typeof fetchSampleWithRelations>>>
 
-/** Images written before the width/height columns existed have them as null - backfill
- *  lazily on first read rather than a blocking startup migration over every existing file. */
+/** Images written before width/height existed have them as null - backfilled lazily on first read, not a blocking startup migration. */
 const imageDimensions = async (
   image: SampleWithRelationsRow['image']
 ): Promise<{ width: number; height: number }> => {
@@ -215,8 +197,7 @@ const mapSampleRow = async (row: SampleWithRelationsRow): Promise<ISample> => {
 
 type ImageMetadata = { hash: string; extension: string; width: number; height: number }
 
-// Bounds in-flight file handles/hashes during ingestion instead of processing a whole
-// import batch (which can run into the thousands of images) at once.
+// Bounds in-flight file handles/hashes instead of processing a whole (possibly thousands-strong) import batch at once.
 const INGEST_CONCURRENCY = 8
 
 const ingestScratchImage = async (imagePath: string): Promise<ImageMetadata> => {
@@ -229,9 +210,7 @@ const ingestScratchImage = async (imagePath: string): Promise<ImageMetadata> => 
   }
 }
 
-/** Moves a scratch file into the store, falling back to copy+unlink when the scratch
- *  directory (os.tmpdir()) isn't on the same filesystem/drive as the store - fs.rename
- *  throws EXDEV in that case rather than silently failing, so this must not be skipped. */
+/** Falls back to copy+unlink when the scratch dir isn't on the same filesystem/drive as the store - fs.rename throws EXDEV in that case. */
 const moveOrCopyFile = async (source: string, destination: string): Promise<void> => {
   try {
     await fs.rename(source, destination)
@@ -245,9 +224,7 @@ const moveOrCopyFile = async (source: string, destination: string): Promise<void
   }
 }
 
-/** Consumes every scratch file referenced by samples: moves the ones behind a newly
- *  inserted image into the store, and discards the rest (their content is already
- *  covered by an existing store file, per insertedImagesIndex). */
+/** Moves scratch files behind a newly inserted image into the store; discards the rest, already covered by an existing store file per insertedImagesIndex. */
 const consumeScratchFiles = async (
   samples: INewSample[],
   images: ImageMetadata[],
@@ -403,16 +380,14 @@ const localStore: IDataStore = {
         }
 
         for (const label of update.labels ?? []) {
-          // Scoped to projectId as a defensive check - the renderer only ever sends a project's
-          // own labels back, but this keeps a bad id from silently renaming a label in another project.
+          // Scoped to projectId defensively - keeps a bad id from silently renaming a label in another project.
           const result = tx
             .update(schema.labels)
             .set({ name: label.name, color: label.color })
             .where(and(eq(schema.labels.id, label.id), eq(schema.labels.projectId, update.id)))
             .run()
 
-          // A label id the project doesn't have yet isn't a rename - it's a new label
-          // being added (EditProjectModal's "Add Label"), so insert it instead.
+          // No existing row means this is a new label (EditProjectModal's "Add Label"), not a rename.
           if (result.changes === 0) {
             tx.insert(schema.labels)
               .values({ id: label.id, name: label.name, color: label.color, projectId: update.id })
@@ -446,9 +421,7 @@ const localStore: IDataStore = {
   },
 
   getTasksForProject: async (projectId) => {
-    // count(samples.id) skips the null produced by the left join for a task with no
-    // samples yet; count(samples.completedAt) counts only the non-null (completed) ones -
-    // both fall out of plain SQL COUNT-of-a-column semantics, no CASE/filter needed.
+    // count(samples.id)/count(samples.completedAt) skip nulls by plain SQL COUNT semantics - no CASE/filter needed.
     const taskRows = await db
       .select({
         id: schema.tasks.id,
@@ -466,9 +439,7 @@ const localStore: IDataStore = {
       return []
     }
 
-    // A second, separate query rather than joining task_tags into the query above - that
-    // aggregate already GROUPs by task for the sample counts, and a many-to-many tags join
-    // would multiply rows before the GROUP BY and corrupt those counts.
+    // Separate query, not joined above - a many-to-many tags join would multiply rows before that query's GROUP BY and corrupt the sample counts.
     const tagRows = await db
       .select({
         taskId: schema.taskTags.taskId,
@@ -520,10 +491,7 @@ const localStore: IDataStore = {
   },
 
   createTask: async (projectId, id, name, newSamples = []) => {
-    // Newly created samples never carry a completedAt (INewSample has no such field -
-    // see cvLabelDatasetToSamples etc.), so completedSampleCount is always 0 here -
-    // cheaper than an extra aggregate query for a value we already know. A new task
-    // starts untagged.
+    // Newly created samples never carry a completedAt, so completedSampleCount is always 0 - cheaper than an extra query for a value we already know.
     const task: ITask = {
       id,
       name,
@@ -683,8 +651,7 @@ const localStore: IDataStore = {
   },
 
   updateSamples: async (updates) => {
-    // Read rows and resolve (possibly-backfilled) width/height before the transaction,
-    // since better-sqlite3 transactions run synchronously and sharp's metadata read doesn't.
+    // Resolved before the transaction, since better-sqlite3 transactions run synchronously and sharp's metadata read doesn't.
     const existingRows = updates.map((update) => {
       const row = db.query.samples
         .findFirst({
@@ -828,7 +795,6 @@ const localStore: IDataStore = {
 
   replacePoints: async (annotationId, points) => {
     return db.transaction((tx) => {
-      // Get current points for the annotation
       const currentPoints = tx
         .select({
           id: schema.points.id,
@@ -841,21 +807,17 @@ const localStore: IDataStore = {
         .orderBy(asc(schema.points.sequence))
         .all()
 
-      // Create a map of current points by id
       const currentPointsMap = new Map(currentPoints.map((p) => [p.id, p]))
 
-      // Categorize operations
       const toInsert: { id: string; x: number; y: number; sequence: number }[] = []
       const toUpdate: { id: string; x: number; y: number; sequence: number }[] = []
       const toDelete: string[] = []
 
-      // Process each input point
       for (let sequence = 0; sequence < points.length; sequence++) {
         const pointInput = points[sequence]
         const id = pointInput.id
 
         if (currentPointsMap.has(id)) {
-          // Update existing point
           const existing = currentPointsMap.get(id)!
           toUpdate.push({
             id: id,
@@ -864,7 +826,7 @@ const localStore: IDataStore = {
             sequence: sequence
           })
         } else {
-          // Insert new point - must have x and y
+          // A new point must have x and y.
           if (pointInput.x === undefined || pointInput.y === undefined) {
             throw new Error(`New point with id ${id} missing x or y coordinate`)
           }
@@ -877,7 +839,6 @@ const localStore: IDataStore = {
         }
       }
 
-      // Points to delete: current points not in input
       for (const current of currentPoints) {
         const isInInput = points.some((p) => p.id === current.id)
         if (!isInInput) {
@@ -885,7 +846,6 @@ const localStore: IDataStore = {
         }
       }
 
-      // Perform operations in order: delete, insert, update
       if (toDelete.length > 0) {
         tx.delete(schema.points).where(inArray(schema.points.id, toDelete)).run()
       }
@@ -903,7 +863,6 @@ const localStore: IDataStore = {
           .run()
       }
 
-      // Return the full list of points ordered by sequence
       return tx
         .select({ id: schema.points.id, x: schema.points.x, y: schema.points.y })
         .from(schema.points)
@@ -914,7 +873,6 @@ const localStore: IDataStore = {
   }
 }
 
-// named exports (bindings)
 export const {
   connect,
   disconnect,

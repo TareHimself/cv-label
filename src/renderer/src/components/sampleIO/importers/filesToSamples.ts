@@ -8,9 +8,7 @@ const extensionOf = (filename: string) => {
   return idx === -1 ? 'bin' : filename.slice(idx + 1).toLowerCase()
 }
 
-/** Writes each file to scratchDir one at a time (not in parallel - datasets can run into
- *  the thousands of images, and holding them all as blobs/base64 at once risks spiking
- *  memory). Returns samples referencing the scratch paths, not image bytes. */
+/** Writes each file to scratchDir one at a time, not in parallel - holding thousands of images as blobs at once risks spiking memory. Returns samples referencing scratch paths, not bytes. */
 export const filesToSamples = async (
   files: File[],
   scratchDir: string,

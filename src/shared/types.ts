@@ -1,25 +1,10 @@
-/** Privileged protocol scheme main registers to serve arbitrary local scratch files (e.g.
- *  a not-yet-imported sample's thumbnail) straight to the renderer, the same way the
- *  images:// protocol serves persisted ones - see main/scratchProtocol.ts.
- *
- *  A raw file path can't be embedded in the URL itself (`scratch:///C%3A%5Cfoo` etc.) -
- *  for a custom "standard" scheme, Chromium's URL parser treats everything between `//`
- *  and the next `/` as the host/authority, subject to host-validity rules that reject or
- *  mangle drive letters, colons and backslashes, same as images:// already avoids by using
- *  an opaque id instead of a raw path. So this is request/response (main mints an id for a
- *  path and hands back `scratch://<id>`), not a pure client-side string builder. */
+/** Privileged protocol serving arbitrary local scratch files to the renderer - request/response (mint an id, hand back `scratch://<id>`) since a raw file path can't safely go in the URL itself. See main/scratchProtocol.ts. */
 export const SCRATCH_PROTOCOL_URL = 'scratch'
 
-/** Privileged protocol scheme main registers to serve persisted sample images. A URL is
- *  `image://<storeId>/<imageId>.<ext>` - `storeId` is the host/authority segment (same
- *  custom-scheme parsing behavior SCRATCH_PROTOCOL_URL relies on), so the single
- *  `protocol.handle` registered in main/store.ts can dispatch to whichever registered
- *  IDataStore produced the image, regardless of which store is currently active. */
+/** Privileged protocol serving persisted sample images: `image://<storeId>/<imageId>.<ext>` - storeId lets main/store.ts dispatch to whichever IDataStore produced the image. */
 export const IMAGE_PROTOCOL_URL = 'image'
 
-/** The id the always-registered local/worker-backed store is known by to the orchestrator
- *  and stamps onto every image:// URL it mints - see main/localStore.ts,
- *  main/storeOrchestrator.ts. */
+/** The id the always-registered local/worker-backed store is known by - see main/localStore.ts, main/storeOrchestrator.ts. */
 export const LOCAL_STORE_ID = 'local'
 
 export type BoundaryResult<T> =
@@ -54,10 +39,7 @@ export interface IProject {
   labels: ILabel[]
 }
 
-/** Renames the project, edits existing labels, and can add new labels (an id not
- *  already on the project is inserted rather than treated as a rename) - existing
- *  labels still can't be removed here, since one already used by an annotation would
- *  violate a foreign key. */
+/** Renames the project and edits/adds labels - can't remove one here, since one already used by an annotation would violate a foreign key. */
 export interface IProjectUpdate {
   id: IProject['id']
   name?: string
@@ -77,9 +59,7 @@ export interface ITagUpdate {
 export interface ITask {
   id: string
   name: string
-  /** Optional since not every code path that returns an ITask computes these (e.g.
-   *  updateTasks, which only renames - its result is never read for progress display,
-   *  only getTasksForProject/createTask populate them). Absent, not 0, when unknown. */
+  /** Absent, not 0, when unknown - only getTasksForProject/createTask populate these. */
   sampleCount?: number
   completedSampleCount?: number
   tags?: ITag[]
@@ -99,10 +79,7 @@ export enum TrainingSplit {
 export interface INewSample {
   id: string
   name: string
-  /** Absolute path to a scratch file on local disk, written by whichever importer built
-   *  this sample. The active IDataStore implementation decides how to ingest it -
-   *  localStore moves it into its own image store; a future remote store would stream-
-   *  upload from the same local path. Always a reference, never held bytes. */
+  /** Absolute path to a scratch file on disk, written by whichever importer built this sample - always a reference, never held bytes. */
   imagePath: string
   split: TrainingSplit
   annotations: IAnnotation[]
@@ -120,10 +97,7 @@ export interface ISampleUpdate extends Partial<OmitV2<ISample, 'annotations' | '
   id: ISample['id']
 }
 
-/** Store-agnostic and project-agnostic connection info for an external annotator server -
- *  see main/appStore.ts. Neither its label vocabulary nor any mapping against a project's
- *  labels is ever persisted - both are fetched/built live and held only in renderer memory
- *  (see hooks/useAnnotatorRuntime.ts, api/ExternalAnnotator.ts). */
+/** Store-agnostic and project-agnostic connection info for an external annotator server - see main/appStore.ts. Its label mapping is never persisted, only rebuilt live in renderer memory. */
 export interface INewAnnotator {
   id: string
   name: string
@@ -177,17 +151,13 @@ export interface IDataStore {
   updateTasks(updates: ITaskUpdate[]): Promise<ITask[]>
   deleteTasks(taskIds: string[]): Promise<boolean[]>
 
-  /** A project-global vocabulary managed from one place (ManageTagsModal) - typing only
-   *  happens here, when a tag is actually being created/renamed. Everywhere a tag gets
-   *  attached to a task, it's picked from this list by id, never typed. */
+  /** A project-global vocabulary managed from one place (ManageTagsModal) - a tag is always picked by id elsewhere, never typed. */
   getTagsForProject(projectId: string): Promise<ITag[]>
   createTag(projectId: string, id: string, name: string): Promise<ITag>
   updateTags(updates: ITagUpdate[]): Promise<ITag[]>
   deleteTags(tagIds: string[]): Promise<boolean[]>
 
-  /** Attaches/detaches existing tags (by id) to/from every task in taskIds - never a
-   *  per-task "replace the whole set" operation, so batch add/remove across differently-
-   *  tagged tasks doesn't require knowing each task's current tags up front. */
+  /** Attaches/detaches existing tags (by id) to/from every task in taskIds - never a per-task "replace the whole set" operation. */
   addTagsToTasks(taskIds: string[], tagIds: string[]): Promise<void>
   removeTagsFromTasks(taskIds: string[], tagIds: string[]): Promise<void>
 
@@ -205,9 +175,7 @@ export interface IDataStore {
   replacePoints(annotationId: string, points: IPointReplacement[]): Promise<IPoint[]>
 }
 
-/** The always-on, store-agnostic counterpart to IDataStore - annotators live here instead
- *  of in whichever IDataStore is currently active (see main/appStore.ts), so main routes
- *  App_* IPC straight to a single fixed AppStore rather than through StoreOrchestrator. */
+/** The always-on, store-agnostic counterpart to IDataStore - annotators live here, not in whichever IDataStore is active, so App_* IPC skips StoreOrchestrator entirely. */
 export interface IAppDataStore {
   getAnnotators(): Promise<IAnnotator[]>
   createAnnotator(
@@ -222,9 +190,7 @@ export interface IAppDataStore {
 
 export type StoreDescriptor = { id: string; name: string }
 
-/** Lets the renderer list/switch which registered IDataStore main is currently routing
- *  Store_* IPC calls to - separate from IDataStore itself since these are orchestration
- *  operations, not data operations. See main/storeOrchestrator.ts. */
+/** Lets the renderer list/switch which registered IDataStore main is routing Store_* IPC to - orchestration, not data operations. See main/storeOrchestrator.ts. */
 export interface IStoreManager {
   listStores(): Promise<StoreDescriptor[]>
   useStore(id: string): Promise<void>
@@ -234,8 +200,7 @@ export interface ISystem {
   createTemporaryDirectory(): Promise<string>
   deleteFile(filePath: string): Promise<void>
   deleteDirectory(filePath: string): Promise<void>
-  /** Shows a native save dialog defaulted to suggestedName; writes data to the chosen
-   *  path. Returns false if the user cancelled the dialog. */
+  /** Shows a native save dialog defaulted to suggestedName; returns false if cancelled. */
   saveFile(suggestedName: string, data: ArrayBuffer): Promise<boolean>
   /** Writes data to an explicit local path - no dialog, unlike saveFile. */
   writeFile(filePath: string, data: ArrayBuffer): Promise<void>
@@ -243,26 +208,18 @@ export interface ISystem {
   /** Relative, forward-slash paths of every file under dirPath (recursive). */
   listFilesRecursive(dirPath: string): Promise<string[]>
   getFileSize(filePath: string): Promise<number>
-  /** Reads just enough of the file to determine its dimensions - never loads the full
-   *  image into memory, unlike decoding it renderer-side via createImageBitmap. */
+  /** Reads just enough of the file to determine dimensions - never loads the full image into memory. */
   getImageDimensions(filePath: string): Promise<{ width: number; height: number }>
-  /** Mints a scratch://<id> URI that resolves back to filePath - see SCRATCH_PROTOCOL_URL
-   *  for why this can't just be built client-side from the path. */
+  /** Mints a scratch://<id> URI resolving back to filePath - see SCRATCH_PROTOCOL_URL. */
   getScratchPreviewUri(filePath: string): Promise<string>
 }
 
 export interface IZip {
-  // getKeys(filePath: string): Promise<string[]>
   extractTo(filePath: string, destination: string): Promise<void>
 }
 
 export interface IFileUtils {
-  /** The real absolute path of a File picked via <input type="file"> - Electron's
-   *  webUtils.getPathForFile, the documented replacement for the removed File.path
-   *  property. Synchronous and never touches the file's bytes, unlike reading it via
-   *  arrayBuffer()/stream() - use this instead of copying a picked file's contents
-   *  through IPC just to hand main process code a path to it. Returns '' for a File that
-   *  has no real on-disk path (e.g. one constructed in memory rather than picked). */
+  /** The real absolute path of a picked File - Electron's webUtils.getPathForFile. Returns '' for a File with no real on-disk path. */
   getPathForFile(file: File): string
 }
 
@@ -272,13 +229,9 @@ export type ArchiveManifest = { textEntries: ArchiveTextEntry[]; imageEntries: A
 export type ExportProgressEvent = { completed: number; total: number }
 
 export interface IExportApi {
-  /** Shows a native save dialog defaulted to suggestedName, then streams manifest's
-   *  entries straight into a zip archive at the chosen path - image entries are read
-   *  from the store and never fully buffered in the renderer. Returns false if the user
-   *  cancelled the dialog. */
+  /** Streams manifest's entries into a zip at a user-chosen path - image entries never fully buffer in the renderer. False if cancelled. */
   runExport(suggestedName: string, manifest: ArchiveManifest): Promise<boolean>
-  /** Subscribes to progress updates for the currently in-flight export. Returns an
-   *  unsubscribe function. */
+  /** Subscribes to progress for the in-flight export; returns an unsubscribe function. */
   onProgress(callback: (event: ExportProgressEvent) => void): () => void
 }
 
@@ -344,8 +297,7 @@ export enum IPCKeys {
 
   // Export
   Export_Run = 'export-run',
-  /** Main -> renderer push channel (not part of IPCEvents' request/response shape) -
-   *  carries ExportProgressEvent payloads while an export triggered by Export_Run runs. */
+  /** Main -> renderer push channel carrying ExportProgressEvent while Export_Run is in flight. */
   Export_Progress = 'export-progress'
 }
 
