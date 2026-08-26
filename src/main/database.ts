@@ -197,8 +197,7 @@ const mapSampleRow = async (row: SampleWithRelationsRow): Promise<ISample> => {
 
 type ImageMetadata = { hash: string; extension: string; width: number; height: number }
 
-// Bounds in-flight file handles/hashes during ingestion instead of processing a whole
-// import batch (which can run into the thousands of images) at once.
+// Bounds in-flight file handles/hashes instead of processing a whole (possibly thousands-strong) import batch at once.
 const INGEST_CONCURRENCY = 8
 
 const ingestScratchImage = async (imagePath: string): Promise<ImageMetadata> => {
@@ -381,16 +380,14 @@ const localStore: IDataStore = {
         }
 
         for (const label of update.labels ?? []) {
-          // Scoped to projectId as a defensive check - the renderer only ever sends a project's
-          // own labels back, but this keeps a bad id from silently renaming a label in another project.
+          // Scoped to projectId defensively - keeps a bad id from silently renaming a label in another project.
           const result = tx
             .update(schema.labels)
             .set({ name: label.name, color: label.color })
             .where(and(eq(schema.labels.id, label.id), eq(schema.labels.projectId, update.id)))
             .run()
 
-          // A label id the project doesn't have yet isn't a rename - it's a new label
-          // being added (EditProjectModal's "Add Label"), so insert it instead.
+          // No existing row means this is a new label (EditProjectModal's "Add Label"), not a rename.
           if (result.changes === 0) {
             tx.insert(schema.labels)
               .values({ id: label.id, name: label.name, color: label.color, projectId: update.id })
@@ -424,9 +421,7 @@ const localStore: IDataStore = {
   },
 
   getTasksForProject: async (projectId) => {
-    // count(samples.id) skips the null produced by the left join for a task with no
-    // samples yet; count(samples.completedAt) counts only the non-null (completed) ones -
-    // both fall out of plain SQL COUNT-of-a-column semantics, no CASE/filter needed.
+    // count(samples.id)/count(samples.completedAt) skip nulls by plain SQL COUNT semantics - no CASE/filter needed.
     const taskRows = await db
       .select({
         id: schema.tasks.id,
@@ -444,9 +439,7 @@ const localStore: IDataStore = {
       return []
     }
 
-    // A second, separate query rather than joining task_tags into the query above - that
-    // aggregate already GROUPs by task for the sample counts, and a many-to-many tags join
-    // would multiply rows before the GROUP BY and corrupt those counts.
+    // Separate query, not joined above - a many-to-many tags join would multiply rows before that query's GROUP BY and corrupt the sample counts.
     const tagRows = await db
       .select({
         taskId: schema.taskTags.taskId,
@@ -498,10 +491,7 @@ const localStore: IDataStore = {
   },
 
   createTask: async (projectId, id, name, newSamples = []) => {
-    // Newly created samples never carry a completedAt (INewSample has no such field -
-    // see cvLabelDatasetToSamples etc.), so completedSampleCount is always 0 here -
-    // cheaper than an extra aggregate query for a value we already know. A new task
-    // starts untagged.
+    // Newly created samples never carry a completedAt, so completedSampleCount is always 0 - cheaper than an extra query for a value we already know.
     const task: ITask = {
       id,
       name,
@@ -661,8 +651,7 @@ const localStore: IDataStore = {
   },
 
   updateSamples: async (updates) => {
-    // Read rows and resolve (possibly-backfilled) width/height before the transaction,
-    // since better-sqlite3 transactions run synchronously and sharp's metadata read doesn't.
+    // Resolved before the transaction, since better-sqlite3 transactions run synchronously and sharp's metadata read doesn't.
     const existingRows = updates.map((update) => {
       const row = db.query.samples
         .findFirst({
@@ -806,7 +795,6 @@ const localStore: IDataStore = {
 
   replacePoints: async (annotationId, points) => {
     return db.transaction((tx) => {
-      // Get current points for the annotation
       const currentPoints = tx
         .select({
           id: schema.points.id,
@@ -819,21 +807,17 @@ const localStore: IDataStore = {
         .orderBy(asc(schema.points.sequence))
         .all()
 
-      // Create a map of current points by id
       const currentPointsMap = new Map(currentPoints.map((p) => [p.id, p]))
 
-      // Categorize operations
       const toInsert: { id: string; x: number; y: number; sequence: number }[] = []
       const toUpdate: { id: string; x: number; y: number; sequence: number }[] = []
       const toDelete: string[] = []
 
-      // Process each input point
       for (let sequence = 0; sequence < points.length; sequence++) {
         const pointInput = points[sequence]
         const id = pointInput.id
 
         if (currentPointsMap.has(id)) {
-          // Update existing point
           const existing = currentPointsMap.get(id)!
           toUpdate.push({
             id: id,
@@ -842,7 +826,7 @@ const localStore: IDataStore = {
             sequence: sequence
           })
         } else {
-          // Insert new point - must have x and y
+          // A new point must have x and y.
           if (pointInput.x === undefined || pointInput.y === undefined) {
             throw new Error(`New point with id ${id} missing x or y coordinate`)
           }
@@ -855,7 +839,6 @@ const localStore: IDataStore = {
         }
       }
 
-      // Points to delete: current points not in input
       for (const current of currentPoints) {
         const isInInput = points.some((p) => p.id === current.id)
         if (!isInInput) {
@@ -863,7 +846,6 @@ const localStore: IDataStore = {
         }
       }
 
-      // Perform operations in order: delete, insert, update
       if (toDelete.length > 0) {
         tx.delete(schema.points).where(inArray(schema.points.id, toDelete)).run()
       }
@@ -881,7 +863,6 @@ const localStore: IDataStore = {
           .run()
       }
 
-      // Return the full list of points ordered by sequence
       return tx
         .select({ id: schema.points.id, x: schema.points.x, y: schema.points.y })
         .from(schema.points)
@@ -892,7 +873,6 @@ const localStore: IDataStore = {
   }
 }
 
-// named exports (bindings)
 export const {
   connect,
   disconnect,
