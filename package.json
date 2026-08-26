@@ -36,7 +36,7 @@
     "@mantine/hooks": "^8.3.15",
     "@mantine/modals": "^8.3.15",
     "@tanstack/react-query": "^5.96.1",
-    "@wyw-in-js/babel-preset": "^1.0.6",
+    "@wyw-in-js/babel-preset": "^2.4.1",
     "archiver": "^7.0.1",
     "better-sqlite3": "^12.6.2",
     "clsx": "^2.1.1",
