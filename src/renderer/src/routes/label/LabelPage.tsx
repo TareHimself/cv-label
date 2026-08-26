@@ -110,9 +110,7 @@ const LabelerModeControl = ({ value, onChange, size = 'md' }: LabelerModeControl
   />
 )
 
-// Labels grow unbounded (a project can have dozens), so this row needs to size to its
-// natural content width and scroll rather than stretch every item to fill the bar -
-// the fixed cap keeps the bottom bar's other controls from getting pushed off-screen.
+// Labels grow unbounded (a project can have dozens), so this row scrolls at its natural width instead of stretching and pushing the bottom bar's other controls off-screen.
 const LABEL_LIST_MAX_WIDTH = 'min(420px, 40vw)'
 
 const TextSegmentedControl = ({
@@ -244,10 +242,7 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
       const { commit, rollback } = sample.update({
         completedAt: newValue
       })
-      // sample.update() mutates the OptimisticObject through its own private
-      // subscription system, which the labeler zustand store never hears about.
-      // Force a notify so selectors reading sample.resolve() (currentSampleId,
-      // sampleCompletedAt) actually re-render.
+      // sample.update() mutates via its own private subscription, which the labeler store never hears about - force a notify so its selectors re-render.
       store.setState((s) => ({ ...s }))
       return useAppStore
         .getState()
@@ -273,12 +268,9 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
     store.getState().setSample(samples[index])
   }, [index, samples, store])
 
-  // Force a full repaint on return: the canvas's own resize-detection normally covers
-  // becoming visible again, but that depends on measuring a bounding rect that Activity
-  // may not have finished restoring yet - an explicit markAllDirty() here is reliable.
+  // Forces a repaint on return - Activity's bounding rect may not be finished restoring when the canvas's own resize-detection would otherwise run.
   useOnRouteEnter(() => store.getState().markAllDirty())
-  // Don't let a bitmap load started for this page keep running (and settling into a
-  // hidden store) after the user has already left it.
+  // Don't let a bitmap load started for this page keep running after the user has left it.
   useOnRouteLeave(() => store.getState().cancelPendingSampleLoad())
 
   const goToSample = useCallback(
@@ -336,13 +328,11 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
     ]
   )
 
-  // useHotkeys ignores INPUT/TEXTAREA/SELECT targets by default, so this doesn't fire
-  // while e.g. the sample index NumberInput below is focused.
+  // useHotkeys ignores INPUT/TEXTAREA/SELECT targets, so this doesn't fire while e.g. the sample index NumberInput is focused.
   useHotkeys(hotkeys)
 
   useEffect(() => {
-    // event.button 3/4 are the mouse's back/forward side buttons - preventDefault on
-    // mousedown, which is where Electron/Chromium's own back/forward would otherwise fire.
+    // event.button 3/4 are the mouse's back/forward buttons - preventDefault on mousedown blocks Electron/Chromium's own back/forward.
     const onMouseDown = (event: MouseEvent) => {
       if (isDeleteConfirmOpen) return
       if (event.button === 3) {
