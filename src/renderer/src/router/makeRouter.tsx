@@ -14,8 +14,7 @@ import { makeUUID } from '@shared/utils'
 export type RouteParamsMap = Record<string, unknown>
 
 type NavigateArgs<Routes extends RouteParamsMap, K extends keyof Routes> = Routes[K] extends
-  | undefined
-  | void
+  undefined | void
   ? [screen: K]
   : [screen: K, params: Routes[K]]
 
