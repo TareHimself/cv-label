@@ -57,9 +57,7 @@ const makeImageUri = (id: string, extension: string) => {
   return `image://${LOCAL_STORE_ID}/${id}.${extension}`
 }
 
-/** Takes just the `<id>.<ext>` segment (the image:// URL's pathname, minus the leading
- *  slash) - the storeId/scheme parsing happens once, centrally, in the orchestrator's
- *  protocol.handle before this store is ever consulted. */
+/** Takes just the `<id>.<ext>` segment - storeId/scheme parsing happens once, centrally, in the orchestrator's protocol.handle before this store is ever consulted. */
 export const getImagePathForId = async (idWithExtension: string) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [id, _] = idWithExtension.split('.') as [string, string]
@@ -72,31 +70,20 @@ export const getImagePathForId = async (idWithExtension: string) => {
   return path.join(imagesPath, `${imageInfo.hash}.${imageInfo.extension}`)
 }
 
-/** A Node Readable can't cross the worker_threads postMessage boundary, so unlike every
- *  other export here this is never called through the RPC proxy from main - only from
- *  exportSamplesToArchive, in the same worker module. A future non-local IDataStore
- *  implementation would swap this for e.g. an HTTP GET response stream; nothing that
- *  consumes it needs to know which. */
+/** A Node Readable can't cross the worker_threads postMessage boundary - unlike everything else here, never called through the RPC proxy from main, only from exportSamplesToArchive in the same worker. */
 export const getImageStream = async (imageUri: string) => {
   const filePath = await getImagePathForId(new URL(imageUri).pathname.slice(1))
   return filePath === undefined ? undefined : createReadStream(filePath)
 }
 
-// How many image entries can be mid-append (file open, being read/compressed/written) at
-// once. archive.append() only queues an entry and returns immediately, so appending every
-// entry back to back with no bound would open one file descriptor per image up front -
-// fine for a handful of samples, but risks exhausting file descriptors (EMFILE) on
-// datasets with thousands of images. This bounds that to a fixed window instead of either
-// extreme (unbounded, or strictly one-at-a-time).
+// Bounds how many image entries can be mid-append at once - unbounded risks exhausting file descriptors (EMFILE) on large datasets.
 const DEFAULT_EXPORT_CONCURRENCY = 10
 
 export const exportSamplesToArchive = async (
   destinationPath: string,
   manifest: ArchiveManifest,
   concurrency: number = DEFAULT_EXPORT_CONCURRENCY,
-  // Must stay the last parameter: the worker-RPC layer detects a trailing function
-  // argument as an out-of-band progress callback (see main/worker/index.ts) and strips it
-  // before the call crosses into the worker.
+  // Must stay last - the worker-RPC layer detects a trailing function as a progress callback and strips it before crossing into the worker.
   onProgress?: (completed: number, total: number) => void
 ): Promise<void> => {
   const archive = archiver('zip', { zlib: { level: 9 } })
@@ -110,15 +97,11 @@ export const exportSamplesToArchive = async (
 
   archive.pipe(output)
 
-  // Progress is tracked against the manifest's own (fixed, known-upfront) entry count
-  // rather than archiver's own 'progress' event, which only reflects entries queued so far
-  // and would understate the real dataset size while entries are still being appended.
+  // Tracked against the manifest's fixed entry count, not archiver's own 'progress' event, which understates the total while entries are still being appended.
   const total = manifest.textEntries.length + manifest.imageEntries.length
   let completed = 0
 
-  // With several appends in flight at once, archiver's 'entry' event (fired per completed
-  // entry) can't be matched to the right pending promise by registration order - a single
-  // persistent listener correlates each event to its own append by name instead.
+  // With several appends in flight, archiver's 'entry' event can't be matched to the right pending promise by registration order - correlate by name instead.
   const pendingByName = new Map<string, () => void>()
   archive.on('entry', (entryData) => {
     const resolve = pendingByName.get(entryData.name)
@@ -170,8 +153,7 @@ function fetchSampleWithRelations(id: string) {
 // Row shape returned by the sample relational query above (id/image/annotations/points).
 type SampleWithRelationsRow = NonNullable<Awaited<ReturnType<typeof fetchSampleWithRelations>>>
 
-/** Images written before the width/height columns existed have them as null - backfill
- *  lazily on first read rather than a blocking startup migration over every existing file. */
+/** Images written before width/height existed have them as null - backfilled lazily on first read, not a blocking startup migration. */
 const imageDimensions = async (
   image: SampleWithRelationsRow['image']
 ): Promise<{ width: number; height: number }> => {
@@ -229,9 +211,7 @@ const ingestScratchImage = async (imagePath: string): Promise<ImageMetadata> => 
   }
 }
 
-/** Moves a scratch file into the store, falling back to copy+unlink when the scratch
- *  directory (os.tmpdir()) isn't on the same filesystem/drive as the store - fs.rename
- *  throws EXDEV in that case rather than silently failing, so this must not be skipped. */
+/** Falls back to copy+unlink when the scratch dir isn't on the same filesystem/drive as the store - fs.rename throws EXDEV in that case. */
 const moveOrCopyFile = async (source: string, destination: string): Promise<void> => {
   try {
     await fs.rename(source, destination)
@@ -245,9 +225,7 @@ const moveOrCopyFile = async (source: string, destination: string): Promise<void
   }
 }
 
-/** Consumes every scratch file referenced by samples: moves the ones behind a newly
- *  inserted image into the store, and discards the rest (their content is already
- *  covered by an existing store file, per insertedImagesIndex). */
+/** Moves scratch files behind a newly inserted image into the store; discards the rest, already covered by an existing store file per insertedImagesIndex. */
 const consumeScratchFiles = async (
   samples: INewSample[],
   images: ImageMetadata[],

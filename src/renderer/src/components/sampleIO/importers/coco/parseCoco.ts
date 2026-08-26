@@ -45,10 +45,7 @@ const dirOf = (path: string) => {
 
 const basenameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
-/** Parses every `*.json` file that looks like a COCO annotations file (has `images`,
- *  `annotations` and `categories` arrays - covers both this app's own `_annotations.coco.json`
- *  export and hand-rolled COCO datasets under other names). Skips any `.json` file that
- *  isn't valid JSON or doesn't match the shape, rather than failing the whole import. */
+/** Parses every `*.json` file with `images`/`annotations`/`categories` arrays - covers this app's own export and hand-rolled COCO datasets alike. Invalid/mismatched files are skipped, not fatal. */
 const parseCocoJsonFiles = async (
   files: VirtualFile[]
 ): Promise<{ dir: string; dataset: RawCocoDataset }[]> => {
@@ -74,8 +71,7 @@ export type CocoClass = {
   name: string
 }
 
-/** Every category referenced across all found COCO annotation files, deduplicated by id
- *  (first occurrence wins) and kept in encounter order. */
+/** Every category referenced across all found COCO files, deduplicated by id (first wins), in encounter order. */
 export const findCocoClasses = async (files: VirtualFile[]): Promise<CocoClass[]> => {
   const classes = new Map<number, string>()
   for (const { dataset } of await parseCocoJsonFiles(files)) {
@@ -92,10 +88,7 @@ export type CocoImagePair = {
   split: TrainingSplit
 }
 
-/** Pairs each image referenced by a COCO annotations file with its own annotations.
- *  `file_name` is resolved relative to the directory the annotations file lives in (the
- *  Roboflow/COCO convention of images sitting alongside `_annotations.coco.json`). The
- *  split is inferred from that directory's path, same convention as the YOLO importer. */
+/** Pairs each image with its annotations - `file_name` resolves relative to the annotations file's own directory (Roboflow/COCO convention). Split is inferred from the path, same as the YOLO importer. */
 export const findCocoImagePairs = async (files: VirtualFile[]): Promise<CocoImagePair[]> => {
   const byPath = new Map(files.map((f) => [f.path, f] as const))
   const pairs: CocoImagePair[] = []
@@ -133,10 +126,7 @@ const isBboxRectangle = (
   return expected.every((v, i) => Math.abs(v - segmentation[i]) < 1e-6)
 }
 
-/** Converts one COCO annotation to the labeler's point representation. A polygon
- *  `segmentation` that isn't just the bbox's own rectangle (i.e. it carries real shape
- *  information, unlike the rectangular segmentation this app's COCO exporter writes for
- *  Box annotations) becomes a Polygon; everything else becomes a Box from `bbox`. */
+/** A `segmentation` that isn't just the bbox's own rectangle (real shape data, unlike what this app's own exporter writes for boxes) becomes a Polygon; everything else becomes a Box from `bbox`. */
 export const cocoAnnotationToPoints = (
   annotation: RawCocoAnnotation
 ): { type: AnnotationType; points: IPoint[] } => {
@@ -184,8 +174,7 @@ const buildSampleFromCocoPair = async (
   }
 }
 
-/** Converts the whole dataset to samples, one image at a time - see yoloDatasetToSamples
- *  for why this isn't parallelized. */
+/** Converts the whole dataset to samples, one image at a time (see yoloDatasetToSamples). */
 export const cocoDatasetToSamples = async (
   pairs: CocoImagePair[],
   categoryIdToLabelId: Map<number, string | null>,
