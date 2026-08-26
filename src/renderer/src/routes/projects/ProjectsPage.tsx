@@ -1,4 +1,5 @@
-import { BasicListPage, BasicListPageTopBar } from '@renderer/components/BasicListPage'
+import { BasicListPage } from '@renderer/components/BasicListPage'
+import { BasicListPageTopBar } from '@renderer/components/BasicListPageTopBar'
 import {
   BasicListPageItem,
   BasicListPageItemSkeleton

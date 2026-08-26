@@ -659,6 +659,7 @@ const useCanvasDraw = (
   annotationCanvas: RefObject<HTMLCanvasElement | null>,
   crosshairCanvas: RefObject<HTMLCanvasElement | null>
 ) => {
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- refs/store are stable; deps track identity, not .current
   const drawCanvases = useCallback(() => {
     const imageCanvasElement = imageCanvas.current
     const annotationCanvasElement = annotationCanvas.current

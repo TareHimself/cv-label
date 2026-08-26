@@ -1,4 +1,5 @@
-import { BasicListPage, BasicListPageTopBar } from '@renderer/components/BasicListPage'
+import { BasicListPage } from '@renderer/components/BasicListPage'
+import { BasicListPageTopBar } from '@renderer/components/BasicListPageTopBar'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { RenameModal } from '@renderer/components/RenameModal'
 import {

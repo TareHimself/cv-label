@@ -14,7 +14,8 @@ import {
 import { IoMdArrowBack } from 'react-icons/io'
 import type { IProject, ITask } from '@shared/types'
 import { AsyncButton } from '@renderer/components/AsyncButton'
-import { BasicListPage, BasicListPageTopBar } from '@renderer/components/BasicListPage'
+import { BasicListPage } from '@renderer/components/BasicListPage'
+import { BasicListPageTopBar } from '@renderer/components/BasicListPageTopBar'
 import { useAppStore } from '@renderer/hooks/useAppStore'
 import { useTasks } from '@renderer/hooks/useTasks'
 import {
