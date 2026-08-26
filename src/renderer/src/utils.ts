@@ -27,10 +27,7 @@ const topFolderSegment = (path?: string): string | null => {
   return segments.length >= 2 ? segments[0] : null
 }
 
-/** The dropped folder's name, if every file's relativePath (set by the browser's
- *  drag-and-drop directory traversal, e.g. react-dropzone's FileWithPath) shares a
- *  common first path segment - i.e. the user dropped one folder rather than loose
- *  files. Returns null for a flat file drop, or a drop spanning multiple folders. */
+/** The dropped folder's name if every file's relativePath shares a common first segment - null for a flat drop or one spanning multiple folders. */
 export const folderNameFromDroppedFiles = (files: { relativePath?: string }[]): string | null => {
   const folderName = topFolderSegment(files[0]?.relativePath)
   if (!folderName) return null
@@ -39,10 +36,7 @@ export const folderNameFromDroppedFiles = (files: { relativePath?: string }[]): 
   return allMatch ? folderName : null
 }
 
-/** Groups dropped files by their top-level folder - for offering a separate task per
- *  folder when more than one was dropped at once. A file with no folder segment (a loose
- *  file dropped alongside folders) belongs to no group and is omitted, since only real
- *  folders make sense as task drafts. */
+/** Groups dropped files by their top-level folder, for offering a separate task per folder. A file with no folder segment is omitted. */
 export const groupFilesByTopFolder = <T extends { relativePath?: string }>(
   files: T[]
 ): Map<string, T[]> => {
