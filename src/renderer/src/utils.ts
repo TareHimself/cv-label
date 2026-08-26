@@ -19,9 +19,7 @@ export const normalizeFilename = (filename: string) => {
   return filename.slice(0, idx)
 }
 
-// A flat (non-folder) file's relativePath falls back to "./name.ext" (file-selector's
-// own convention for "no real path") - strip that leading "./" first so it doesn't get
-// mistaken for a real (if oddly named) folder segment.
+// A flat file's relativePath falls back to "./name.ext" (file-selector's "no real path" convention) - strip that leading "./" so it isn't mistaken for a folder segment.
 const topFolderSegment = (path?: string): string | null => {
   const segments = path?.replace(/^\.\//, '').split('/').filter(Boolean) ?? []
   return segments.length >= 2 ? segments[0] : null

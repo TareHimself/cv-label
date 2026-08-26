@@ -41,9 +41,7 @@ export const LabelMapper = <K extends string | number>({
             ]}
             value={mapping.get(item.id) ?? EXCLUDE_VALUE}
             onChange={(value) => onChange(item.id, value === EXCLUDE_VALUE ? null : value)}
-            // These importers/exporters all live inside a modal - without an explicit
-            // zIndex above the modal's own, this dropdown renders behind the modal body
-            // and can't be clicked.
+            // These importers/exporters live inside a modal - without an explicit zIndex above it, this dropdown renders behind the modal body and can't be clicked.
             comboboxProps={{ zIndex: ZIndex.actionModalContent }}
             disabled={disabled}
             allowDeselect={false}

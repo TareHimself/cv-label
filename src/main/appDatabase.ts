@@ -14,9 +14,7 @@ console.log('App database loaded into worker', APP_PATH)
 assert(APP_PATH !== undefined, 'APP_PATH global was not defined')
 assert(MIGRATIONS_PATH !== undefined, 'MIGRATIONS_PATH global was not defined')
 
-// Sibling to store/database/data.db (see database.ts) - app-level data lives independently
-// of whichever IDataStore is currently active, so it gets its own top-level folder rather
-// than nesting under store/.
+// Sibling to store/database/data.db - app-level data lives independently of whichever IDataStore is active, so it gets its own top-level folder.
 const appPath = path.join(APP_PATH, 'app')
 const databasePath = path.join(appPath, 'database', 'app.db')
 
@@ -96,5 +94,4 @@ const appDatabase = {
   }
 }
 
-// named exports (bindings)
 export const { getAnnotators, createAnnotator, updateAnnotators, deleteAnnotators } = appDatabase

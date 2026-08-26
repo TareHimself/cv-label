@@ -63,9 +63,7 @@ export const useProjects = () => {
         current.map((project) => {
           if (project.id !== update.id) return project
           const existingIds = new Set(project.labels.map((l) => l.id))
-          // A label id the project doesn't have yet is a new one being added (see
-          // IProjectUpdate), not a rename - append it rather than dropping it on the
-          // floor until the post-mutation refetch catches up.
+          // A label id the project doesn't have yet is new, not a rename - append it rather than dropping it until the refetch catches up.
           const newLabels = (update.labels ?? []).filter((l) => !existingIds.has(l.id))
           return {
             ...project,

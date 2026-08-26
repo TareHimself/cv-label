@@ -61,9 +61,7 @@ if (isEntryFile(import.meta.url)) {
 
       if (data.type === ModuleWorkerMessage.Call) {
         const func = methods[data.methodId]
-        // Every call gets a progress reporter as its final argument - unused by methods
-        // that don't declare a trailing progress parameter, but requires no per-method
-        // plumbing for the ones that do (see WorkerProgressMessage).
+        // Every call gets a progress reporter as its final argument - unused unless a method declares a trailing progress parameter (see WorkerProgressMessage).
         const reportProgress = (...args: unknown[]) => {
           const message: WorkerProgressMessage = { type: 'progress', callRef: data.callRef, args }
           parentPort?.postMessage(message)

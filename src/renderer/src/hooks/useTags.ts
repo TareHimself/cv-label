@@ -21,8 +21,7 @@ export const useTags = (project: IProject) => {
     [queryClient, tagsQueryKey]
   )
 
-  // A rename/delete changes what's embedded in each task's own `tags` field too - not
-  // needed for create, which can't affect any task's existing tags.
+  // A rename/delete changes what's embedded in each task's `tags` field too - not needed for create.
   const invalidateTasksToo = useCallback(
     () => queryClient.invalidateQueries({ queryKey: tasksQueryKey }),
     [queryClient, tasksQueryKey]

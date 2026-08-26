@@ -37,8 +37,7 @@ export class StoreOrchestrator {
     await entry.store.connect()
     this.#currentId = id
 
-    // Free the store being switched away from - meaningful now that disconnect() does
-    // real teardown instead of being a no-op.
+    // Free the store being switched away from - meaningful now that disconnect() does real teardown, not a no-op.
     if (previousId !== undefined && previousId !== id) {
       await this.#stores.get(previousId)?.store.disconnect()
     }

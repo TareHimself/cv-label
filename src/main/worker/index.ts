@@ -96,8 +96,7 @@ export async function importWorkerModule<T = unknown>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result: any = {}
 
-  // Lets callers tear the worker thread down explicitly (e.g. StoreOrchestrator freeing a
-  // store that's been switched away from) instead of only ever being reaped on app exit.
+  // Lets callers tear the worker down explicitly (e.g. a freed store) instead of only ever being reaped on app exit.
   result.terminate = () => worker.worker.terminate()
 
   for (const property of initResponse.properties) {
@@ -106,8 +105,7 @@ export async function importWorkerModule<T = unknown>(
 
   for (const method of initResponse.methods) {
     result[method.name] = (...args: unknown[]) => {
-      // By convention, a trailing function argument is a progress callback: it can't
-      // cross postMessage, so it's registered locally against this call instead of sent.
+      // By convention, a trailing function arg is a progress callback - can't cross postMessage, so it's registered locally instead of sent.
       const lastArg = args[args.length - 1]
       const hasProgressCallback = typeof lastArg === 'function'
       const onProgress = hasProgressCallback

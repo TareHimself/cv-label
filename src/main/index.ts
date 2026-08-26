@@ -4,11 +4,7 @@ import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { getAppPath } from './utils'
 
-// Ties Electron's own userData dir (and its single-instance lock file) to the same working
-// directory getAppPath() scopes the database/images to - makes the instance lock
-// per-working-directory rather than global. Only once packaged or under an explicit
-// override, so plain `pnpm dev` keeps Electron's default userData location. Must run
-// before requestSingleInstanceLock() below, which reads userData to place its lock file.
+// Ties userData (and its single-instance lock) to getAppPath()'s working directory - only once packaged, so plain `pnpm dev` keeps Electron's default location. Must run before requestSingleInstanceLock() below.
 if (app.isPackaged || process.env.CV_LABEL_APP_PATH) {
   app.setPath('userData', join(getAppPath(), 'userData'))
 }

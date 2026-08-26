@@ -25,9 +25,7 @@ export const TagPicker: FC<TagPickerProps> = ({
   onCreate
 }) => {
   const [search, setSearch] = useState('')
-  // Bridges the gap between a tag being created and useTags' invalidate-triggered
-  // refetch landing - without this, the just-created pill would briefly show no label
-  // (allTags won't contain it yet).
+  // Bridges the gap before useTags' invalidate-triggered refetch lands - otherwise the just-created pill would briefly show no label.
   const [pendingNewTags, setPendingNewTags] = useState<ITag[]>([])
 
   const knownTags = [
