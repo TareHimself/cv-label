@@ -19,11 +19,7 @@ export type EditProjectModalProps = {
   ) => Promise<unknown>
 }
 
-/** Renames the project, edits existing labels (including their colors), and lets new
- *  labels be added - existing labels still can't be removed here, since one already
- *  used by an annotation can't be deleted. A label added (and not yet saved) in this
- *  same session can be removed again freely, since nothing references it yet. Controlled
- *  by mounting with `key={project?.id}` so state resets when the target project changes. */
+/** Renames the project and edits/adds labels - can't remove an existing one (used by an annotation), but a not-yet-saved new one can be removed freely. Mount with `key={project?.id}` to reset state per project. */
 export const EditProjectModal: FC<EditProjectModalProps> = ({
   opened,
   project,

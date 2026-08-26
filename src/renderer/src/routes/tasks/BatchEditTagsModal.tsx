@@ -10,17 +10,13 @@ export type BatchEditTagsModalProps = {
   opened: boolean
   project: IProject
   taskCount: number
-  /** Tags currently on at least one selected task - the only ones removal makes sense
-   *  for, since there's no single "current" tag list across a batch of possibly
-   *  differently-tagged tasks to diff against (unlike EditTaskTagsModal). */
+  /** Tags on at least one selected task - the only ones removal makes sense for, since there's no single "current" list across a differently-tagged batch. */
   removableTags: ITag[]
   onCancel: () => void
   onConfirm: (addedIds: string[], removedIds: string[]) => Promise<unknown>
 }
 
-/** Adds/removes tags across a batch of tasks - "Add" is a creatable combobox (TagPicker,
- *  same as the single-task modal) and "Remove" is a row of clickable chips (only tags
- *  already on some selected task, so there's nothing to type there). */
+/** Adds/removes tags across a batch of tasks - "Add" is a creatable combobox (TagPicker), "Remove" is a row of chips for tags already on some selected task. */
 export const BatchEditTagsModal: FC<BatchEditTagsModalProps> = ({
   opened,
   project,

@@ -26,9 +26,7 @@ import { ZIndex } from '@renderer/zIndex'
 
 const CVLABEL_EXTENSION = /\.cvlabel$/i
 
-/** The dropped file's own name, minus the .cvlabel extension - mirrors
- *  folderNameFromDroppedFiles' role for the image-drop path (both just seed the Create
- *  Task modal's name field; the user can still rename before creating). */
+/** The dropped file's name minus the .cvlabel extension - seeds the Create Task modal's name field, same role as folderNameFromDroppedFiles for the image-drop path. */
 const taskNameFromCvLabelFile = (file: FileWithPath) => file.name.replace(CVLABEL_EXTENSION, '')
 
 // Mantine's Dropzone only builds valid file-picker options (and skips a console warning)
@@ -114,9 +112,7 @@ const SelectedSampleRow = memo(function SelectedSampleRow({
   )
 })
 
-/** Memoized so typing in the task name field (which lives in the same parent state as
- *  `samples`) doesn't re-render every imported sample's row, which was visibly laggy for
- *  a large import even before rows only held a scratch path rather than a full image. */
+/** Memoized so typing in the task name field doesn't re-render every imported sample's row - was visibly laggy for a large import otherwise. */
 const SampleList = memo(function SampleList({
   samples,
   onAddSamples,
