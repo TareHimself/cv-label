@@ -132,8 +132,6 @@ const drawPolygon = (
     ctx.lineTo(nextPoint.x, nextPoint.y)
   }
 
-  //if (closed) ctx.closePath();
-
   if (fill) {
     ctx.fill()
   } else {
@@ -194,8 +192,7 @@ const drawSelectedHitHandles = (
   }
 
   if (selectedAnnotation.type === AnnotationType.Box) {
-    // Edge hit-test lines, drawn before the corner circles below so a corner's hit
-    // area wins over an overlapping edge at the same pixels.
+    // Drawn before the corner circles below so a corner's hit area wins over an overlapping edge.
     const boxCorners = getBoxPoints(points)
     const edgeSentinels = [BOX_EDGE_TOP, BOX_EDGE_RIGHT, BOX_EDGE_BOTTOM, BOX_EDGE_LEFT]
     for (let i = 0; i < boxCorners.length; i++) {
@@ -225,8 +222,7 @@ const drawSelectedHitHandles = (
       0
     )
 
-    // The 2 derived corners (top-right/bottom-left) - purely visual/hit-test handles,
-    // don't correspond to a real IPoint (see BOX_CORNER_HANDLE_TOP_RIGHT).
+    // The 2 derived corners - visual/hit-test only, no real IPoint behind them.
     const topRightHitId = state.selectedAnnotationControlHitIds.getByValue(
       BOX_CORNER_HANDLE_TOP_RIGHT
     )
@@ -344,20 +340,13 @@ const drawCreationPreview = (
 const HOVER_DIM_ALPHA = 0.55
 const HOVER_OUTLINE_WIDTH = 3
 
-/** Dims the whole canvas - since this runs on the annotation canvas layer (stacked above
- *  the image canvas), it darkens both the image and every other annotation already drawn
- *  this frame. Deliberately driven by "is the mouse anywhere over the AnnotationsDrawer",
- *  not "is this specific row hovered": keying the dim itself off a single row would flash
- *  off/on every time the cursor crosses the gap between two rows on its way from one to
- *  another - this way the dim stays on continuously and only the cutout below moves. */
+/** Dims the whole canvas - driven by "is the mouse over the AnnotationsDrawer", not a single row, to avoid flicker crossing row gaps. */
 const dimCanvas = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
   ctx.fillStyle = `rgba(0, 0, 0, ${HOVER_DIM_ALPHA})`
   ctx.fillRect(0, 0, width, height)
 }
 
-/** Cuts a hole exactly matching a shape out of whatever's already been drawn (namely
- *  dimCanvas's overlay) via a destination-out composite, exposing the image and that
- *  shape's own fill/outline at full brightness underneath. */
+/** Cuts a hole matching a shape out of whatever's already drawn (dimCanvas's overlay), via a destination-out composite. */
 const cutoutShape = (ctx: CanvasRenderingContext2D, shapePoints: OmitV2<IPoint, 'id'>[]) => {
   if (shapePoints.length < 2) return
 
@@ -625,8 +614,7 @@ const usePointerInteractions = (
         if (result === PointerResult.Consumed) {
           return
         }
-        // Default: fall through to the pan below (e.g. deselecting on empty canvas
-        // still lets the same drag pan the view).
+        // Default: fall through to the pan below.
       }
 
       // Pan fallback: either forced (ctrl+left-click) or an unconsumed left-click.
@@ -816,7 +804,6 @@ const useCanvasDraw = (
             xScale,
             yScale
           )
-          //const compositeOperation = annotationCtx.globalCompositeOperation // Heavy on performance
           switch (annotation.type) {
             case AnnotationType.Box:
               {
@@ -831,7 +818,6 @@ const useCanvasDraw = (
                   ANNOTATION_ALPHA
                 )
 
-                //annotationCtx.globalCompositeOperation = 'difference'
                 drawPolygon(
                   annotationCtx,
                   actualPoints,
@@ -839,7 +825,6 @@ const useCanvasDraw = (
                   false,
                   2
                 )
-                //annotationCtx.globalCompositeOperation = compositeOperation
               }
               break
 
@@ -854,7 +839,6 @@ const useCanvasDraw = (
                   ANNOTATION_ALPHA
                 )
 
-                //annotationCtx.globalCompositeOperation = 'difference'
                 drawPolygon(
                   annotationCtx,
                   points,
@@ -862,7 +846,6 @@ const useCanvasDraw = (
                   false,
                   2
                 )
-                //annotationCtx.globalCompositeOperation = compositeOperation
               }
               break
           }
@@ -883,8 +866,7 @@ const useCanvasDraw = (
                 drawControlCircle(annotationCtx, points[0], CONTROL_POINT_CIRCLE_RADIUS)
                 drawControlCircle(annotationCtx, points[1], CONTROL_POINT_CIRCLE_RADIUS)
 
-                // Purely visual - the other 2 corners of the box, derived from the same
-                // 2 real points, so dragging them still only ever produces 2 real points.
+                // Purely visual - the other 2 derived corners, from the same 2 real points.
                 drawControlCircle(
                   annotationCtx,
                   { x: points[1].x, y: points[0].y },
@@ -939,8 +921,7 @@ const useCanvasDraw = (
 
             cutoutShape(annotationCtx, spotlightShape)
 
-            // Re-draws the spotlighted annotation's outline crisp and undimmed on top of
-            // the cutout, thicker than normal so it reads clearly as the focused shape.
+            // Redraws the spotlighted annotation's outline undimmed, thicker than normal.
             drawPolygon(
               annotationCtx,
               spotlightShape,
@@ -968,11 +949,7 @@ const useCanvasDraw = (
     }
   }, [annotationCanvas, crosshairCanvas, imageCanvas, store])
 
-  // Render-on-demand: only schedule a frame when the store actually has something
-  // dirty, instead of ticking requestAnimationFrame forever. drawCanvases() detects
-  // canvas-size mismatches itself and marks everything dirty on the first call, which
-  // covers the initial paint; a ResizeObserver covers later container resizes, since
-  // those don't otherwise touch the store.
+  // Render-on-demand: only schedules a frame when the store has something dirty.
   useEffect(() => {
     let frameId: number | null = null
 
@@ -986,8 +963,7 @@ const useCanvasDraw = (
       frameId = requestAnimationFrame(() => {
         frameId = null
         drawCanvases()
-        // Some modes (e.g. crosshair tracking while creating an annotation) keep
-        // marking annotationDirty on every mouse move, so keep going until clean.
+        // Some modes keep marking annotationDirty on every mouse move - keep going until clean.
         if (isDirty()) {
           scheduleFrame()
         }

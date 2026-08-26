@@ -4,8 +4,6 @@ import { makeUUID } from '@shared/utils'
 import { useCallback } from 'react'
 import { useAppStore } from './useAppStore'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-//import toast from 'react-hot-toast'
-//toast.promise()
 
 export const useTasks = (project: IProject) => {
   const store = useAppStore((s) => s.store)

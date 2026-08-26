@@ -3,8 +3,6 @@
 import '@mantine/core/styles.css'
 import '@mantine/dropzone/styles.css'
 import 'mantine-contextmenu/styles.css'
-// import '@mantine/modals/styles.css'
-// import '@mantine/notifications/styles.css'
 import './assets/main.css'
 import { Toaster } from 'react-hot-toast'
 import { StrictMode } from 'react'

@@ -33,8 +33,6 @@ const Container = styled.div`
   height: 100%;
   display: flex;
   flex-direction: column;
-  /* display: flex;
-  flex-direction: column; */
 `
 const StyledLabeler = styled(Labeler)`
   width: 100%;
@@ -137,7 +135,6 @@ const TextSegmentedControl = ({
           display: 'flex'
         },
         control: {
-          // aspectRatio: 1,
           display: 'flex'
         }
       }}
@@ -394,7 +391,7 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
           return Promise.resolve()
         }}
       />
-      <Flex style={{ position: 'absolute', bottom: 20, left: 20 }} gap={'md'}>
+      <Flex style={{ position: 'absolute', bottom: 20, left: 20 }} align={'center'} gap={'md'}>
         <LabelerModeControl value={mode} onChange={(e) => store.getState().setMode(e)} />
 
         {currentSampleId && (

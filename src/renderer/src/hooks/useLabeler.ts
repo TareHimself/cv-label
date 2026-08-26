@@ -17,21 +17,11 @@ const ZOOM_STEP_DELTA = 0.15
 const MIN_ZOOM = 0.05
 const MAX_ZOOM = 32
 
-/** A box only ever has 2 real points (opposite corners, normalized to
- *  [top-left, bottom-right] by normalizeAnnotationPoints), but shows 4 draggable
- *  handles - these 2 sentinels stand in for the other two (derived) corners in
- *  selectedAnnotationControlHitIds/moveAnnotationPoint. Dragging one moves one real
- *  point's x and the other real point's y (see pointIdsBeingMovedAxis) rather than
- *  corresponding to a single real IPoint. Only ever meaningful while a Box is selected,
- *  where there's exactly one of each in play at a time, so a fixed literal (rather than
- *  a per-annotation id) is fine. */
+/** Sentinels for a Box's 2 derived corner handles (see moveAnnotationPoint) - safe as fixed literals since only one Box is ever selected at a time. */
 export const BOX_CORNER_HANDLE_TOP_RIGHT = '__box-corner-top-right__'
 export const BOX_CORNER_HANDLE_BOTTOM_LEFT = '__box-corner-bottom-left__'
 
-/** A box's 4 edges - draggable to resize along a single axis, moving only the real
- *  point on that edge (see moveAnnotationPoint). Unlike a Polygon's lines, these never go
- *  through addControlPoint - a Box only ever has 2 real points, so there's nothing to
- *  insert a new point into. */
+/** A Box's 4 resizable edges (see moveAnnotationPoint) - unlike a Polygon's lines, these never go through addControlPoint. */
 export const BOX_EDGE_TOP = '__box-edge-top__'
 export const BOX_EDGE_RIGHT = '__box-edge-right__'
 export const BOX_EDGE_BOTTOM = '__box-edge-bottom__'
@@ -73,11 +63,7 @@ export const normalizeAnnotationPoints = <T extends Pick<IAnnotation, 'type' | '
   return fixedAnnotation
 }
 
-/** How much of moveCurrent applies to a given point mid-drag: the full (dx, dy) if it
- *  isn't axis-masked (the default for polygon vertices and whole-annotation moves), or just
- *  one axis for a box's 2 derived corner handles (see BOX_CORNER_HANDLE_TOP_RIGHT).
- *  Returns [0, 0] for a point that isn't part of the current drag at all. Shared between
- *  commitAnnotationMove here and the Labeler canvas's live drag preview. */
+/** How much of moveCurrent applies to one point mid-drag - the full delta unless axis-masked (a Box's 2 derived corners); [0, 0] if not part of the drag. */
 export const axisMaskedMoveDelta = (
   pointId: string,
   pointIdsBeingMoved: string[] | null,
@@ -184,16 +170,10 @@ type LabelerStoreState = {
   canvasSize: Vector2
   scale: number
   mousePos: Vector2
-  /**
-   * General purpose xy diff applied contextually to some item
-   */
+  /** General-purpose xy diff applied contextually to some item. */
   moveCurrent: Vector2
   pointIdsBeingMoved: string[] | null
-  /** Parallel array to pointIdsBeingMoved: which axis of moveCurrent each point gets.
-   *  null (or a missing entry) means that point gets the full (dx, dy) - the default for
-   *  polygon vertices and whole-annotation moves. Only a box's 2 derived corner handles
-   *  (top-right/bottom-left) need per-point axis splitting, since dragging one moves one
-   *  real point's x and the other real point's y rather than both axes of a single point. */
+  /** Parallel to pointIdsBeingMoved - which axis each point gets; null means both (the default outside a Box's 2 derived corners). */
   pointIdsBeingMovedAxis: ('x' | 'y' | 'xy')[] | null
   annotationIdBeingMoved: string | null
   mode: LabelerMode
@@ -202,8 +182,6 @@ type LabelerStoreState = {
   sample: OptimisticSample | null
 
   readonly annotationsPendingDelete: Set<string>
-  // readonly activeHitIds: Set<string>
-  // readonly availableHitIds: Set<string>
   readonly hitTestCanvas: OffscreenCanvas
 
   isDragging: boolean
@@ -214,23 +192,13 @@ type LabelerStoreState = {
   selectedLabelId: string
   annotationBeingCreated: INewAnnotation | null
   readonly labelsMap: Record<string, ILabel>
-  // hitHandlers: Map<string,(e: unknown) => void>
 
-  /** Whether the mouse is anywhere over the AnnotationsDrawer's row list - drives
-   *  whether the canvas is dimmed at all. Deliberately broader than hoveredAnnotationId:
-   *  keying the dim itself off a specific row would flicker off/on every time the mouse
-   *  crosses the gap between two rows (or a group header) on its way from one to
-   *  another - this way the dim stays on continuously across the whole drawer, and only
-   *  the spotlighted shape changes as hoveredAnnotationId changes underneath it. */
+  /** Whether the mouse is over the AnnotationsDrawer's row list - drives the canvas dim; broader than hoveredAnnotationId to avoid flicker between rows. */
   isAnnotationsDrawerHovered: boolean
-  /** The annotation whose row is currently hovered, if any - drives which shape (if any)
-   *  gets cut out of the dim/gets its outline emphasized. Not the same as
-   *  selectedAnnotation, which persists across mouse movement. */
+  /** The currently row-hovered annotation, if any - unlike selectedAnnotation, doesn't persist across mouse movement. */
   hoveredAnnotationId: string | null
 
-  /** Per-sample undo/redo history - cleared on setSample (see there). Each entry captures
-   *  enough before/after data to replay a single create/delete/points/relabel mutation in
-   *  either direction via the shared apply* primitives (see undo/redo). */
+  /** Per-sample undo/redo history, cleared on setSample. */
   readonly undoStack: HistoryEntry[]
   readonly redoStack: HistoryEntry[]
 }
@@ -271,16 +239,13 @@ type LabelerStoreActions = {
   preDraw: () => void
   onCanvasResize: (width: number, height: number) => void
   setSample: (sample: OptimisticSample) => void
-  /** Aborts an in-flight bitmap load without starting a new one - for leaving the page
-   *  mid-load, as opposed to setSample's own abort-then-restart when switching samples. */
+  /** Aborts an in-flight bitmap load without restarting it - for leaving the page mid-load. */
   cancelPendingSampleLoad: () => void
   onBitmapLoaded: (bitmap: ImageBitmap) => void
-  //onMouseOver: (x: number, y: number) => void
   zoom: (x: number, y: number, delta: number) => void
   zoomIn: (anchor?: 'center' | 'mouse') => void
   zoomOut: (anchor?: 'center' | 'mouse') => void
   setZoom: (zoom: number) => void
-  //setAnnotations: (annotations: IAnnotation[]) => void
   setMode: (mode: LabelerMode) => void
   setLabelId: (labelId: string) => void
   selectAnnotation: (id: string | null) => void
@@ -319,33 +284,15 @@ export const useLabeler = (labels: ILabel[]) => {
         let activeSampleAbort: AbortController | null = null
         const imageHitId = colorGenerator.make()
         const labelsMap = createLabelsMap(labels)
-        // const activeHitIds = new Set([imageHitId])
-        // const availableHitIds = new Set<string>()
         const hitIdToAnnotationId = new OneToOneMap<string, string>()
         const selectedAnnotationControlHitIds = new OneToOneMap<string, string>()
         const selectedAnnotationLineHitIds = new OneToOneMap<string, string>()
 
         const makeHitId = () => {
-          // const pooledId = availableHitIds.values().next().value
-          // if (pooledId !== undefined) {
-          //   availableHitIds.delete(pooledId)
-          //   activeHitIds.add(pooledId)
-          //   return pooledId
-          // }
-
-          // let color = randomHexColor()
-          // while (activeHitIds.has(color)) {
-          //   color = randomHexColor()
-          // }
-
-          // activeHitIds.add(color)
-          // return color
           return colorGenerator.make()
         }
 
         const freeHitId = (id: string) => {
-          // activeHitIds.delete(id)
-          // availableHitIds.add(id)
           colorGenerator.free(id)
         }
 
@@ -362,14 +309,7 @@ export const useLabeler = (labels: ILabel[]) => {
           selectedAnnotationLineHitIds.clear()
         }
 
-        /** Rebuilds selectedAnnotationControlHitIds/selectedAnnotationLineHitIds from
-         *  scratch for `annotation` - the single source of truth for what a selected
-         *  annotation's hit ids should look like, shared by selectAnnotation and any
-         *  primitive that swaps out a selected annotation's points/type in place
-         *  (replacePoints, type conversion). A Box's derived corner and edge sentinel
-         *  handles only ever get set up here - they're not per-point, so a naive
-         *  "re-add each real point" resync (as addSelectedAnnotationPointId does for
-         *  Polygon) would silently lose them. */
+        /** Rebuilds a selected annotation's hit ids from scratch - a Box's derived corner/edge handles only ever get set up here, not per-point. */
         const rebuildSelectedAnnotationHitIds = (annotation: IAnnotation) => {
           clearSelectedAnnotationHitIds()
 
@@ -470,17 +410,6 @@ export const useLabeler = (labels: ILabel[]) => {
           } satisfies INewAnnotation
         }
 
-        // const applyPointSnapshot = (annotation: IAnnotation, points: IPoint[]) => {
-        //   const pointMap = new Map(points.map((p) => [p.id, p]))
-        //   for (const point of annotation.points) {
-        //     const replacement = pointMap.get(point.id)
-        //     if (replacement !== undefined) {
-        //       point.x = replacement.x
-        //       point.y = replacement.y
-        //     }
-        //   }
-        // }
-
         const fitBitmapToCanvas = () => {
           const state = get()
           if (state.bitmap === null) {
@@ -521,16 +450,11 @@ export const useLabeler = (labels: ILabel[]) => {
           return getCanvasCenter()
         }
 
-        /** Records an undoable mutation and drops any redo history - matches standard
-         *  editor UX (a new edit invalidates whatever was undone before it). Only called by
-         *  the 4 public mutation actions, never by undo()/redo() themselves (those manage
-         *  the two stacks directly so undoing/redoing doesn't clear the other stack). */
+        /** Records an undoable mutation and drops redo history, like standard editor undo. */
         const pushHistory = (entry: HistoryEntry) =>
           set((state) => ({ undoStack: [...state.undoStack, entry], redoStack: [] }))
 
-        /** Optimistically creates `annotation`, then persists it - shared by
-         *  onConfirmAnnotationCreation (a brand new annotation) and undo/redo (replaying a
-         *  previously deleted/created annotation, id and all). */
+        /** Optimistically creates annotation then persists it - shared by creation and undo/redo. */
         const applyCreateAnnotation = (annotation: IAnnotation) => {
           const state = get()
           if (state.sample === null) return
@@ -562,9 +486,7 @@ export const useLabeler = (labels: ILabel[]) => {
             })
         }
 
-        /** Optimistically removes the annotation with id annotationId, then persists the
-         *  delete - shared by deleteAnnotation and undo/redo (undoing a create, or redoing a
-         *  delete). */
+        /** Optimistically removes annotationId then persists the delete - shared by deleteAnnotation and undo/redo. */
         const applyDeleteAnnotation = (annotationId: string) => {
           const state = get()
           const annotations = state.sample?.resolve().annotations
@@ -612,14 +534,7 @@ export const useLabeler = (labels: ILabel[]) => {
             })
         }
 
-        /** Optimistically replaces an annotation's full points array, then persists it -
-         *  the shared primitive behind commitAnnotationMove, addControlPoint,
-         *  deleteControlPoint, and undo/redo of any of those (a move only ever changes
-         *  existing points' coordinates, while add/delete-control-point also changes which
-         *  point ids exist - replacePoints' id-diffing on the main-process side handles
-         *  both the same way, so one primitive covers all of them). Always resyncs the
-         *  selected annotation's hit ids afterward, since the point id set may have
-         *  changed. */
+        /** Optimistically replaces an annotation's points then persists it - shared by move/add/delete-control-point and their undo/redo; resyncs hit ids after. */
         const applyReplacePoints = (annotationId: string, points: IPoint[]) => {
           const state = get()
           const annotation = state.sample?.resolve().annotations.resolve()[annotationId]
@@ -649,11 +564,7 @@ export const useLabeler = (labels: ILabel[]) => {
             })
         }
 
-        /** Optimistically relabels an annotation, then persists it - shared by
-         *  setAnnotationLabelId and undo/redo. Also keeps the label picker in sync if the
-         *  relabeled annotation is the one currently selected, mirroring selectAnnotation's
-         *  own sync - otherwise relabeling via the context menu (or undoing/redoing one)
-         *  would leave the picker showing a label the selection no longer has. */
+        /** Optimistically relabels an annotation then persists it - also syncs the label picker if it's the selected annotation. */
         const applyRelabel = (annotationId: string, labelId: string) => {
           const state = get()
           const targetAnnotation =
@@ -684,12 +595,7 @@ export const useLabeler = (labels: ILabel[]) => {
             })
         }
 
-        /** Optimistically swaps an annotation's type and points together (one atomic
-         *  diff), then persists both - shared by convertAnnotationType and undo/redo of a
-         *  conversion. Persistence is still 2 separate IPC calls (updateAnnotations only
-         *  touches type/labelId, replacePoints only touches points), fired concurrently
-         *  and committed/rolled back together so the optimistic view never shows a
-         *  half-converted annotation (new type, stale points or vice versa). */
+        /** Optimistically swaps an annotation's type+points atomically then persists both via 2 concurrent calls, committed/rolled back together. */
         const applyConvertType = (annotationId: string, type: AnnotationType, points: IPoint[]) => {
           const state = get()
           const annotation = state.sample?.resolve().annotations.resolve()[annotationId]
@@ -721,9 +627,7 @@ export const useLabeler = (labels: ILabel[]) => {
             })
         }
 
-        /** A Box's own 2 real points (top-left/bottom-right, per normalizeAnnotationPoints)
-         *  become a Polygon's 4 corner points - fresh point ids throughout, since a
-         *  Polygon needs more points than a Box ever has. */
+        /** A Box's 2 points become a Polygon's 4 corners, with fresh point ids. */
         const boxPointsToPolygonPoints = (points: IPoint[]): IPoint[] => {
           const [topLeft, bottomRight] = points
           return [
@@ -734,10 +638,7 @@ export const useLabeler = (labels: ILabel[]) => {
           ]
         }
 
-        /** A Polygon's outline is reduced to its axis-aligned bounding box - necessarily
-         *  lossy (a non-rectangular outline can't survive becoming a Box), reusing the
-         *  same boundingBoxOf the exporters already rely on for the same "give every
-         *  annotation a rectangle" reduction. */
+        /** A Polygon reduces to its axis-aligned bounding box - necessarily lossy for a non-rectangular outline. */
         const polygonPointsToBoxPoints = (points: IPoint[]): IPoint[] => {
           const box = boundingBoxOf(points)
           return [
@@ -749,20 +650,11 @@ export const useLabeler = (labels: ILabel[]) => {
         const DUPLICATE_OFFSET_RATIO = 0.08
         const DUPLICATE_OFFSET_MIN = 12
 
-        /** How far a duplicate is nudged from its original, scaled to the source
-         *  annotation's own size (not the image's) so a tiny annotation still gets a
-         *  clearly visible offset and a huge one doesn't jump by an absurd amount -
-         *  floored so a degenerate (near-zero-area) annotation still visibly offsets. */
+        /** How far a duplicate is nudged, scaled to its own size so tiny/huge annotations both offset sensibly. */
         const duplicateOffsetFor = (box: BoundingBox): number =>
           Math.max(DUPLICATE_OFFSET_MIN, Math.max(box.width, box.height) * DUPLICATE_OFFSET_RATIO)
 
-        /** Picks how far to nudge one axis of a duplicate so its whole bounding box stays
-         *  inside [0, extent] - prefers the default positive (down/right) direction, falls
-         *  back to negative (up/left) when that side is the one with room, and only falls
-         *  short of `desired` when the source annotation is close enough to the image's
-         *  full size that neither side has room for it. Always a single scalar applied
-         *  uniformly to every point (see duplicateAnnotation), never a per-point clamp, so
-         *  the duplicate is nudged less far (or the other way) rather than distorted. */
+        /** Nudges a duplicate's axis by desired, flipping direction or shrinking it to keep the bounding box inside [0, extent]. */
         const clampedDuplicateAxisOffset = (
           min: number,
           size: number,
@@ -776,10 +668,7 @@ export const useLabeler = (labels: ILabel[]) => {
           return spaceAfter >= spaceBefore ? spaceAfter : -spaceBefore
         }
 
-        /** Undoing a just-created annotation before its createAnnotations call has
-         *  resolved races the resulting deleteAnnotations call server-side - a pre-existing
-         *  class of risk (the same as a fast create-then-delete via the UI today), not
-         *  introduced or fixed by undo/redo. */
+        /** Undoing a just-created annotation before its create call resolves can race the delete - pre-existing risk, not new. */
         const applyHistoryInverse = (entry: HistoryEntry) => {
           switch (entry.kind) {
             case 'create':
@@ -821,11 +710,8 @@ export const useLabeler = (labels: ILabel[]) => {
           canvasSize: [0, 0],
           scale: 1,
           mousePos: [0, 0],
-          //annotations: new Map(),
           mode: LabelerMode.Select,
           showHitTestDebugOverlay: false,
-          // activeHitIds,
-          // availableHitIds,
           hitTestCanvas: new OffscreenCanvas(0, 0),
           isDragging: false,
           selectedAnnotation: null,
@@ -833,7 +719,6 @@ export const useLabeler = (labels: ILabel[]) => {
           selectedAnnotationControlHitIds,
           selectedAnnotationLineHitIds,
           annotationsPendingDelete: new Set(),
-          //annotationsPendingAdd: new Set(),
           selectedLabelId: labels[0]?.id ?? '',
           annotationBeingCreated: null,
           labelsMap,
@@ -895,12 +780,7 @@ export const useLabeler = (labels: ILabel[]) => {
             set({
               mousePos: [x, y],
               annotationBeingCreated: annotationBeingCreated,
-              // OR'd with the current flag, never overwritten to false here - clearing
-              // dirty flags is preDraw()'s job exclusively. This listens globally (see
-              // usePointerMove), so it fires on every mouse move across the whole app;
-              // unconditionally overwriting annotationDirty raced with (and could
-              // silently clobber) a `true` some other action - e.g. the AnnotationsDrawer's
-              // hover spotlight - had just set moments earlier but hadn't been painted yet.
+              // OR'd, never overwritten to false - only preDraw() clears dirty flags.
               annotationDirty: state.annotationDirty || changed || inCreateMode
             })
           },
@@ -1004,9 +884,7 @@ export const useLabeler = (labels: ILabel[]) => {
               selectedAnnotation: annotation,
               annotationDirty: true,
               hitTestDirty: true,
-              // Selecting an existing annotation switches the label picker to match it -
-              // deselecting (annotation === null) leaves it alone rather than resetting to
-              // some default, since there's nothing meaningful to switch it to.
+              // Selecting an annotation syncs the label picker; deselecting leaves it alone.
               ...(annotation !== null ? { selectedLabelId: annotation.resolve().labelId } : {})
             })
           },
@@ -1164,12 +1042,10 @@ export const useLabeler = (labels: ILabel[]) => {
             ) {
               const boxPoints = state.selectedAnnotation.resolve().points
               if (boxPoints.length !== 2) return
-              // Normalized by normalizeAnnotationPoints, so points[0] is always
-              // top-left and points[1] is always bottom-right.
+              // Normalized: points[0] is top-left, points[1] is bottom-right.
               const [topLeft, bottomRight] = boxPoints
               const isTopRight = pointId === BOX_CORNER_HANDLE_TOP_RIGHT
-              // Top-right's x is the right edge (bottomRight.x); its y is the top edge
-              // (topLeft.y). Bottom-left is the mirror: left edge's x, bottom edge's y.
+              // Top-right takes the right edge's x and top edge's y; bottom-left is the mirror.
               const xSource = isTopRight ? bottomRight : topLeft
               const ySource = isTopRight ? topLeft : bottomRight
 
@@ -1192,8 +1068,7 @@ export const useLabeler = (labels: ILabel[]) => {
             ) {
               const boxPoints = state.selectedAnnotation.resolve().points
               if (boxPoints.length !== 2) return
-              // Normalized by normalizeAnnotationPoints, so points[0] is always
-              // top-left and points[1] is always bottom-right.
+              // Normalized: points[0] is top-left, points[1] is bottom-right.
               const [topLeft, bottomRight] = boxPoints
               const isTopOrLeft = pointId === BOX_EDGE_TOP || pointId === BOX_EDGE_LEFT
               const source = isTopOrLeft ? topLeft : bottomRight
@@ -1454,8 +1329,7 @@ export const useLabeler = (labels: ILabel[]) => {
             if (state.isAnnotationsDrawerHovered === hovered) return
             set({
               isAnnotationsDrawerHovered: hovered,
-              // Leaving the drawer entirely always clears whichever row was hovered too -
-              // belt-and-suspenders alongside each row's own onMouseLeave.
+              // Belt-and-suspenders alongside each row's own onMouseLeave.
               hoveredAnnotationId: hovered ? state.hoveredAnnotationId : null,
               annotationDirty: true
             })
