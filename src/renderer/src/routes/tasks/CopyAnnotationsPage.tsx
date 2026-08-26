@@ -49,17 +49,7 @@ type SampleMappingRowsProps = {
   onChange: (sourceSampleId: string, destinationSampleId: string | null) => void
 }
 
-/** Two lines per source sample: its own thumbnail + full name on top, then a Select to
- *  pick which destination sample it maps to (or Skip) plus a live thumbnail preview of
- *  whichever destination is currently picked - a closed Select can only show text, and
- *  visually confirming "this is the same page" is the whole point when the destination
- *  task's names/text are in a different language. The name gets its own line rather than
- *  sharing one with the Select (source and destination names here are typically long and
- *  differ only by a suffix) so it never has to compete with the Select for width and get
- *  truncated illegibly. Colocated here rather than folded into the shared LabelMapper,
- *  which 6 importer/exporter callers depend on for a plain text-only "map to a project
- *  label" row - bolting a thumbnail concept onto it would leak this one caller's needs
- *  into all of them. */
+/** Two lines per source sample: thumbnail + name, then a Select (or Skip) plus a live thumbnail of the picked destination - visual confirmation matters here since names can differ by language. Kept out of the shared LabelMapper so its thumbnail concept doesn't leak into that component's 6 other text-only callers. */
 const SampleMappingRows: FC<SampleMappingRowsProps> = ({
   sourceSamples,
   destinationSamples,
