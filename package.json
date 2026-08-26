@@ -75,7 +75,7 @@
     "@types/tinycolor2": "^1.4.6",
     "@types/yauzl": "^3.4.0",
     "@vitejs/plugin-react": "^5.1.1",
-    "@wyw-in-js/vite": "^1.0.6",
+    "@wyw-in-js/vite": "^2.4.1",
     "drizzle-kit": "^0.31.10",
     "electron": "^39.8.10",
     "electron-builder": "^26.0.12",
