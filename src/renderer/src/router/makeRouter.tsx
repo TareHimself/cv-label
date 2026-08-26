@@ -38,9 +38,7 @@ export type RouterScreens<Routes extends RouteParamsMap> = {
   [K in keyof Routes]: FC<Routes[K] extends undefined ? Record<string, never> : Routes[K]>
 }
 
-/** Identifies which stack entry a screen (and anything it renders) belongs to, so the
- *  lifecycle hooks below can look up their own entry's visibility. Provided by
- *  `makeRouterOutlet` around each `<Activity>`'s children. */
+/** Identifies which stack entry a screen belongs to, so the lifecycle hooks below can look up its visibility. Provided by `makeRouterOutlet` around each `<Activity>`'s children. */
 type RouteContextValue = { key: string }
 
 export type RouterHandle<Routes extends RouteParamsMap> = {
@@ -49,27 +47,14 @@ export type RouterHandle<Routes extends RouteParamsMap> = {
   useRouterStore: RouterStore<Routes>
   /** True iff this screen's stack entry is currently the top (visible) one. */
   useIsRouteVisible: () => boolean
-  /** Runs `callback` when this screen becomes visible: on first mount, and again every
-   *  time its `<Activity>` subtree goes from hidden back to visible (Activity remounts
-   *  effects on that transition, so a plain mount effect already doubles as this). */
+  /** Runs callback on mount, and again whenever its `<Activity>` subtree goes hidden -> visible (Activity remounts effects on that transition). */
   useOnRouteEnter: (callback: () => void) => void
-  /** Runs `callback` when this screen stops being visible: hidden by a `navigate()` past
-   *  it, or fully removed by `back()` (Activity tears down effects in both cases, so a
-   *  plain effect cleanup already doubles as this). */
+  /** Runs callback when this screen stops being visible - hidden by navigate() past it, or removed by back() (Activity tears down effects either way). */
   useOnRouteLeave: (callback: () => void) => void
   RouteContext: React.Context<RouteContextValue | null>
 }
 
-/**
- * Builds a stack-based navigator's data/actions: screens are pushed on top of each other
- * and stay mounted (see `makeRouterOutlet`) so state like scroll position survives going
- * back, instead of the unmount/remount that a route-swapping router does.
- *
- * Deliberately takes no screen components - only the route/param shape - so modules that
- * just need to call `navigate`/`back` (e.g. a page's data hook) don't have to import every
- * other page's component to get them, which would create a circular dependency between
- * this module and the pages themselves. Pair with `makeRouterOutlet` to render the stack.
- */
+/** Builds a stack navigator's data/actions - screens stay mounted (see makeRouterOutlet) so state like scroll position survives going back. Takes no screen components, only the route/param shape, so callers of navigate()/back() don't create a circular dependency importing every page. */
 export const makeRouter = <Routes extends RouteParamsMap>(
   ...initial: AnyNavigateArgs<Routes>
 ): RouterHandle<Routes> => {
@@ -137,13 +122,7 @@ export const makeRouter = <Routes extends RouteParamsMap>(
   }
 }
 
-/**
- * Builds the `<RouterOutlet>` component that actually renders a router's stack, given its
- * screen components. Kept separate from `makeRouter` so the store/navigate/back can live in
- * a module with no page imports (see `makeRouter`'s doc comment) while this piece - which
- * necessarily imports every page component - stays isolated to wherever the app root
- * assembles them (e.g. `App.tsx`), rather than being reachable from the pages themselves.
- */
+/** Builds the `<RouterOutlet>` that renders a router's stack given its screen components - kept separate from makeRouter so only the app root (which imports every page) needs this piece. */
 export const makeRouterOutlet = <Routes extends RouteParamsMap>(
   router: RouterHandle<Routes>,
   screens: RouterScreens<Routes>

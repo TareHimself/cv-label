@@ -1,12 +1,7 @@
 import JSZip from 'jszip'
 import { writeBlobToScratchFile } from './writeToScratch'
 
-/** A file from either a zip archive or a picked folder, addressed by a forward-slash
- *  relative path so the rest of the importers don't need to know which source it
- *  came from. `diskPath` is set for disk-backed sources (a zip extracted to a scratch
- *  directory) - importers reuse it directly as a sample's imagePath instead of writing
- *  another scratch copy, and can look up its dimensions without ever reading its bytes
- *  into the renderer. */
+/** A file from a zip or picked folder, addressed by a relative path so importers don't need to know the source. `diskPath` is set for disk-backed sources, reusable directly as a sample's imagePath. */
 export type VirtualFile = {
   path: string
   diskPath?: string
@@ -14,9 +9,7 @@ export type VirtualFile = {
   blob: () => Promise<Blob>
 }
 
-/** Reads the whole input zip into memory - only used for small manifest/label reads via
- *  findYoloClasses etc. Large zip-based imports should extract to disk instead; see
- *  virtualFilesFromExtractedZip. */
+/** Reads the whole zip into memory - only for small manifest/label reads. Large imports should use virtualFilesFromExtractedZip instead. */
 export const virtualFilesFromZip = async (zipFile: File): Promise<VirtualFile[]> => {
   const zip = await JSZip.loadAsync(zipFile)
   const files: VirtualFile[] = []
@@ -33,21 +26,7 @@ export const virtualFilesFromZip = async (zipFile: File): Promise<VirtualFile[]>
   return files
 }
 
-/** Extracts a dropped zip disk-to-disk into scratchDir (via the main-process streaming
- *  extractor) instead of inflating the whole archive into renderer memory. Every entry's
- *  `diskPath` points at its real extracted location, so importers can reuse it as a
- *  sample's imagePath with no further copying.
- *
- *  Resolves the picked file's own real path via webUtils.getPathForFile rather than
- *  copying it into scratchDir first - a naive copy (read the File's bytes, ship them
- *  across IPC, write them back out) would hold the entire file in memory twice over for
- *  something that's already sitting on disk, which for a multi-gigabyte dataset export
- *  defeats the point of extracting it in a streaming fashion at all. That resolution only
- *  works for a File Electron itself handed the renderer (a native file-picker selection or
- *  a plain OS drag) - a Dropzone drag that goes through directory-aware processing (needed
- *  elsewhere for folder drops) re-materializes the File via the FileSystemEntry API first,
- *  which Electron can't map back to a real path. Falls back to the naive copy only in that
- *  case, so drag-and-drop still works for a zip too, just without the streaming shortcut. */
+/** Extracts a dropped zip disk-to-disk into scratchDir instead of inflating it into renderer memory - falls back to a naive byte-copy only when the picked File has no resolvable real path (a Dropzone folder-drop re-materializes it via FileSystemEntry first, which Electron can't map back to a path). */
 export const virtualFilesFromExtractedZip = async (
   zipFile: File,
   scratchDir: string
@@ -57,9 +36,7 @@ export const virtualFilesFromExtractedZip = async (
 
   await window.zip.extractTo(zipPath, scratchDir)
   if (!resolvedPath) {
-    // The staged copy lives inside scratchDir itself (nowhere else to put it without a
-    // second temporary-directory round trip) - remove it before listing so it isn't
-    // mistaken for one of the zip's own extracted entries.
+    // The staged copy lives inside scratchDir itself - remove it before listing so it isn't mistaken for an extracted entry.
     await window.system.deleteFile(zipPath)
   }
 
@@ -71,23 +48,15 @@ export const virtualFilesFromExtractedZip = async (
       path: relativePath,
       diskPath,
       text: () => window.system.readTextFile(diskPath),
-      // Callers should use diskPath directly (as an imagePath, or via
-      // window.system.getImageDimensions) instead of reading bytes back into the
-      // renderer - blob() is only meaningful for in-memory sources.
+      // Callers should use diskPath directly instead - blob() is only for in-memory sources.
       blob: () => Promise.reject(new Error('blob() is not supported for disk-backed files'))
     }
   })
 }
 
-/** Accepts a plain File[] as well as a live FileList - callers reading from an
- *  <input type="file"> should pass Array.from(input.files) captured synchronously in
- *  the change handler, before any await. input.files is the same mutable FileList object
- *  on every read (not a fresh snapshot), and gets cleared in place by a later
- *  `input.value = ''` reset - holding onto the FileList itself across an async gap silently
- *  empties it out from under you. */
+/** Accepts a plain File[] as well as a live FileList - capture via Array.from(input.files) synchronously in the change handler, since the live FileList empties out from under an async gap after `input.value = ''`. */
 export const virtualFilesFromFileList = (fileList: FileList | File[]): VirtualFile[] => {
-  // webkitdirectory-selected files carry their folder-relative path here, e.g.
-  // "MyDataset/images/train/img1.jpg".
+  // webkitdirectory-selected files carry a folder-relative path, e.g. "MyDataset/images/train/img1.jpg".
   return Array.from(fileList).map((file) => ({
     path: (file.webkitRelativePath || file.name).replace(/\\/g, '/'),
     text: () => file.text(),

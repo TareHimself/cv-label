@@ -25,9 +25,7 @@ export type YoloClass = {
   name: string
 }
 
-/** Reads class names from data.yaml/dataset.yaml (Ultralytics format, `names` as either a
- *  list or an `{id: name}` map) or classes.txt (one name per line, in order). Returns null
- *  if neither is present, so the caller can fall back to naming classes by their raw id. */
+/** Reads class names from data.yaml/dataset.yaml (Ultralytics `names`) or classes.txt - null if neither is present, so the caller can fall back to naming by raw id. */
 export const findYoloClasses = async (files: VirtualFile[]): Promise<YoloClass[] | null> => {
   const dataYaml = files.find((f) => /(^|\/)(data|dataset)\.ya?ml$/i.test(f.path))
   if (dataYaml) {
@@ -64,9 +62,7 @@ export type YoloBox = {
   h: number
 }
 
-/** Parses a YOLO label .txt file's bounding-box lines (`class cx cy w h`). Ignores blank
- *  lines and any trailing columns (e.g. from segmentation/OBB variants) - only the first
- *  five fields are used. Malformed lines are skipped rather than failing the whole import. */
+/** Parses a YOLO label .txt file's box lines (`class cx cy w h`) - only the first 5 fields are used, malformed lines are skipped rather than failing the import. */
 export const parseYoloLabelFile = (content: string): YoloBox[] => {
   return content
     .split(/\r?\n/)
@@ -116,10 +112,7 @@ export type YoloPolygon = {
   points: { x: number; y: number }[]
 }
 
-/** Parses a YOLO-seg label .txt file's polygon lines (`class x1 y1 x2 y2 ... xn yn`).
- *  Requires at least 3 vertices - anything shorter isn't a real polygon and would be
- *  indistinguishable from a detection line anyway. Malformed or too-short lines are
- *  skipped rather than failing the whole import. */
+/** Parses a YOLO-seg label .txt file's polygon lines (`class x1 y1 ... xn yn`) - requires at least 3 vertices, malformed/short lines are skipped rather than failing the import. */
 export const parseYoloSegmentationLabelFile = (content: string): YoloPolygon[] => {
   return content
     .split(/\r?\n/)
@@ -161,12 +154,7 @@ export type YoloImagePair = {
 
 const IMAGES_DIR_PATTERN = /(^|\/)images\//
 
-/** Pairs each image with its YOLO label file, checked in the same directory first (flat
- *  layouts) and then via the Ultralytics `images/` -> `labels/` sibling-directory
- *  convention. Images without a matching label are kept (imported with no annotations)
- *  rather than dropped. Images under a val/valid/validation folder default to the Valid
- *  split, a test folder to Test, and everything else to Train - there's no UI for this
- *  since it just mirrors the dataset's own folder structure. */
+/** Pairs each image with its YOLO label file - same directory first, then the Ultralytics `images/` -> `labels/` convention. An unmatched image is kept with no annotations, not dropped. Split is inferred from the folder name (val/test/train), no UI for it. */
 export const findYoloImagePairs = (files: VirtualFile[]): YoloImagePair[] => {
   const byPath = new Map(files.map((f) => [f.path, f] as const))
 
@@ -184,8 +172,7 @@ export const findYoloImagePairs = (files: VirtualFile[]): YoloImagePair[] => {
     })
 }
 
-/** Every distinct class id actually referenced by the dataset's label files, used to build
- *  a fallback class list ("Class 0", "Class 1", ...) when there's no data.yaml/classes.txt. */
+/** Every distinct class id referenced in the dataset's labels - builds a fallback ("Class 0", "Class 1", ...) class list when there's no data.yaml/classes.txt. */
 export const findReferencedClassIds = async (pairs: YoloImagePair[]): Promise<number[]> => {
   const ids = new Set<number>()
   for (const pair of pairs) {
@@ -197,12 +184,7 @@ export const findReferencedClassIds = async (pairs: YoloImagePair[]): Promise<nu
   return Array.from(ids).sort((a, b) => a - b)
 }
 
-/** Gets the image's pixel dimensions (needed to normalize box/polygon coordinates) and a
- *  scratch-file imagePath. A disk-backed pair (extracted from a zip) already has a real
- *  file - its dimensions are read directly via sharp (main-process, no bytes cross into
- *  the renderer) and its diskPath is reused as-is, no extra copy. A blob-backed pair (a
- *  picked folder) has no on-disk file yet, so it's decoded once via createImageBitmap for
- *  its dimensions and then written to scratchDir. */
+/** Gets the image's pixel dimensions and a scratch-file imagePath. A disk-backed pair reuses its diskPath as-is (dimensions read main-process side, no bytes cross into the renderer); a blob-backed pair is decoded once via createImageBitmap and written to scratchDir. */
 const resolveImagePathAndDimensions = async (
   image: VirtualFile,
   scratchDir: string
@@ -266,11 +248,7 @@ const buildSampleFromYoloPair = async (
   }
 }
 
-/** Converts the whole dataset to samples, one image at a time (not in parallel - datasets
- *  can run into the thousands of images, and decoding many at once risks spiking memory).
- *  `format` picks how every label line in the dataset is interpreted - YOLO's own label
- *  files don't self-describe this, and a dataset is conventionally all-detection or
- *  all-segmentation, so it's one choice for the whole import rather than inferred per line. */
+/** Converts the whole dataset to samples one image at a time, not in parallel - datasets can run into the thousands and decoding many at once risks spiking memory. `format` is one choice for the whole import since YOLO label files don't self-describe it. */
 export const yoloDatasetToSamples = async (
   pairs: YoloImagePair[],
   classIdToLabelId: Map<number, string | null>,
