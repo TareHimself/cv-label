@@ -36,10 +36,7 @@ export const useRunAnnotator = (taskIds: string[]) => {
   const queryClient = useQueryClient()
   const [progress, setProgress] = useState<RunAnnotatorProgress>(INITIAL_PROGRESS)
   const [isRunning, setIsRunning] = useState(false)
-  // Distinct from isRunning (which flips back to false once the run finishes) and from
-  // progress.total (which is legitimately 0 when every sample was already labeled) - the
-  // only reliable way to tell "a run happened" from "nothing has run yet" is a flag that
-  // run() itself sets and only reset() clears.
+  // Distinct from isRunning (flips back once finished) and progress.total (legitimately 0 when already labeled) - only run()/reset() touch this.
   const [hasRun, setHasRun] = useState(false)
 
   const run = useCallback(
@@ -86,9 +83,7 @@ export const useRunAnnotator = (taskIds: string[]) => {
         }
       }
 
-      // Awaited before clearing isRunning (which enables "Done") - the caller can stay on
-      // this same modal and immediately Run again, so the sample list backing that next
-      // run must already reflect the annotations just created, not a stale pre-run snapshot.
+      // Awaited before clearing isRunning - an immediate re-Run must see the annotations just created, not a stale snapshot.
       await Promise.all(
         taskIds.map((taskId) =>
           queryClient.invalidateQueries({ queryKey: ['samples', taskId, store] })
