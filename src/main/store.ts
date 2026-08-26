@@ -13,10 +13,7 @@ orchestrator.register({
   resolveImage: localStore.resolveImage
 })
 
-// protocol.registerSchemesAsPrivileged can only be called once per app lifetime - every
-// custom scheme the app uses (image://, scratch://, ...) must be registered together in
-// this single call, or the ones left out of it silently never become privileged even
-// though registering them separately doesn't throw.
+// Call-once-per-app-lifetime - every custom scheme must be registered together here, or the ones left out silently never become privileged.
 protocol.registerSchemesAsPrivileged([
   {
     scheme: IMAGE_PROTOCOL_URL,
@@ -42,8 +39,7 @@ app.whenReady().then(() => {
   protocol.handle(IMAGE_PROTOCOL_URL, async (req) => {
     try {
       const url = new URL(req.url)
-      // storeId is the host/authority segment (image://<storeId>/<imageId>.<ext>) - same
-      // custom-scheme parsing behavior scratch:// relies on.
+      // storeId is the host segment: image://<storeId>/<imageId>.<ext>
       return await orchestrator.resolveImage(url.host, url.pathname.slice(1))
     } catch (error) {
       console.error(error)

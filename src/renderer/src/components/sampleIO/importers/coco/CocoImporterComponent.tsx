@@ -86,10 +86,7 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
       e.target.value = ''
       return
     }
-    // input.files is the same mutable FileList object on every read, not a fresh
-    // snapshot - materialize it into a plain array before resetting the input's value
-    // below (needed so re-picking the same folder still fires onChange), since that reset
-    // clears this same FileList in place.
+    // input.files is a live mutable FileList - materialize it now, before the value reset below (needed so re-picking the same folder still fires onChange) clears it in place.
     const files = Array.from(fileList)
     e.target.value = ''
     loadSource(() => virtualFilesFromFileList(files))

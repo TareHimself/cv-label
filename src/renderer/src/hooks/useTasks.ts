@@ -123,11 +123,7 @@ export const useTasks = (project: IProject) => {
     [removeMutateAsync]
   )
 
-  // Tags are picked by id (see hooks/useTags.ts for the project's vocabulary) and
-  // attached/detached across a whole batch of task ids in one call (see
-  // IDataStore.addTagsToTasks) - simple invalidate-on-success here rather than granular
-  // optimistic patching, since tagging isn't perf-sensitive and the resulting per-task
-  // tag lists are easiest to just re-fetch.
+  // Simple invalidate-on-success rather than granular optimistic patching - tagging isn't perf-sensitive, easiest to just re-fetch.
   const { mutateAsync: addTagsMutateAsync } = useMutation({
     mutationFn: ({ taskIds, tagIds }: { taskIds: string[]; tagIds: string[] }) =>
       store.addTagsToTasks(taskIds, tagIds),

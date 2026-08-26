@@ -102,10 +102,7 @@ export const YoloImporterComponent: FC<SampleImporterComponentProps> = ({
       e.target.value = ''
       return
     }
-    // input.files is the same mutable FileList object on every read, not a fresh
-    // snapshot - materialize it into a plain array now, synchronously, before loadSource's
-    // first await runs. Otherwise the value reset below (needed so re-picking the same
-    // folder still fires onChange) clears this same FileList in place before it's read.
+    // input.files is a live mutable FileList - materialize it now, before the value reset below (needed so re-picking the same folder still fires onChange) clears it in place.
     const files = Array.from(fileList)
     loadSource(() => virtualFilesFromFileList(files))
     e.target.value = ''
