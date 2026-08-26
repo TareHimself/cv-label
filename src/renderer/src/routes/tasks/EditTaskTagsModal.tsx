@@ -14,12 +14,7 @@ export type EditTaskTagsModalProps = {
   onConfirm: (addedIds: string[], removedIds: string[]) => Promise<unknown>
 }
 
-/** Edits one task's tags via a single creatable combobox (TagPicker), pre-filled with the
- *  task's current tags as pills - add more by picking (or creating) from the dropdown,
- *  remove by clicking a pill's own remove button. Diffed against the original set on
- *  Save. Controlled by mounting with a `key` tied to the task (e.g. `key={task?.id}`),
- *  same convention as RenameModal, so reopening for a different task doesn't carry over
- *  the previous selection. */
+/** Edits one task's tags via TagPicker, pre-filled as pills, diffed against the original set on Save. Controlled by mounting with a `key={task?.id}`, same convention as RenameModal. */
 export const EditTaskTagsModal: FC<EditTaskTagsModalProps> = ({
   opened,
   project,

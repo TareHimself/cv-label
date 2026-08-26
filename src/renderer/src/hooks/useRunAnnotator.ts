@@ -30,12 +30,7 @@ const INITIAL_PROGRESS: RunAnnotatorProgress = {
   failures: []
 }
 
-/** Runs an annotator over a set of samples, skipping any sample that already has at
- *  least one annotation - auto-labeling only ever targets unlabeled samples. Runs
- *  sequentially and keeps going past a per-sample failure so one bad image doesn't stop
- *  the rest of the batch. `taskIds` covers every task the passed-in samples were drawn
- *  from (usually one, but a batch run from the Tasks page can span several), so each of
- *  their sample caches gets invalidated once the run finishes. */
+/** Runs an annotator over samples, skipping any already-annotated one. Sequential, keeps going past a per-sample failure. `taskIds` covers every task the samples were drawn from, so each cache gets invalidated when the run finishes. */
 export const useRunAnnotator = (taskIds: string[]) => {
   const store = useAppStore((s) => s.store)
   const queryClient = useQueryClient()
