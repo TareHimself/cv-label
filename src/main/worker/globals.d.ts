@@ -1,7 +1,4 @@
-// Ambient globals injected via `workerData` by importWorkerModule (see worker/index.ts) -
-// shared by every worker-thread module (database.ts, appDatabase.ts, ...) that reads them,
-// so each doesn't redeclare its own (which TS rejects as a duplicate block-scoped binding
-// once more than one such module is part of the same program).
+// Ambient globals injected via `workerData` by importWorkerModule - shared here so every worker-thread module that reads them doesn't redeclare its own (a duplicate block-scoped binding).
 export {}
 
 declare global {

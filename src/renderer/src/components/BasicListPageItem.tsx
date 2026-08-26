@@ -149,10 +149,7 @@ export const BasicListPageItem: FC<BasicListPageItemProps> = ({
         ]
       : [])
   ]
-  // Outside select mode, the All/Above/Below variants have no anchor to make sense of yet
-  // (nothing else is selected) - a single generic "Select" entry (via onSelect) is the
-  // only selection action offered until the list is already in select mode, at which
-  // point the fuller batch-selection variants take over.
+  // Outside select mode, All/Above/Below have no anchor to make sense of yet - just a generic "Select" entry until the list is already in select mode.
   const selectionItems = selectMode
     ? [
         ...(onSelectAll ? [{ key: 'select-all', title: 'Select All', onClick: onSelectAll }] : []),

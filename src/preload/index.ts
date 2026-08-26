@@ -81,8 +81,7 @@ const zipApi: IZip = {
   extractTo: wrap(IPCKeys.Zip_ExtractTo)
 }
 
-// Synchronous and preload-only, unlike everything else here - never crosses IPC, so it
-// doesn't go through wrap()/ipcRenderer.invoke.
+// Synchronous and preload-only, unlike everything else here - never crosses IPC.
 const fileUtilsApi: IFileUtils = {
   getPathForFile: (file) => webUtils.getPathForFile(file)
 }
@@ -96,9 +95,6 @@ const exportApi: IExportApi = {
   }
 }
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
