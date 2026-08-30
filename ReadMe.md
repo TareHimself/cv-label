@@ -21,6 +21,11 @@ default, behind an `IDataStore` interface designed to be swapped for other backe
 Sample images are from the [COCO dataset](https://cocodataset.org), used here for
 demonstration only.
 
+## Data formats
+
+Import/export YOLO, COCO, and this app's own `.cvlabel` archive format — see
+[`formats/`](./formats) for the `.cvlabel` spec.
+
 ## Recommended IDE Setup
 
 - [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
