@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/TareHimself/cv-label/formats/cvlabel/schema.json",
+  "title": "CV-Label manifest.json",
+  "description": "manifest.json found at the root of a .cvlabel archive. See SPEC.md.",
+  "type": "object",
+  "required": ["labels", "samples"],
+  "properties": {
+    "labels": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/label" }
+    },
+    "samples": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sample" }
+    }
+  },
+  "$defs": {
+    "label": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "required": ["id", "name", "split", "createdAt", "imageFile", "annotations"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "split": { "enum": ["train", "test", "valid"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "imageFile": { "type": "string" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "annotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/annotation" }
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "required": ["id", "type", "labelId", "points"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "enum": ["box", "polygon"] },
+        "labelId": { "type": "string" },
+        "points": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/point" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "box" } } },
+          "then": { "properties": { "points": { "minItems": 2, "maxItems": 2 } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "polygon" } } },
+          "then": { "properties": { "points": { "minItems": 3 } } }
+        }
+      ]
+    },
+    "point": {
+      "type": "object",
+      "required": ["id", "x", "y"],
+      "properties": {
+        "id": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    }
+  }
+}
