@@ -340,6 +340,48 @@ describe('useLabeler box creation validation', () => {
 
     expect(Object.keys(store.getState().sample!.resolve().annotations.resolve())).toHaveLength(0)
   })
+
+  it('captures the start corner at the actual click, not wherever the mouse was when the tool was armed', async () => {
+    const store = setupWithImage()
+
+    await act(async () => {
+      // The tool is armed while hovering far outside the image (e.g. over a toolbar button).
+      store.setState({ mousePos: [-500, -500] })
+      store.getState().setMode(LabelerMode.CreateBox)
+      store.getState().onMouseMove(10, 10)
+      store.getState().onConfirmPoint(10, 10)
+      store.getState().onMouseMove(60, 60)
+      store.getState().onConfirmPoint(60, 60)
+      await flush()
+    })
+
+    const created = Object.values(store.getState().sample!.resolve().annotations.resolve())
+    expect(created).toHaveLength(1)
+    expect(created[0].resolve().points.map((p) => [p.x, p.y])).toEqual([
+      [10, 10],
+      [60, 60]
+    ])
+  })
+
+  it('creates a box that starts inside the image and is dragged past the edge, clamping to the boundary', async () => {
+    const store = setupWithImage()
+
+    await act(async () => {
+      store.setState({ mousePos: [10, 10] })
+      store.getState().setMode(LabelerMode.CreateBox)
+      store.getState().onConfirmPoint(10, 10)
+      store.getState().onMouseMove(500, 500)
+      store.getState().onConfirmPoint(500, 500)
+      await flush()
+    })
+
+    const created = Object.values(store.getState().sample!.resolve().annotations.resolve())
+    expect(created).toHaveLength(1)
+    expect(created[0].resolve().points.map((p) => [p.x, p.y])).toEqual([
+      [10, 10],
+      [100, 100]
+    ])
+  })
 })
 
 describe('useLabeler duplicateAnnotation', () => {

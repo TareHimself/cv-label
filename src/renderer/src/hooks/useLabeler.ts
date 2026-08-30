@@ -105,7 +105,6 @@ export const useLabeler = (labels: ILabel[]) => {
           labelId: string,
           mousePos: Vector2
         ) => {
-          annotationCreationRawStart = [...mousePos]
           const [x, y] = canvasToBitmapSpace(...mousePos)
           return {
             id: makeUUID(),
@@ -372,6 +371,10 @@ export const useLabeler = (labels: ILabel[]) => {
               ) {
                 state.onConfirmAnnotationCreation()
               } else {
+                if (state.annotationBeingCreated.type === AnnotationType.Box) {
+                  // The box's start corner, locked in at the actual click - see isValidBoxCreation.
+                  annotationCreationRawStart = [x, y]
+                }
                 state.annotationBeingCreated.points.push({
                   id: makeUUID(),
                   x: 0,
