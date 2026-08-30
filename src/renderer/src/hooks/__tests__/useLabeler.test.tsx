@@ -93,6 +93,12 @@ describe('useLabeler undo/redo', () => {
       async (_sampleId, annotations) => annotations
     )
     vi.mocked(dataStore.deleteAnnotations).mockResolvedValue([true])
+    act(() =>
+      store.setState({
+        bitmap: { width: 100, height: 100 } as ImageBitmap,
+        imageRect: { x: 0, y: 0, width: 100, height: 100 }
+      })
+    )
 
     await act(async () => {
       store.getState().setMode(LabelerMode.CreateBox)
@@ -274,6 +280,65 @@ describe('useLabeler undo/redo', () => {
     expect(dataStore.createAnnotations).not.toHaveBeenCalled()
     expect(dataStore.replacePoints).not.toHaveBeenCalled()
     expect(dataStore.updateAnnotations).not.toHaveBeenCalled()
+  })
+})
+
+describe('useLabeler box creation validation', () => {
+  const setupWithImage = () => {
+    const store = setup([])
+    act(() =>
+      store.setState({
+        bitmap: { width: 100, height: 100 } as ImageBitmap,
+        imageRect: { x: 0, y: 0, width: 100, height: 100 }
+      })
+    )
+    const dataStore = useAppStore.getState().store
+    vi.mocked(dataStore.createAnnotations).mockImplementation(
+      async (_sampleId, annotations) => annotations
+    )
+    return store
+  }
+
+  it('creates a box that starts inside the image and is large enough', async () => {
+    const store = setupWithImage()
+
+    await act(async () => {
+      store.setState({ mousePos: [10, 10] })
+      store.getState().setMode(LabelerMode.CreateBox)
+      store.getState().onConfirmPoint(60, 60)
+      store.getState().onConfirmPoint(60, 60)
+      await flush()
+    })
+
+    expect(Object.keys(store.getState().sample!.resolve().annotations.resolve())).toHaveLength(1)
+  })
+
+  it('discards a box whose corners were both clicked outside the image', async () => {
+    const store = setupWithImage()
+
+    await act(async () => {
+      store.setState({ mousePos: [-10, -10] })
+      store.getState().setMode(LabelerMode.CreateBox)
+      store.getState().onConfirmPoint(-20, -20)
+      store.getState().onConfirmPoint(-20, -20)
+      await flush()
+    })
+
+    expect(Object.keys(store.getState().sample!.resolve().annotations.resolve())).toHaveLength(0)
+  })
+
+  it('discards a box too small on screen to be an intentional drag', async () => {
+    const store = setupWithImage()
+
+    await act(async () => {
+      store.setState({ mousePos: [50, 50] })
+      store.getState().setMode(LabelerMode.CreateBox)
+      store.getState().onConfirmPoint(51, 51)
+      store.getState().onConfirmPoint(51, 51)
+      await flush()
+    })
+
+    expect(Object.keys(store.getState().sample!.resolve().annotations.resolve())).toHaveLength(0)
   })
 })
 

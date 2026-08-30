@@ -17,6 +17,9 @@ const ZOOM_STEP_DELTA = 0.15
 const MIN_ZOOM = 0.05
 const MAX_ZOOM = 32
 
+/** Below this on-screen size (any zoom), a just-drawn box is treated as an accidental click, not a real annotation. */
+const MIN_BOX_SCREEN_SIZE_PX = 4
+
 /** Sentinels for a Box's 2 derived corner handles (see moveAnnotationPoint) - safe as fixed literals since only one Box is ever selected at a time. */
 export const BOX_CORNER_HANDLE_TOP_RIGHT = '__box-corner-top-right__'
 export const BOX_CORNER_HANDLE_BOTTOM_LEFT = '__box-corner-bottom-left__'
@@ -282,6 +285,8 @@ export const useLabeler = (labels: ILabel[]) => {
       create<LabelerStore>((set, get) => {
         const colorGenerator = new ColorGenerator()
         let activeSampleAbort: AbortController | null = null
+        /** Raw (pre-clamp) canvas position of the in-progress box's first corner - see isValidBoxCreation. */
+        let annotationCreationRawStart: Vector2 | null = null
         const imageHitId = colorGenerator.make()
         const labelsMap = createLabelsMap(labels)
         const hitIdToAnnotationId = new OneToOneMap<string, string>()
@@ -390,11 +395,18 @@ export const useLabeler = (labels: ILabel[]) => {
           return [newX, newY]
         }
 
+        const pointInRect = (pos: Vector2, rect: Rect): boolean =>
+          pos[0] >= rect.x &&
+          pos[0] <= rect.x + rect.width &&
+          pos[1] >= rect.y &&
+          pos[1] <= rect.y + rect.height
+
         const createPendingAnnotation = (
           type: AnnotationType,
           labelId: string,
           mousePos: Vector2
         ) => {
+          annotationCreationRawStart = [...mousePos]
           const [x, y] = canvasToBitmapSpace(...mousePos)
           return {
             id: makeUUID(),
@@ -408,6 +420,26 @@ export const useLabeler = (labels: ILabel[]) => {
               }
             ]
           } satisfies INewAnnotation
+        }
+
+        /** Rejects a Box whose corners were both clicked outside the image, or whose on-screen size is too small to be intentional. */
+        const isValidBoxCreation = (
+          rawEnd: Vector2,
+          imageRect: Rect,
+          scale: number,
+          annotation: INewAnnotation
+        ): boolean => {
+          const startInside =
+            annotationCreationRawStart !== null &&
+            pointInRect(annotationCreationRawStart, imageRect)
+          const endInside = pointInRect(rawEnd, imageRect)
+          if (!startInside && !endInside) return false
+
+          const box = boundingBoxOf(annotation.points)
+          return (
+            box.width * scale >= MIN_BOX_SCREEN_SIZE_PX &&
+            box.height * scale >= MIN_BOX_SCREEN_SIZE_PX
+          )
         }
 
         const fitBitmapToCanvas = () => {
@@ -935,6 +967,9 @@ export const useLabeler = (labels: ILabel[]) => {
               }
 
               annotation = normalizeAnnotationPoints(annotation)
+              const shouldDiscard =
+                annotation.type === AnnotationType.Box &&
+                !isValidBoxCreation(state.mousePos, state.imageRect, state.scale, annotation)
 
               set({
                 annotationBeingCreated: createPendingAnnotation(
@@ -944,6 +979,8 @@ export const useLabeler = (labels: ILabel[]) => {
                 ),
                 annotationDirty: true
               })
+
+              if (shouldDiscard) return
 
               applyCreateAnnotation(annotation)
               pushHistory({ kind: 'create', annotation })
