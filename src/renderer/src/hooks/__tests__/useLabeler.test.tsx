@@ -382,6 +382,26 @@ describe('useLabeler box creation validation', () => {
       [100, 100]
     ])
   })
+
+  it('creates a box whose start and end are both outside the image but whose extent covers it', async () => {
+    const store = setupWithImage()
+
+    await act(async () => {
+      store.setState({ mousePos: [-50, -50] })
+      store.getState().setMode(LabelerMode.CreateBox)
+      store.getState().onConfirmPoint(-50, -50)
+      store.getState().onMouseMove(150, 150)
+      store.getState().onConfirmPoint(150, 150)
+      await flush()
+    })
+
+    const created = Object.values(store.getState().sample!.resolve().annotations.resolve())
+    expect(created).toHaveLength(1)
+    expect(created[0].resolve().points.map((p) => [p.x, p.y])).toEqual([
+      [0, 0],
+      [100, 100]
+    ])
+  })
 })
 
 describe('useLabeler duplicateAnnotation', () => {
