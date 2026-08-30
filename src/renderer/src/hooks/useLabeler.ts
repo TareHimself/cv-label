@@ -6,7 +6,7 @@ import { useMemo } from 'react'
 import { makeUUID } from '@shared/utils'
 import { clamp } from '@mantine/hooks'
 import { OptimisticObject } from '@renderer/util/optimistic_object'
-import { boundingBoxOf } from '@renderer/components/sampleIO/exporters/annotationShape'
+import { boundingBoxOf } from '@renderer/util/boundingBox'
 import {
   BOX_CORNER_HANDLE_TOP_RIGHT,
   BOX_CORNER_HANDLE_BOTTOM_LEFT,
@@ -14,7 +14,7 @@ import {
   BOX_EDGE_RIGHT,
   BOX_EDGE_BOTTOM,
   BOX_EDGE_LEFT,
-  createHitIdTracker
+  HitIdTracker
 } from './labeler/hitIds'
 import {
   normalizeAnnotationPoints,
@@ -79,7 +79,7 @@ export const useLabeler = (labels: ILabel[]) => {
   const store = useMemo(
     () =>
       create<LabelerStore>((set, get) => {
-        const hitIds = createHitIdTracker()
+        const hitIds = new HitIdTracker()
         let activeSampleAbort: AbortController | null = null
         /** Raw (pre-clamp) canvas position of the in-progress box's first corner - see isValidBoxCreation. */
         let annotationCreationRawStart: Vector2 | null = null

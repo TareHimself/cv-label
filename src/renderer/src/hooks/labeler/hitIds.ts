@@ -63,110 +63,98 @@ export class OneToOneMap<T, K> {
 }
 
 /** Owns the color-hit-id bookkeeping the canvas hit-test reads from - one instance per labeler store. */
-export const createHitIdTracker = () => {
-  const colorGenerator = new ColorGenerator()
-  const hitIdToAnnotationId = new OneToOneMap<string, string>()
-  const selectedAnnotationControlHitIds = new OneToOneMap<string, string>()
-  const selectedAnnotationLineHitIds = new OneToOneMap<string, string>()
+export class HitIdTracker {
+  readonly colorGenerator = new ColorGenerator()
+  readonly hitIdToAnnotationId = new OneToOneMap<string, string>()
+  readonly selectedAnnotationControlHitIds = new OneToOneMap<string, string>()
+  readonly selectedAnnotationLineHitIds = new OneToOneMap<string, string>()
 
-  const makeHitId = () => colorGenerator.make()
-  const freeHitId = (id: string) => colorGenerator.free(id)
+  makeHitId(): string {
+    return this.colorGenerator.make()
+  }
 
-  const clearSelectedAnnotationHitIds = () => {
-    for (const hitId of selectedAnnotationControlHitIds.keys()) {
-      freeHitId(hitId)
+  freeHitId(id: string): void {
+    this.colorGenerator.free(id)
+  }
+
+  clearSelectedAnnotationHitIds(): void {
+    for (const hitId of this.selectedAnnotationControlHitIds.keys()) {
+      this.freeHitId(hitId)
     }
 
-    for (const hitId of selectedAnnotationLineHitIds.keys()) {
-      freeHitId(hitId)
+    for (const hitId of this.selectedAnnotationLineHitIds.keys()) {
+      this.freeHitId(hitId)
     }
 
-    selectedAnnotationControlHitIds.clear()
-    selectedAnnotationLineHitIds.clear()
+    this.selectedAnnotationControlHitIds.clear()
+    this.selectedAnnotationLineHitIds.clear()
   }
 
   /** Rebuilds a selected annotation's hit ids from scratch - a Box's derived corner/edge handles only ever get set up here, not per-point. */
-  const rebuildSelectedAnnotationHitIds = (annotation: IAnnotation) => {
-    clearSelectedAnnotationHitIds()
+  rebuildSelectedAnnotationHitIds(annotation: IAnnotation): void {
+    this.clearSelectedAnnotationHitIds()
 
     for (const point of annotation.points) {
-      selectedAnnotationControlHitIds.set(makeHitId(), point.id)
+      this.selectedAnnotationControlHitIds.set(this.makeHitId(), point.id)
     }
 
     if (annotation.type === AnnotationType.Polygon) {
       for (const point of annotation.points) {
-        selectedAnnotationLineHitIds.set(makeHitId(), point.id)
+        this.selectedAnnotationLineHitIds.set(this.makeHitId(), point.id)
       }
     } else if (annotation.type === AnnotationType.Box) {
-      selectedAnnotationControlHitIds.set(makeHitId(), BOX_CORNER_HANDLE_TOP_RIGHT)
-      selectedAnnotationControlHitIds.set(makeHitId(), BOX_CORNER_HANDLE_BOTTOM_LEFT)
-      selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_TOP)
-      selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_RIGHT)
-      selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_BOTTOM)
-      selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_LEFT)
+      this.selectedAnnotationControlHitIds.set(this.makeHitId(), BOX_CORNER_HANDLE_TOP_RIGHT)
+      this.selectedAnnotationControlHitIds.set(this.makeHitId(), BOX_CORNER_HANDLE_BOTTOM_LEFT)
+      this.selectedAnnotationLineHitIds.set(this.makeHitId(), BOX_EDGE_TOP)
+      this.selectedAnnotationLineHitIds.set(this.makeHitId(), BOX_EDGE_RIGHT)
+      this.selectedAnnotationLineHitIds.set(this.makeHitId(), BOX_EDGE_BOTTOM)
+      this.selectedAnnotationLineHitIds.set(this.makeHitId(), BOX_EDGE_LEFT)
     }
   }
 
-  const clearSelectedAnnotationPointId = (pointId: string) => {
+  clearSelectedAnnotationPointId(pointId: string): void {
     {
-      const hitId = selectedAnnotationControlHitIds.getByValue(pointId)
+      const hitId = this.selectedAnnotationControlHitIds.getByValue(pointId)
       if (hitId !== undefined) {
-        freeHitId(hitId)
-        selectedAnnotationControlHitIds.delete(pointId)
+        this.freeHitId(hitId)
+        this.selectedAnnotationControlHitIds.delete(pointId)
       }
     }
     {
-      const hitId = selectedAnnotationLineHitIds.getByValue(pointId)
+      const hitId = this.selectedAnnotationLineHitIds.getByValue(pointId)
       if (hitId !== undefined) {
-        freeHitId(hitId)
-        selectedAnnotationLineHitIds.delete(pointId)
+        this.freeHitId(hitId)
+        this.selectedAnnotationLineHitIds.delete(pointId)
       }
     }
   }
 
-  const addSelectedAnnotationPointId = (pointId: string) => {
-    clearSelectedAnnotationPointId(pointId)
+  addSelectedAnnotationPointId(pointId: string): void {
+    this.clearSelectedAnnotationPointId(pointId)
     {
-      const hitId = makeHitId()
-      selectedAnnotationControlHitIds.set(hitId, pointId)
+      const hitId = this.makeHitId()
+      this.selectedAnnotationControlHitIds.set(hitId, pointId)
     }
     {
-      const hitId = makeHitId()
-      selectedAnnotationLineHitIds.set(hitId, pointId)
+      const hitId = this.makeHitId()
+      this.selectedAnnotationLineHitIds.set(hitId, pointId)
     }
   }
 
   /** Frees annotationId's own hit color, plus its selected-handle colors if it was the selected annotation. */
-  const freeAnnotationHitIds = (annotationId: string, wasSelected: boolean) => {
-    const hitId = hitIdToAnnotationId.getByValue(annotationId)
+  freeAnnotationHitIds(annotationId: string, wasSelected: boolean): void {
+    const hitId = this.hitIdToAnnotationId.getByValue(annotationId)
     if (hitId !== undefined) {
-      freeHitId(hitId)
-      hitIdToAnnotationId.delete(hitId)
+      this.freeHitId(hitId)
+      this.hitIdToAnnotationId.delete(hitId)
     }
     if (wasSelected) {
-      clearSelectedAnnotationHitIds()
+      this.clearSelectedAnnotationHitIds()
     }
   }
 
-  const addAnnotationHitIds = (annotationId: string) => {
-    const hitId = makeHitId()
-    hitIdToAnnotationId.set(hitId, annotationId)
-  }
-
-  return {
-    colorGenerator,
-    hitIdToAnnotationId,
-    selectedAnnotationControlHitIds,
-    selectedAnnotationLineHitIds,
-    makeHitId,
-    freeHitId,
-    clearSelectedAnnotationHitIds,
-    rebuildSelectedAnnotationHitIds,
-    addSelectedAnnotationPointId,
-    clearSelectedAnnotationPointId,
-    freeAnnotationHitIds,
-    addAnnotationHitIds
+  addAnnotationHitIds(annotationId: string): void {
+    const hitId = this.makeHitId()
+    this.hitIdToAnnotationId.set(hitId, annotationId)
   }
 }
-
-export type HitIdTracker = ReturnType<typeof createHitIdTracker>

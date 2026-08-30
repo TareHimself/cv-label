@@ -1,13 +1,10 @@
 import { makeUUID } from '@shared/utils'
 import { AnnotationType, IAnnotation, INewAnnotation, IPoint } from '@shared/types'
-import {
-  boundingBoxOf,
-  type BoundingBox
-} from '@renderer/components/sampleIO/exporters/annotationShape'
+import { boundingBoxOf, type BoundingBox } from '@renderer/util/boundingBox'
 import type { Rect, Vector2 } from './storeTypes'
 
 /** Below this on-screen size (any zoom), a just-drawn box is treated as an accidental click, not a real annotation. */
-export const MIN_BOX_SCREEN_SIZE_PX = 4
+export const MIN_BOX_SCREEN_SIZE_PX = 8
 
 export const normalizeAnnotationPoints = <T extends Pick<IAnnotation, 'type' | 'points'>>(
   annotation: T
@@ -25,13 +22,6 @@ export const normalizeAnnotationPoints = <T extends Pick<IAnnotation, 'type' | '
     p1.x = maxX
     p1.y = maxY
   }
-
-  // Could become problematic so removed for now
-  // fixedAnnotation.points = fixedAnnotation.points.map((c) => ({
-  //   id: c.id,
-  //   x: Math.round(c.x),
-  //   y: Math.round(c.y)
-  // }))
 
   return fixedAnnotation
 }
