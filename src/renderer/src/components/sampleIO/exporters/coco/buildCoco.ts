@@ -1,5 +1,6 @@
 import { AnnotationType, IAnnotation, ILabel } from '@shared/types'
-import { boundingBoxOf, exportShapePoints, ExportShape, polygonArea } from '../annotationShape'
+import { exportShapePoints, ExportShape } from '../annotationShape'
+import { boundingBoxOf, polygonArea } from '@renderer/util/boundingBox'
 
 /** COCO can carry an independent optional segmentation alongside a bbox, so unlike YOLO there's a third mode: Native, leaving each annotation's segmentation as whatever it actually has. */
 export enum CocoShapeMode {

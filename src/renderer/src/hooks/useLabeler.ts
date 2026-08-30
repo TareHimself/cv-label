@@ -1,34 +1,47 @@
-import { LabelerMode, OptimisticSample } from '@renderer/types'
+import { LabelerMode } from '@renderer/types'
 import { rgb2hex } from '@shared/color'
 import { AnnotationType, IAnnotation, ILabel, INewAnnotation, IPoint } from '@shared/types'
 import { create } from 'zustand'
 import { useMemo } from 'react'
 import { makeUUID } from '@shared/utils'
 import { clamp } from '@mantine/hooks'
-import { useAppStore } from '@renderer/hooks/useAppStore'
 import { OptimisticObject } from '@renderer/util/optimistic_object'
-import { ColorGenerator } from '@renderer/util/color_generator'
+import { boundingBoxOf } from '@renderer/util/boundingBox'
 import {
-  boundingBoxOf,
-  type BoundingBox
-} from '@renderer/components/sampleIO/exporters/annotationShape'
+  BOX_CORNER_HANDLE_TOP_RIGHT,
+  BOX_CORNER_HANDLE_BOTTOM_LEFT,
+  BOX_EDGE_TOP,
+  BOX_EDGE_RIGHT,
+  BOX_EDGE_BOTTOM,
+  BOX_EDGE_LEFT,
+  HitIdTracker
+} from './labeler/hitIds'
+import {
+  normalizeAnnotationPoints,
+  axisMaskedMoveDelta,
+  isValidBoxCreation,
+  boxPointsToPolygonPoints,
+  polygonPointsToBoxPoints,
+  duplicateOffsetFor,
+  clampedDuplicateAxisOffset
+} from './labeler/geometry'
+import { createHistoryController } from './labeler/history'
+import type { Vector2, LabelerStoreState, LabelerStore } from './labeler/storeTypes'
+
+export {
+  BOX_CORNER_HANDLE_TOP_RIGHT,
+  BOX_CORNER_HANDLE_BOTTOM_LEFT,
+  BOX_EDGE_TOP,
+  BOX_EDGE_RIGHT,
+  BOX_EDGE_BOTTOM,
+  BOX_EDGE_LEFT
+} from './labeler/hitIds'
+export { normalizeAnnotationPoints, axisMaskedMoveDelta } from './labeler/geometry'
+export type { HitTestResult, HistoryEntry, LabelerStore } from './labeler/storeTypes'
 
 const ZOOM_STEP_DELTA = 0.15
 const MIN_ZOOM = 0.05
 const MAX_ZOOM = 32
-
-/** Below this on-screen size (any zoom), a just-drawn box is treated as an accidental click, not a real annotation. */
-const MIN_BOX_SCREEN_SIZE_PX = 4
-
-/** Sentinels for a Box's 2 derived corner handles (see moveAnnotationPoint) - safe as fixed literals since only one Box is ever selected at a time. */
-export const BOX_CORNER_HANDLE_TOP_RIGHT = '__box-corner-top-right__'
-export const BOX_CORNER_HANDLE_BOTTOM_LEFT = '__box-corner-bottom-left__'
-
-/** A Box's 4 resizable edges (see moveAnnotationPoint) - unlike a Polygon's lines, these never go through addControlPoint. */
-export const BOX_EDGE_TOP = '__box-edge-top__'
-export const BOX_EDGE_RIGHT = '__box-edge-right__'
-export const BOX_EDGE_BOTTOM = '__box-edge-bottom__'
-export const BOX_EDGE_LEFT = '__box-edge-left__'
 
 const createLabelsMap = (labels: ILabel[]) => {
   const labelsMap: Record<string, ILabel> = {}
@@ -37,46 +50,6 @@ const createLabelsMap = (labels: ILabel[]) => {
   }
 
   return labelsMap
-}
-
-export const normalizeAnnotationPoints = <T extends Pick<IAnnotation, 'type' | 'points'>>(
-  annotation: T
-) => {
-  const fixedAnnotation = structuredClone(annotation)
-  if (annotation.type === AnnotationType.Box && annotation.points.length === 2) {
-    const [p0, p1] = fixedAnnotation.points
-    const minX = Math.min(p0.x, p1.x)
-    const minY = Math.min(p0.y, p1.y)
-    const maxX = Math.max(p0.x, p1.x)
-    const maxY = Math.max(p0.y, p1.y)
-
-    p0.x = minX
-    p0.y = minY
-    p1.x = maxX
-    p1.y = maxY
-  }
-
-  // Could become problematic so removed for now
-  // fixedAnnotation.points = fixedAnnotation.points.map((c) => ({
-  //   id: c.id,
-  //   x: Math.round(c.x),
-  //   y: Math.round(c.y)
-  // }))
-
-  return fixedAnnotation
-}
-
-/** How much of moveCurrent applies to one point mid-drag - the full delta unless axis-masked (a Box's 2 derived corners); [0, 0] if not part of the drag. */
-export const axisMaskedMoveDelta = (
-  pointId: string,
-  pointIdsBeingMoved: string[] | null,
-  pointIdsBeingMovedAxis: ('x' | 'y' | 'xy')[] | null,
-  moveCurrent: Vector2
-): Vector2 => {
-  const idx = pointIdsBeingMoved?.indexOf(pointId) ?? -1
-  if (idx === -1) return [0, 0]
-  const axis = pointIdsBeingMovedAxis?.[idx] ?? 'xy'
-  return [axis === 'y' ? 0 : moveCurrent[0], axis === 'x' ? 0 : moveCurrent[1]]
 }
 
 const loadBitmap = (uri: string, signal?: AbortSignal) => {
@@ -102,284 +75,16 @@ const loadBitmap = (uri: string, signal?: AbortSignal) => {
   })
 }
 
-class OneToOneMap<T, K> {
-  toValue: Map<T, K>
-  toKey: Map<K, T>
-  constructor() {
-    this.toValue = new Map()
-    this.toKey = new Map()
-  }
-
-  set(key: T, value: K) {
-    this.toValue.set(key, value)
-    this.toKey.set(value, key)
-  }
-
-  get(key: T) {
-    return this.toValue.get(key)
-  }
-
-  getByValue(value: K) {
-    return this.toKey.get(value)
-  }
-
-  delete(key: T) {
-    const other = this.toValue.get(key)
-    if (other !== undefined) {
-      this.toValue.delete(key)
-      this.toKey.delete(other)
-    }
-  }
-
-  deleteByValue(value: K) {
-    const other = this.toKey.get(value)
-    if (other !== undefined) {
-      this.toKey.delete(value)
-      this.toValue.delete(other)
-    }
-  }
-
-  clear() {
-    this.toKey.clear()
-    this.toValue.clear()
-  }
-
-  keys() {
-    return this.toValue.keys()
-  }
-
-  values() {
-    return this.toValue.values()
-  }
-}
-
-type Rect = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-type Vector2 = [number, number]
-
-type LabelerStoreState = {
-  imageHitId: string
-  sizeDirty: boolean
-  imageDirty: boolean
-  annotationDirty: boolean
-  hitTestDirty: boolean
-  imageRect: Rect
-  bitmap: ImageBitmap | null
-  canvasSize: Vector2
-  scale: number
-  mousePos: Vector2
-  /** General-purpose xy diff applied contextually to some item. */
-  moveCurrent: Vector2
-  pointIdsBeingMoved: string[] | null
-  /** Parallel to pointIdsBeingMoved - which axis each point gets; null means both (the default outside a Box's 2 derived corners). */
-  pointIdsBeingMovedAxis: ('x' | 'y' | 'xy')[] | null
-  annotationIdBeingMoved: string | null
-  mode: LabelerMode
-  showHitTestDebugOverlay: boolean
-
-  sample: OptimisticSample | null
-
-  readonly annotationsPendingDelete: Set<string>
-  readonly hitTestCanvas: OffscreenCanvas
-
-  isDragging: boolean
-  selectedAnnotation: OptimisticObject<IAnnotation> | null
-  readonly hitIdToAnnotationId: OneToOneMap<string, string>
-  readonly selectedAnnotationControlHitIds: OneToOneMap<string, string>
-  readonly selectedAnnotationLineHitIds: OneToOneMap<string, string>
-  selectedLabelId: string
-  annotationBeingCreated: INewAnnotation | null
-  readonly labelsMap: Record<string, ILabel>
-
-  /** Whether the mouse is over the AnnotationsDrawer's row list - drives the canvas dim; broader than hoveredAnnotationId to avoid flicker between rows. */
-  isAnnotationsDrawerHovered: boolean
-  /** The currently row-hovered annotation, if any - unlike selectedAnnotation, doesn't persist across mouse movement. */
-  hoveredAnnotationId: string | null
-
-  /** Per-sample undo/redo history, cleared on setSample. */
-  readonly undoStack: HistoryEntry[]
-  readonly redoStack: HistoryEntry[]
-}
-
-export type HitTestResult =
-  | {
-      annotationId: string | null
-      controlPointId: null
-      lineControlPointId: null
-    }
-  | {
-      annotationId: string
-      controlPointId: string
-      lineControlPointId: string | null
-    }
-  | {
-      annotationId: string
-      controlPointId: string | null
-      lineControlPointId: string
-    }
-
-export type HistoryEntry =
-  | { kind: 'create'; annotation: IAnnotation }
-  | { kind: 'delete'; annotation: IAnnotation }
-  | { kind: 'points'; annotationId: string; before: IPoint[]; after: IPoint[] }
-  | { kind: 'relabel'; annotationId: string; beforeLabelId: string; afterLabelId: string }
-  | {
-      kind: 'convert'
-      annotationId: string
-      beforeType: AnnotationType
-      beforePoints: IPoint[]
-      afterType: AnnotationType
-      afterPoints: IPoint[]
-    }
-
-type LabelerStoreActions = {
-  markAllDirty: () => void
-  preDraw: () => void
-  onCanvasResize: (width: number, height: number) => void
-  setSample: (sample: OptimisticSample) => void
-  /** Aborts an in-flight bitmap load without restarting it - for leaving the page mid-load. */
-  cancelPendingSampleLoad: () => void
-  onBitmapLoaded: (bitmap: ImageBitmap) => void
-  zoom: (x: number, y: number, delta: number) => void
-  zoomIn: (anchor?: 'center' | 'mouse') => void
-  zoomOut: (anchor?: 'center' | 'mouse') => void
-  setZoom: (zoom: number) => void
-  setMode: (mode: LabelerMode) => void
-  setLabelId: (labelId: string) => void
-  selectAnnotation: (id: string | null) => void
-  /** Escape: deselects, or else drops back to Select mode. */
-  cancelActiveAction: () => void
-  onMouseMove: (x: number, y: number) => void
-  onConfirmPoint: (x: number, y: number) => void
-  onConfirmAnnotationCreation: (discardLivePoint?: boolean) => void
-  setAnnotationLabelId: (annotationId: string, newLabelId: string) => void
-  moveSelectedAnnotationBy: (dx: number, dy: number) => void
-  moveAnnotationPoint: (pointId: string, x: number, y: number) => void
-  commitAnnotationMove: (annotationId: string) => void
-  setShowHitTestDebugOverlay: (enabled: boolean) => void
-  canvasToBitmapSpace: (x: number, y: number) => [x: number, y: number]
-  deleteAnnotation: (annotationId: string) => void
-  deleteSelectedAnnotation: () => void
-  duplicateAnnotation: (annotationId: string) => string | undefined
-  duplicateSelectedAnnotation: () => void
-  convertAnnotationType: (annotationId: string) => void
-  addControlPoint: (lineId: string, x: number, y: number) => string | undefined
-  deleteControlPoint: (controlPointId: string) => void
-  hittest: (x: number, y: number) => HitTestResult | null
-  setHoveredAnnotation: (id: string | null) => void
-  setAnnotationsDrawerHovered: (hovered: boolean) => void
-  undo: () => void
-  redo: () => void
-}
-
-export type LabelerStore = LabelerStoreState & LabelerStoreActions
-
 export const useLabeler = (labels: ILabel[]) => {
   const store = useMemo(
     () =>
       create<LabelerStore>((set, get) => {
-        const colorGenerator = new ColorGenerator()
+        const hitIds = new HitIdTracker()
         let activeSampleAbort: AbortController | null = null
         /** Raw (pre-clamp) canvas position of the in-progress box's first corner - see isValidBoxCreation. */
         let annotationCreationRawStart: Vector2 | null = null
-        const imageHitId = colorGenerator.make()
+        const imageHitId = hitIds.colorGenerator.make()
         const labelsMap = createLabelsMap(labels)
-        const hitIdToAnnotationId = new OneToOneMap<string, string>()
-        const selectedAnnotationControlHitIds = new OneToOneMap<string, string>()
-        const selectedAnnotationLineHitIds = new OneToOneMap<string, string>()
-
-        const makeHitId = () => {
-          return colorGenerator.make()
-        }
-
-        const freeHitId = (id: string) => {
-          colorGenerator.free(id)
-        }
-
-        const clearSelectedAnnotationHitIds = () => {
-          for (const hitId of selectedAnnotationControlHitIds.keys()) {
-            freeHitId(hitId)
-          }
-
-          for (const hitId of selectedAnnotationLineHitIds.keys()) {
-            freeHitId(hitId)
-          }
-
-          selectedAnnotationControlHitIds.clear()
-          selectedAnnotationLineHitIds.clear()
-        }
-
-        /** Rebuilds a selected annotation's hit ids from scratch - a Box's derived corner/edge handles only ever get set up here, not per-point. */
-        const rebuildSelectedAnnotationHitIds = (annotation: IAnnotation) => {
-          clearSelectedAnnotationHitIds()
-
-          for (const point of annotation.points) {
-            selectedAnnotationControlHitIds.set(makeHitId(), point.id)
-          }
-
-          if (annotation.type === AnnotationType.Polygon) {
-            for (const point of annotation.points) {
-              selectedAnnotationLineHitIds.set(makeHitId(), point.id)
-            }
-          } else if (annotation.type === AnnotationType.Box) {
-            selectedAnnotationControlHitIds.set(makeHitId(), BOX_CORNER_HANDLE_TOP_RIGHT)
-            selectedAnnotationControlHitIds.set(makeHitId(), BOX_CORNER_HANDLE_BOTTOM_LEFT)
-            selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_TOP)
-            selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_RIGHT)
-            selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_BOTTOM)
-            selectedAnnotationLineHitIds.set(makeHitId(), BOX_EDGE_LEFT)
-          }
-        }
-
-        const addSelectedAnnotationPointId = (pointId: string) => {
-          clearSelectedAnnotationPointId(pointId)
-          {
-            const hitId = makeHitId()
-            selectedAnnotationControlHitIds.set(hitId, pointId)
-          }
-          {
-            const hitId = makeHitId()
-            selectedAnnotationLineHitIds.set(hitId, pointId)
-          }
-        }
-
-        const clearSelectedAnnotationPointId = (pointId: string) => {
-          {
-            const hitId = selectedAnnotationControlHitIds.getByValue(pointId)
-            if (hitId !== undefined) {
-              freeHitId(hitId)
-              selectedAnnotationControlHitIds.delete(pointId)
-            }
-          }
-          {
-            const hitId = selectedAnnotationLineHitIds.getByValue(pointId)
-            if (hitId !== undefined) {
-              freeHitId(hitId)
-              selectedAnnotationLineHitIds.delete(pointId)
-            }
-          }
-        }
-
-        const freeAnnotationHitIds = (annotationId: string) => {
-          const hitId = hitIdToAnnotationId.getByValue(annotationId)
-          if (hitId !== undefined) {
-            freeHitId(hitId)
-            hitIdToAnnotationId.delete(hitId)
-          }
-          if (annotationId === get().selectedAnnotation?.resolve().id) {
-            clearSelectedAnnotationHitIds()
-          }
-        }
-
-        const addAnnotationHitIds = (annotationId: string) => {
-          const hitId = makeHitId()
-          hitIdToAnnotationId.set(hitId, annotationId)
-        }
 
         const canvasToBitmapSpace = (x: number, y: number): [x: number, y: number] => {
           const state = get()
@@ -394,12 +99,6 @@ export const useLabeler = (labels: ILabel[]) => {
 
           return [newX, newY]
         }
-
-        const pointInRect = (pos: Vector2, rect: Rect): boolean =>
-          pos[0] >= rect.x &&
-          pos[0] <= rect.x + rect.width &&
-          pos[1] >= rect.y &&
-          pos[1] <= rect.y + rect.height
 
         const createPendingAnnotation = (
           type: AnnotationType,
@@ -420,26 +119,6 @@ export const useLabeler = (labels: ILabel[]) => {
               }
             ]
           } satisfies INewAnnotation
-        }
-
-        /** Rejects a Box whose corners were both clicked outside the image, or whose on-screen size is too small to be intentional. */
-        const isValidBoxCreation = (
-          rawEnd: Vector2,
-          imageRect: Rect,
-          scale: number,
-          annotation: INewAnnotation
-        ): boolean => {
-          const startInside =
-            annotationCreationRawStart !== null &&
-            pointInRect(annotationCreationRawStart, imageRect)
-          const endInside = pointInRect(rawEnd, imageRect)
-          if (!startInside && !endInside) return false
-
-          const box = boundingBoxOf(annotation.points)
-          return (
-            box.width * scale >= MIN_BOX_SCREEN_SIZE_PX &&
-            box.height * scale >= MIN_BOX_SCREEN_SIZE_PX
-          )
         }
 
         const fitBitmapToCanvas = () => {
@@ -482,254 +161,7 @@ export const useLabeler = (labels: ILabel[]) => {
           return getCanvasCenter()
         }
 
-        /** Records an undoable mutation and drops redo history, like standard editor undo. */
-        const pushHistory = (entry: HistoryEntry) =>
-          set((state) => ({ undoStack: [...state.undoStack, entry], redoStack: [] }))
-
-        /** Optimistically creates annotation then persists it - shared by creation and undo/redo. */
-        const applyCreateAnnotation = (annotation: IAnnotation) => {
-          const state = get()
-          if (state.sample === null) return
-
-          const dataStore = useAppStore.getState().store
-          const annotations = state.sample.resolve().annotations
-          const newAnnotation = new OptimisticObject(annotation)
-          const { commit, rollback } = annotations.update({
-            [annotation.id]: newAnnotation
-          })
-
-          const sampleId = state.sample.resolve().id
-          set({ annotationDirty: true })
-          dataStore
-            .createAnnotations(sampleId, [annotation])
-            .then((results) => {
-              newAnnotation.updateBase(results[0])
-              commit()
-              if (sampleId === get().sample?.resolve().id) {
-                addAnnotationHitIds(results[0].id)
-                set({ annotationDirty: true, hitTestDirty: true })
-              }
-            })
-            .catch(() => {
-              rollback()
-              if (sampleId === get().sample?.resolve().id) {
-                set({ annotationDirty: true })
-              }
-            })
-        }
-
-        /** Optimistically removes annotationId then persists the delete - shared by deleteAnnotation and undo/redo. */
-        const applyDeleteAnnotation = (annotationId: string) => {
-          const state = get()
-          const annotations = state.sample?.resolve().annotations
-          if (annotations === undefined) return
-
-          const annotation = annotations.resolve()[annotationId]?.resolve() ?? null
-          if (annotation === null) return
-
-          let selectedAnnotation = state.selectedAnnotation
-          if (state.selectedAnnotation?.resolve().id === annotationId) {
-            selectedAnnotation = null
-          }
-
-          const { commit, rollback } = annotations.update({
-            [annotationId]: undefined
-          })
-          const dataStore = useAppStore.getState().store
-          freeAnnotationHitIds(annotationId)
-          set({
-            selectedAnnotation,
-            hoveredAnnotationId:
-              state.hoveredAnnotationId === annotationId ? null : state.hoveredAnnotationId,
-            annotationDirty: true,
-            hitTestDirty: true
-          })
-          const sampleId = state.sample?.resolve().id
-          dataStore
-            .deleteAnnotations([annotationId])
-            .then((c) => {
-              if (!c[0]) {
-                throw new Error('Failed to delete annotation')
-              }
-              commit()
-            })
-            .catch(() => {
-              rollback()
-              if (sampleId === get().sample?.resolve().id) {
-                addAnnotationHitIds(annotationId)
-              }
-            })
-            .finally(() => {
-              if (sampleId === get().sample?.resolve().id) {
-                set({ annotationDirty: true, hitTestDirty: true })
-              }
-            })
-        }
-
-        /** Optimistically replaces an annotation's points then persists it - shared by move/add/delete-control-point and their undo/redo; resyncs hit ids after. */
-        const applyReplacePoints = (annotationId: string, points: IPoint[]) => {
-          const state = get()
-          const annotation = state.sample?.resolve().annotations.resolve()[annotationId]
-          if (annotation === undefined) return
-
-          const sampleId = state.sample?.resolve().id
-          const dataStore = useAppStore.getState().store
-          const { commit, rollback } = annotation.update({ points })
-          set({ annotationDirty: true, hitTestDirty: true })
-          dataStore
-            .replacePoints(annotationId, points)
-            .then((resultPoints) => {
-              commit({ points: resultPoints })
-            })
-            .catch((e) => {
-              console.error(e)
-              rollback()
-            })
-            .finally(() => {
-              const stillSelected = get().selectedAnnotation
-              if (stillSelected?.resolve().id === annotationId) {
-                rebuildSelectedAnnotationHitIds(stillSelected.resolve())
-              }
-              if (sampleId === get().sample?.resolve().id) {
-                set({ annotationDirty: true, hitTestDirty: true })
-              }
-            })
-        }
-
-        /** Optimistically relabels an annotation then persists it - also syncs the label picker if it's the selected annotation. */
-        const applyRelabel = (annotationId: string, labelId: string) => {
-          const state = get()
-          const targetAnnotation =
-            state.sample?.resolve().annotations.resolve()[annotationId] ?? null
-          if (targetAnnotation === null) return
-
-          const { commit, rollback } = targetAnnotation.update({ labelId })
-          const dataStore = useAppStore.getState().store
-          set({
-            annotationDirty: true,
-            ...(state.selectedAnnotation?.resolve().id === annotationId
-              ? { selectedLabelId: labelId }
-              : {})
-          })
-          const sampleId = state.sample?.resolve().id
-          dataStore
-            .updateAnnotations([{ id: annotationId, labelId }])
-            .then((c) => {
-              commit(c[0])
-            })
-            .catch(() => {
-              rollback()
-            })
-            .finally(() => {
-              if (sampleId === get().sample?.resolve().id) {
-                set({ annotationDirty: true })
-              }
-            })
-        }
-
-        /** Optimistically swaps an annotation's type+points atomically then persists both via 2 concurrent calls, committed/rolled back together. */
-        const applyConvertType = (annotationId: string, type: AnnotationType, points: IPoint[]) => {
-          const state = get()
-          const annotation = state.sample?.resolve().annotations.resolve()[annotationId]
-          if (annotation === undefined) return
-
-          const sampleId = state.sample?.resolve().id
-          const dataStore = useAppStore.getState().store
-          const { commit, rollback } = annotation.update({ type, points })
-          set({ annotationDirty: true, hitTestDirty: true })
-          Promise.all([
-            dataStore.updateAnnotations([{ id: annotationId, type }]),
-            dataStore.replacePoints(annotationId, points)
-          ])
-            .then(([updateResults, pointResults]) => {
-              commit({ type: updateResults[0]?.type, points: pointResults })
-            })
-            .catch((e) => {
-              console.error(e)
-              rollback()
-            })
-            .finally(() => {
-              const stillSelected = get().selectedAnnotation
-              if (stillSelected?.resolve().id === annotationId) {
-                rebuildSelectedAnnotationHitIds(stillSelected.resolve())
-              }
-              if (sampleId === get().sample?.resolve().id) {
-                set({ annotationDirty: true, hitTestDirty: true })
-              }
-            })
-        }
-
-        /** A Box's 2 points become a Polygon's 4 corners, with fresh point ids. */
-        const boxPointsToPolygonPoints = (points: IPoint[]): IPoint[] => {
-          const [topLeft, bottomRight] = points
-          return [
-            { id: makeUUID(), x: topLeft.x, y: topLeft.y },
-            { id: makeUUID(), x: bottomRight.x, y: topLeft.y },
-            { id: makeUUID(), x: bottomRight.x, y: bottomRight.y },
-            { id: makeUUID(), x: topLeft.x, y: bottomRight.y }
-          ]
-        }
-
-        /** A Polygon reduces to its axis-aligned bounding box - necessarily lossy for a non-rectangular outline. */
-        const polygonPointsToBoxPoints = (points: IPoint[]): IPoint[] => {
-          const box = boundingBoxOf(points)
-          return [
-            { id: makeUUID(), x: box.minX, y: box.minY },
-            { id: makeUUID(), x: box.minX + box.width, y: box.minY + box.height }
-          ]
-        }
-
-        const DUPLICATE_OFFSET_RATIO = 0.08
-        const DUPLICATE_OFFSET_MIN = 12
-
-        /** How far a duplicate is nudged, scaled to its own size so tiny/huge annotations both offset sensibly. */
-        const duplicateOffsetFor = (box: BoundingBox): number =>
-          Math.max(DUPLICATE_OFFSET_MIN, Math.max(box.width, box.height) * DUPLICATE_OFFSET_RATIO)
-
-        /** Nudges a duplicate's axis by desired, flipping direction or shrinking it to keep the bounding box inside [0, extent]. */
-        const clampedDuplicateAxisOffset = (
-          min: number,
-          size: number,
-          extent: number,
-          desired: number
-        ) => {
-          const spaceAfter = extent - (min + size)
-          const spaceBefore = min
-          if (spaceAfter >= desired) return desired
-          if (spaceBefore >= desired) return -desired
-          return spaceAfter >= spaceBefore ? spaceAfter : -spaceBefore
-        }
-
-        /** Undoing a just-created annotation before its create call resolves can race the delete - pre-existing risk, not new. */
-        const applyHistoryInverse = (entry: HistoryEntry) => {
-          switch (entry.kind) {
-            case 'create':
-              return applyDeleteAnnotation(entry.annotation.id)
-            case 'delete':
-              return applyCreateAnnotation(entry.annotation)
-            case 'points':
-              return applyReplacePoints(entry.annotationId, entry.before)
-            case 'relabel':
-              return applyRelabel(entry.annotationId, entry.beforeLabelId)
-            case 'convert':
-              return applyConvertType(entry.annotationId, entry.beforeType, entry.beforePoints)
-          }
-        }
-
-        const applyHistoryForward = (entry: HistoryEntry) => {
-          switch (entry.kind) {
-            case 'create':
-              return applyCreateAnnotation(entry.annotation)
-            case 'delete':
-              return applyDeleteAnnotation(entry.annotation.id)
-            case 'points':
-              return applyReplacePoints(entry.annotationId, entry.after)
-            case 'relabel':
-              return applyRelabel(entry.annotationId, entry.afterLabelId)
-            case 'convert':
-              return applyConvertType(entry.annotationId, entry.afterType, entry.afterPoints)
-          }
-        }
+        const history = createHistoryController({ get, set, hitIds })
 
         const initialState: LabelerStoreState = {
           imageHitId: imageHitId,
@@ -747,9 +179,9 @@ export const useLabeler = (labels: ILabel[]) => {
           hitTestCanvas: new OffscreenCanvas(0, 0),
           isDragging: false,
           selectedAnnotation: null,
-          hitIdToAnnotationId,
-          selectedAnnotationControlHitIds,
-          selectedAnnotationLineHitIds,
+          hitIdToAnnotationId: hitIds.hitIdToAnnotationId,
+          selectedAnnotationControlHitIds: hitIds.selectedAnnotationControlHitIds,
+          selectedAnnotationLineHitIds: hitIds.selectedAnnotationLineHitIds,
           annotationsPendingDelete: new Set(),
           selectedLabelId: labels[0]?.id ?? '',
           annotationBeingCreated: null,
@@ -862,7 +294,7 @@ export const useLabeler = (labels: ILabel[]) => {
             get().zoom(centerX, centerY, delta)
           },
           setMode: (mode) => {
-            clearSelectedAnnotationHitIds()
+            hitIds.clearSelectedAnnotationHitIds()
             const state = get()
 
             if (mode === LabelerMode.Select) {
@@ -907,9 +339,9 @@ export const useLabeler = (labels: ILabel[]) => {
             }
 
             if (annotation !== null) {
-              rebuildSelectedAnnotationHitIds(annotation.resolve())
+              hitIds.rebuildSelectedAnnotationHitIds(annotation.resolve())
             } else {
-              clearSelectedAnnotationHitIds()
+              hitIds.clearSelectedAnnotationHitIds()
             }
 
             set({
@@ -969,7 +401,13 @@ export const useLabeler = (labels: ILabel[]) => {
               annotation = normalizeAnnotationPoints(annotation)
               const shouldDiscard =
                 annotation.type === AnnotationType.Box &&
-                !isValidBoxCreation(state.mousePos, state.imageRect, state.scale, annotation)
+                !isValidBoxCreation(
+                  annotationCreationRawStart,
+                  state.mousePos,
+                  state.imageRect,
+                  state.scale,
+                  annotation
+                )
 
               set({
                 annotationBeingCreated: createPendingAnnotation(
@@ -982,8 +420,8 @@ export const useLabeler = (labels: ILabel[]) => {
 
               if (shouldDiscard) return
 
-              applyCreateAnnotation(annotation)
-              pushHistory({ kind: 'create', annotation })
+              history.applyCreateAnnotation(annotation)
+              history.pushHistory({ kind: 'create', annotation })
             }
           },
           setSample: (sample) => {
@@ -991,16 +429,16 @@ export const useLabeler = (labels: ILabel[]) => {
               activeSampleAbort.abort()
             }
 
-            clearSelectedAnnotationHitIds()
+            hitIds.clearSelectedAnnotationHitIds()
 
-            for (const hitId of hitIdToAnnotationId.keys()) {
-              freeHitId(hitId)
+            for (const hitId of hitIds.hitIdToAnnotationId.keys()) {
+              hitIds.freeHitId(hitId)
             }
 
-            hitIdToAnnotationId.clear()
+            hitIds.hitIdToAnnotationId.clear()
 
             for (const annotation of sample.resolve().annotations.values()) {
-              addAnnotationHitIds(annotation.resolve().id)
+              hitIds.addAnnotationHitIds(annotation.resolve().id)
             }
 
             activeSampleAbort = new AbortController()
@@ -1049,8 +487,13 @@ export const useLabeler = (labels: ILabel[]) => {
             const beforeLabelId = targetAnnotation.resolve().labelId
             if (beforeLabelId === labelId) return
 
-            applyRelabel(annotationId, labelId)
-            pushHistory({ kind: 'relabel', annotationId, beforeLabelId, afterLabelId: labelId })
+            history.applyRelabel(annotationId, labelId)
+            history.pushHistory({
+              kind: 'relabel',
+              annotationId,
+              beforeLabelId,
+              afterLabelId: labelId
+            })
           },
           moveSelectedAnnotationBy: (dx, dy) => {
             const state = get()
@@ -1183,8 +626,8 @@ export const useLabeler = (labels: ILabel[]) => {
               pointIdsBeingMovedAxis: null
             })
 
-            applyReplacePoints(annotationId, payload)
-            pushHistory({ kind: 'points', annotationId, before, after: payload })
+            history.applyReplacePoints(annotationId, payload)
+            history.pushHistory({ kind: 'points', annotationId, before, after: payload })
           },
           deleteAnnotation: (annotationId: string) => {
             const state = get()
@@ -1192,8 +635,8 @@ export const useLabeler = (labels: ILabel[]) => {
               state.sample?.resolve().annotations.resolve()[annotationId]?.resolve() ?? null
             if (annotation === null) return
 
-            applyDeleteAnnotation(annotationId)
-            pushHistory({ kind: 'delete', annotation })
+            history.applyDeleteAnnotation(annotationId)
+            history.pushHistory({ kind: 'delete', annotation })
           },
           deleteSelectedAnnotation: () => {
             const state = get()
@@ -1231,8 +674,8 @@ export const useLabeler = (labels: ILabel[]) => {
               }))
             }
 
-            applyCreateAnnotation(duplicate)
-            pushHistory({ kind: 'create', annotation: duplicate })
+            history.applyCreateAnnotation(duplicate)
+            history.pushHistory({ kind: 'create', annotation: duplicate })
             get().selectAnnotation(duplicate.id)
             return duplicate.id
           },
@@ -1255,8 +698,8 @@ export const useLabeler = (labels: ILabel[]) => {
                 ? boxPointsToPolygonPoints(annotation.points)
                 : polygonPointsToBoxPoints(annotation.points)
 
-            applyConvertType(annotationId, afterType, afterPoints)
-            pushHistory({
+            history.applyConvertType(annotationId, afterType, afterPoints)
+            history.pushHistory({
               kind: 'convert',
               annotationId,
               beforeType: annotation.type,
@@ -1283,10 +726,10 @@ export const useLabeler = (labels: ILabel[]) => {
             const before = structuredClone(resolvedAnnotation.points)
             const points = resolvedAnnotation.points
             points.splice(pointIndex + 1, 0, newPoint)
-            addSelectedAnnotationPointId(newPoint.id)
+            hitIds.addSelectedAnnotationPointId(newPoint.id)
             set({ annotationDirty: true, hitTestDirty: true })
-            applyReplacePoints(resolvedAnnotation.id, points)
-            pushHistory({
+            history.applyReplacePoints(resolvedAnnotation.id, points)
+            history.pushHistory({
               kind: 'points',
               annotationId: resolvedAnnotation.id,
               before,
@@ -1305,17 +748,17 @@ export const useLabeler = (labels: ILabel[]) => {
             const points = resolvedAnnotation.points
             const pointToRemove = points[pointIndex]
             points.splice(pointIndex, 1)
-            clearSelectedAnnotationPointId(pointToRemove.id)
+            hitIds.clearSelectedAnnotationPointId(pointToRemove.id)
             set({ annotationDirty: true, hitTestDirty: true })
-            applyReplacePoints(resolvedAnnotation.id, points)
-            pushHistory({
+            history.applyReplacePoints(resolvedAnnotation.id, points)
+            history.pushHistory({
               kind: 'points',
               annotationId: resolvedAnnotation.id,
               before,
               after: points
             })
           },
-          hittest: (x, y): HitTestResult | null => {
+          hittest: (x, y) => {
             const state = get()
 
             const imageData = state.hitTestCanvas
@@ -1371,24 +814,8 @@ export const useLabeler = (labels: ILabel[]) => {
               annotationDirty: true
             })
           },
-          undo: () => {
-            const { undoStack } = get()
-            const entry = undoStack[undoStack.length - 1]
-            if (entry === undefined) return
-
-            set({ undoStack: undoStack.slice(0, -1) })
-            applyHistoryInverse(entry)
-            set((s) => ({ redoStack: [...s.redoStack, entry] }))
-          },
-          redo: () => {
-            const { redoStack } = get()
-            const entry = redoStack[redoStack.length - 1]
-            if (entry === undefined) return
-
-            set({ redoStack: redoStack.slice(0, -1) })
-            applyHistoryForward(entry)
-            set((s) => ({ undoStack: [...s.undoStack, entry] }))
-          }
+          undo: history.undo,
+          redo: history.redo
         }
       }),
     [labels]

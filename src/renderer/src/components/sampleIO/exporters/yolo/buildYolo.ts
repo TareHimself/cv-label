@@ -1,6 +1,7 @@
 import { stringify } from 'yaml'
 import { IAnnotation, ILabel } from '@shared/types'
-import { boundingBoxOf, exportShapePoints, ExportShape } from '../annotationShape'
+import { exportShapePoints, ExportShape } from '../annotationShape'
+import { boundingBoxOf } from '@renderer/util/boundingBox'
 
 export { ExportShape }
 
