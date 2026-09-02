@@ -7,6 +7,8 @@ import {
 import { VirtualizedItemList } from '@renderer/components/VirtualizedItemList'
 import { ConfirmDeleteModal } from '@renderer/components/ConfirmDeleteModal'
 import { EditProjectModal } from './EditProjectModal'
+import { ExportProjectModal } from './ExportProjectModal'
+import { ImportProjectButton } from './ImportProjectButton'
 import { AnnotatorsModal } from '@renderer/components/annotators/AnnotatorsModal'
 import { Badge, Button, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { CiSearch } from 'react-icons/ci'
@@ -47,6 +49,7 @@ export const ProjectsPage = () => {
   const [pendingDelete, setPendingDelete] = useState<IProject | null>(null)
   const [pendingEdit, setPendingEdit] = useState<IProject | null>(null)
   const [pendingAnnotators, setPendingAnnotators] = useState<IProject | null>(null)
+  const [pendingExport, setPendingExport] = useState<IProject | null>(null)
   const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
   const [isBatchDeletePending, setIsBatchDeletePending] = useState(false)
@@ -148,12 +151,18 @@ export const ProjectsPage = () => {
           onClose={() => setPendingAnnotators(null)}
         />
       )}
+      <ExportProjectModal
+        opened={pendingExport !== null}
+        project={pendingExport}
+        onClose={() => setPendingExport(null)}
+      />
       <BasicListPage
         scrollContainerRef={scrollContainerRef}
         top={
           <BasicListPageTopBar>
             <Group>
               <CreateProjectButton create={create} />
+              <ImportProjectButton />
               {!isSelectMode && (
                 <Button size="xs" variant="outline" onClick={() => setIsSelectMode(true)}>
                   Select
@@ -226,6 +235,7 @@ export const ProjectsPage = () => {
                 onClick={() => open(p)}
                 onEdit={() => setPendingEdit(p)}
                 onManageAnnotators={() => setPendingAnnotators(p)}
+                onExport={() => setPendingExport(p)}
                 onDelete={() => setPendingDelete(p)}
                 selectMode={isSelectMode}
                 selected={selectedProjectIds.has(p.id)}

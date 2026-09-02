@@ -71,6 +71,8 @@ describe('CvLabelJsonExporterComponent', () => {
       (e: { path: string }) => e.path === 'manifest.json'
     ).content
     expect(JSON.parse(manifestJson)).toEqual({
+      version: 1,
+      kind: 'tasks',
       labels: [{ id: 'l1', name: 'Stop Sign' }],
       samples: [
         {

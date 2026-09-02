@@ -4,8 +4,10 @@
   "title": "CV-Label manifest.json",
   "description": "manifest.json found at the root of a .cvlabel archive. See SPEC.md.",
   "type": "object",
-  "required": ["labels", "samples"],
+  "required": ["version", "kind", "labels"],
   "properties": {
+    "version": { "const": 1 },
+    "kind": { "enum": ["tasks", "project"] },
     "labels": {
       "type": "array",
       "items": { "$ref": "#/$defs/label" }
@@ -13,8 +15,26 @@
     "samples": {
       "type": "array",
       "items": { "$ref": "#/$defs/sample" }
+    },
+    "project": { "$ref": "#/$defs/project" },
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/task" }
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "project" } } },
+      "then": {
+        "required": ["project", "tasks"],
+        "properties": { "samples": false }
+      },
+      "else": {
+        "required": ["samples"],
+        "properties": { "project": false, "tasks": false }
+      }
+    }
+  ],
   "$defs": {
     "label": {
       "type": "object",
@@ -22,6 +42,25 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "name", "samples"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "samples": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sample" }
+        }
       }
     },
     "sample": {

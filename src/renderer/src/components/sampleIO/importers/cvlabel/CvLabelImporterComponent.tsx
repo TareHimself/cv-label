@@ -60,6 +60,11 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
           setState({ step: 'select-source' })
           return
         }
+        if (found.manifest.kind !== 'tasks') {
+          toast.error('This is a project export - import it from the Projects page instead')
+          setState({ step: 'select-source' })
+          return
+        }
 
         const pairs = findCvLabelPairs(found.manifest, found.dir, extractedFiles)
         if (pairs.length === 0) {

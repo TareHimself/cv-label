@@ -1,5 +1,6 @@
-import { AnnotationType, INewAnnotation, INewSample, TrainingSplit } from '@shared/types'
+import { AnnotationType, ILabel, INewAnnotation, INewSample, TrainingSplit } from '@shared/types'
 import { makeUUID } from '@shared/utils'
+import { randomHexColor } from '@shared/color'
 import type { VirtualFile } from '../virtualFileSystem'
 import { resolveImagePath } from '../writeToScratch'
 
@@ -24,15 +25,67 @@ type ManifestSample = {
   imageFile: string
 }
 
-type CvLabelManifest = {
+type ManifestTask = {
+  id: string
+  name: string
+  samples: ManifestSample[]
+}
+
+type CvLabelTasksManifest = {
+  version: number
+  kind: 'tasks'
   labels: CvLabelClass[]
   samples: ManifestSample[]
+}
+
+type CvLabelProjectManifest = {
+  version: number
+  kind: 'project'
+  project: { name: string }
+  labels: CvLabelClass[]
+  tasks: ManifestTask[]
+}
+
+type CvLabelManifest = CvLabelTasksManifest | CvLabelProjectManifest
+
+const isManifestSample = (value: unknown): value is ManifestSample => {
+  if (typeof value !== 'object' || value === null) return false
+  const obj = value as Record<string, unknown>
+  return (
+    typeof obj.id === 'string' &&
+    typeof obj.imageFile === 'string' &&
+    Array.isArray(obj.annotations)
+  )
 }
 
 const isCvLabelManifest = (value: unknown): value is CvLabelManifest => {
   if (typeof value !== 'object' || value === null) return false
   const obj = value as Record<string, unknown>
-  return Array.isArray(obj.labels) && Array.isArray(obj.samples)
+  if (obj.version !== 1 || !Array.isArray(obj.labels)) return false
+
+  if (obj.kind === 'tasks') {
+    return Array.isArray(obj.samples) && obj.samples.every(isManifestSample)
+  }
+
+  if (obj.kind === 'project') {
+    return (
+      typeof obj.project === 'object' &&
+      obj.project !== null &&
+      typeof (obj.project as Record<string, unknown>).name === 'string' &&
+      Array.isArray(obj.tasks) &&
+      obj.tasks.every(
+        (task) =>
+          typeof task === 'object' &&
+          task !== null &&
+          typeof (task as Record<string, unknown>).id === 'string' &&
+          typeof (task as Record<string, unknown>).name === 'string' &&
+          Array.isArray((task as Record<string, unknown>).samples) &&
+          ((task as Record<string, unknown>).samples as unknown[]).every(isManifestSample)
+      )
+    )
+  }
+
+  return false
 }
 
 const dirOf = (path: string) => {
@@ -63,9 +116,9 @@ export type CvLabelPair = {
   image: VirtualFile | null
 }
 
-/** Pairs each manifest sample with its referenced image file - a missing image is kept as null and skipped later, rather than failing the whole import. */
+/** Pairs a `kind: "tasks"` manifest's samples with their image files - a missing image is kept as null and skipped later, rather than failing the whole import. */
 export const findCvLabelPairs = (
-  manifest: CvLabelManifest,
+  manifest: CvLabelTasksManifest,
   dir: string,
   files: VirtualFile[]
 ): CvLabelPair[] => {
@@ -76,7 +129,7 @@ export const findCvLabelPairs = (
   }))
 }
 
-/** Converts the whole archive to samples, one image at a time (see yoloDatasetToSamples). Every id is regenerated fresh so re-importing never collides with existing records; annotations with no label mapping are dropped. */
+/** Converts a `kind: "tasks"` archive to samples, one image at a time (see yoloDatasetToSamples). Every id is regenerated fresh so re-importing never collides with existing records; annotations with no label mapping are dropped. */
 export const cvLabelDatasetToSamples = async (
   pairs: CvLabelPair[],
   labelIdToProjectLabelId: Map<string, string | null>,
@@ -118,3 +171,70 @@ export const cvLabelDatasetToSamples = async (
 
   return samples
 }
+
+export type CvLabelProjectTask = {
+  id: string
+  name: string
+  samples: INewSample[]
+}
+
+/** Converts a `kind: "project"` archive into a brand-new project's shape - fresh ids and label colors throughout. */
+export const cvLabelProjectManifestToNewProject = async (
+  manifest: CvLabelProjectManifest,
+  dir: string,
+  files: VirtualFile[],
+  scratchDir: string,
+  onProgress?: (completed: number, total: number) => void
+): Promise<{ labels: ILabel[]; tasks: CvLabelProjectTask[] }> => {
+  const labelIdMap = new Map(manifest.labels.map((label) => [label.id, makeUUID()]))
+  const labels: ILabel[] = manifest.labels.map((label) => ({
+    id: labelIdMap.get(label.id)!,
+    name: label.name,
+    color: randomHexColor()
+  }))
+
+  const byPath = new Map(files.map((f) => [f.path, f] as const))
+  const total = manifest.tasks.reduce((sum, task) => sum + task.samples.length, 0)
+  let processed = 0
+
+  const tasks: CvLabelProjectTask[] = []
+  for (const task of manifest.tasks) {
+    const samples: INewSample[] = []
+
+    for (const manifestSample of task.samples) {
+      const image = byPath.get(`${dir}${manifestSample.imageFile}`)
+      if (image) {
+        const imagePath = await resolveImagePath(image, scratchDir)
+        const annotations: INewAnnotation[] = []
+        for (const annotation of manifestSample.annotations) {
+          const labelId = labelIdMap.get(annotation.labelId)
+          if (labelId === undefined) continue
+          annotations.push({
+            id: makeUUID(),
+            type: annotation.type,
+            labelId,
+            points: annotation.points.map((p) => ({ id: makeUUID(), x: p.x, y: p.y }))
+          })
+        }
+
+        samples.push({
+          id: makeUUID(),
+          name: manifestSample.name,
+          imagePath,
+          split: manifestSample.split,
+          annotations,
+          createdAt: manifestSample.createdAt
+        })
+      }
+
+      processed += 1
+      onProgress?.(processed, total)
+    }
+
+    tasks.push({ id: makeUUID(), name: task.name, samples })
+  }
+
+  return { labels, tasks }
+}
+
+export type { CvLabelManifest, CvLabelTasksManifest, CvLabelProjectManifest }

@@ -75,7 +75,7 @@ const projectWithLabel: IProject = {
 
 const makeCvLabelFile = async (name: string, labels: unknown[], samples: unknown[]) => {
   const zip = new JSZip()
-  zip.file('manifest.json', JSON.stringify({ labels, samples }))
+  zip.file('manifest.json', JSON.stringify({ version: 1, kind: 'tasks', labels, samples }))
   zip.file('images/s1.jpg', 'fake-image-bytes')
   const buffer = await zip.generateAsync({ type: 'arraybuffer' })
   return new File([buffer], name)
