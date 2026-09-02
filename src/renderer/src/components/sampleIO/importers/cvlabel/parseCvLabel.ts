@@ -116,7 +116,7 @@ export type CvLabelPair = {
   image: VirtualFile | null
 }
 
-/** Pairs each of a `kind: "tasks"` manifest's samples with its referenced image file - a missing image is kept as null and skipped later, rather than failing the whole import. */
+/** Pairs a `kind: "tasks"` manifest's samples with their image files - a missing image is kept as null and skipped later, rather than failing the whole import. */
 export const findCvLabelPairs = (
   manifest: CvLabelTasksManifest,
   dir: string,
@@ -178,7 +178,7 @@ export type CvLabelProjectTask = {
   samples: INewSample[]
 }
 
-/** Converts a `kind: "project"` archive into a brand-new project's shape - fresh ids and label colors throughout, task structure preserved as exported. A sample with no matching image file is skipped, same as the tasks-kind path. */
+/** Converts a `kind: "project"` archive into a brand-new project's shape - fresh ids and label colors throughout. */
 export const cvLabelProjectManifestToNewProject = async (
   manifest: CvLabelProjectManifest,
   dir: string,

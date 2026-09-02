@@ -28,7 +28,7 @@ export const ExportProjectModal: FC<ExportProjectModalProps> = ({ opened, projec
   const [phase, setPhase] = useState<ExportPhase>('preparing')
   const [progress, setProgress] = useState(0)
 
-  // Only subscribes while actually open - this modal stays mounted (just hidden) between opens, unlike CvLabelJsonExporterComponent which only mounts once selected.
+  // Only subscribes while open - unlike CvLabelJsonExporterComponent, this modal stays mounted between opens.
   useEffect(() => {
     if (!opened) return undefined
     return window.exportApi.onProgress(({ completed, total }) => {
