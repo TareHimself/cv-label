@@ -19,7 +19,8 @@ const project: IProject = {
   ]
 }
 
-const manifestJson = (labels: unknown[], samples: unknown[]) => JSON.stringify({ labels, samples })
+const manifestJson = (labels: unknown[], samples: unknown[]) =>
+  JSON.stringify({ version: 1, kind: 'tasks', labels, samples })
 
 // Mantine's Dropzone renders a real <input type=file> under the hood and reacts to it the
 // same way it would a drop - same interaction pattern as PlainImagesImporterComponent's

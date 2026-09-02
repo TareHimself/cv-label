@@ -71,7 +71,11 @@ export const CvLabelJsonExporterComponent = ({
 
       manifest.textEntries.push({
         path: 'manifest.json',
-        content: buildCvLabelManifest(includedLabels, manifestSamples)
+        content: buildCvLabelManifest({
+          kind: 'tasks',
+          labels: includedLabels,
+          samples: manifestSamples
+        })
       })
 
       setPhase('exporting')

@@ -32,14 +32,22 @@ Every manifest starts with:
 | `version` | `number`             | Format version. Currently always `1`. |
 | `kind`    | `"tasks" \| "project"` | Which shape the rest of the manifest follows — see below. |
 | `labels`  | `Label[]`             | Every exported label |
-| `samples` | `Sample[]`            | Every exported sample |
+
+A `kind: "tasks"` manifest additionally has:
+
+| Field     | Type       | Description |
+| --------- | ---------- | ----------- |
+| `samples` | `Sample[]` | A flat list, independent of any task structure |
 
 A `kind: "project"` manifest additionally has:
 
 | Field     | Type       | Description |
 | --------- | ---------- | ----------- |
 | `project` | `Project`  | The exported project's own identity |
-| `tasks`   | `Task[]`   | Every task in the project, with which samples belong to it |
+| `tasks`   | `Task[]`   | Every task in the project, each carrying its own samples directly |
+
+There's no top-level `samples` field for `kind: "project"` — each task nests its samples, mirroring
+the app's actual Project → Task → Sample structure instead of flattening it into id references.
 
 ### Label
 
@@ -56,11 +64,11 @@ A `kind: "project"` manifest additionally has:
 
 ### Task (`kind: "project"` only)
 
-| Field       | Type       | Description |
-| ----------- | ---------- | ----------- |
-| `id`        | `string`   | |
-| `name`      | `string`   | |
-| `sampleIds` | `string[]` | References `Sample.id` values in the same manifest |
+| Field     | Type       | Description |
+| --------- | ---------- | ----------- |
+| `id`      | `string`   | |
+| `name`    | `string`   | |
+| `samples` | `Sample[]` | This task's own samples, nested directly - not an id reference |
 
 ### Sample
 
@@ -74,9 +82,9 @@ A `kind: "project"` manifest additionally has:
 | `annotations` | `Annotation[]`    | |
 | `width`, `height` | `number` (optional) | Written on export; not read on import today |
 
-A `kind: "tasks"` sample belongs to no particular task — that's the point of the shape. A
-`kind: "project"` sample's task membership comes from `Task.sampleIds`, not from a field on the
-sample itself.
+A `kind: "tasks"` sample sits in the top-level flat `samples` list, belonging to no particular task
+- that's the point of the shape. A `kind: "project"` sample sits inside whichever `Task.samples` it
+belongs to - task membership is structural, not an id reference.
 
 ### Annotation
 
@@ -107,8 +115,9 @@ whose label has no mapping are dropped. Every id (sample, annotation, point) is 
 on import, so manifest ids only need to be unique within the file, not globally.
 
 **`kind: "project"`**: always creates a brand-new project named after `Project.name`, with its own
-fresh labels and tasks reconstructed from `tasks`/`labels`/`samples` as exported — no label mapping
-step, since there's no existing project to reconcile against. Every id is likewise regenerated.
+fresh labels and tasks reconstructed directly from `tasks`/`labels` as exported — no label mapping
+step, since there's no existing project to reconcile against, and no id-based sample-to-task lookup
+either, since each task already carries its own samples. Every id is likewise regenerated.
 
 ## 5. Versioning
 
@@ -159,24 +168,29 @@ additions, not about reading old files. Bump `version` on any future breaking ch
   "kind": "project",
   "project": { "name": "Street Signs" },
   "labels": [{ "id": "lbl_1", "name": "stop_sign" }],
-  "tasks": [{ "id": "task_1", "name": "Batch 1", "sampleIds": ["smp_1"] }],
-  "samples": [
+  "tasks": [
     {
-      "id": "smp_1",
-      "name": "frame_0001",
-      "split": "train",
-      "createdAt": "2026-08-01T12:00:00.000Z",
-      "imageFile": "images/smp_1.jpg",
-      "width": 1920,
-      "height": 1080,
-      "annotations": [
+      "id": "task_1",
+      "name": "Batch 1",
+      "samples": [
         {
-          "id": "ann_1",
-          "type": "box",
-          "labelId": "lbl_1",
-          "points": [
-            { "id": "pt_1", "x": 100, "y": 200 },
-            { "id": "pt_2", "x": 300, "y": 400 }
+          "id": "smp_1",
+          "name": "frame_0001",
+          "split": "train",
+          "createdAt": "2026-08-01T12:00:00.000Z",
+          "imageFile": "images/smp_1.jpg",
+          "width": 1920,
+          "height": 1080,
+          "annotations": [
+            {
+              "id": "ann_1",
+              "type": "box",
+              "labelId": "lbl_1",
+              "points": [
+                { "id": "pt_1", "x": 100, "y": 200 },
+                { "id": "pt_2", "x": 300, "y": 400 }
+              ]
+            }
           ]
         }
       ]

@@ -4,7 +4,7 @@
   "title": "CV-Label manifest.json",
   "description": "manifest.json found at the root of a .cvlabel archive. See SPEC.md.",
   "type": "object",
-  "required": ["version", "kind", "labels", "samples"],
+  "required": ["version", "kind", "labels"],
   "properties": {
     "version": { "const": 1 },
     "kind": { "enum": ["tasks", "project"] },
@@ -25,12 +25,13 @@
   "allOf": [
     {
       "if": { "properties": { "kind": { "const": "project" } } },
-      "then": { "required": ["project", "tasks"] },
+      "then": {
+        "required": ["project", "tasks"],
+        "properties": { "samples": false }
+      },
       "else": {
-        "properties": {
-          "project": false,
-          "tasks": false
-        }
+        "required": ["samples"],
+        "properties": { "project": false, "tasks": false }
       }
     }
   ],
@@ -52,13 +53,13 @@
     },
     "task": {
       "type": "object",
-      "required": ["id", "name", "sampleIds"],
+      "required": ["id", "name", "samples"],
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "sampleIds": {
+        "samples": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "$ref": "#/$defs/sample" }
         }
       }
     },
