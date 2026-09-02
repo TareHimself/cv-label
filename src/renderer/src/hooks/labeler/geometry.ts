@@ -39,13 +39,10 @@ export const axisMaskedMoveDelta = (
   return [axis === 'y' ? 0 : moveCurrent[0], axis === 'x' ? 0 : moveCurrent[1]]
 }
 
-export const pointInRect = (pos: Vector2, rect: Rect): boolean =>
-  pos[0] >= rect.x &&
-  pos[0] <= rect.x + rect.width &&
-  pos[1] >= rect.y &&
-  pos[1] <= rect.y + rect.height
+const rectsIntersect = (a: Rect, b: Rect): boolean =>
+  a.x <= b.x + b.width && a.x + a.width >= b.x && a.y <= b.y + b.height && a.y + a.height >= b.y
 
-/** Rejects a Box whose corners were both clicked outside the image, or whose on-screen size is too small to be intentional. */
+/** Rejects a Box whose raw (pre-clamp) extent doesn't touch the image at all, or whose on-screen size is too small to be intentional - a box can legitimately start inside and end outside (dragged to the edge, clamped) or vice versa, so this checks the drawn rectangle against the image, not either single corner. */
 export const isValidBoxCreation = (
   rawStart: Vector2 | null,
   rawEnd: Vector2,
@@ -53,9 +50,15 @@ export const isValidBoxCreation = (
   scale: number,
   annotation: INewAnnotation
 ): boolean => {
-  const startInside = rawStart !== null && pointInRect(rawStart, imageRect)
-  const endInside = pointInRect(rawEnd, imageRect)
-  if (!startInside && !endInside) return false
+  if (rawStart === null) return false
+
+  const rawExtent: Rect = {
+    x: Math.min(rawStart[0], rawEnd[0]),
+    y: Math.min(rawStart[1], rawEnd[1]),
+    width: Math.abs(rawEnd[0] - rawStart[0]),
+    height: Math.abs(rawEnd[1] - rawStart[1])
+  }
+  if (!rectsIntersect(rawExtent, imageRect)) return false
 
   const box = boundingBoxOf(annotation.points)
   return box.width * scale >= MIN_BOX_SCREEN_SIZE_PX && box.height * scale >= MIN_BOX_SCREEN_SIZE_PX
