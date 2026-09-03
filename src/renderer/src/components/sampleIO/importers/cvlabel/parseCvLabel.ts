@@ -7,6 +7,7 @@ import { resolveImagePath } from '../writeToScratch'
 export type CvLabelClass = {
   id: string
   name: string
+  color?: string
 }
 
 type ManifestAnnotation = {
@@ -22,6 +23,7 @@ type ManifestSample = {
   split: TrainingSplit
   annotations: ManifestAnnotation[]
   createdAt: string
+  completedAt?: string | null
   imageFile: string
 }
 
@@ -142,7 +144,8 @@ export const cvLabelDatasetToSamples = async (
         imagePath,
         split: pair.sample.split,
         annotations,
-        createdAt: pair.sample.createdAt
+        createdAt: pair.sample.createdAt,
+        completedAt: pair.sample.completedAt ?? null
       })
     }
 
@@ -189,7 +192,7 @@ export type CvLabelProjectTask = {
   samples: INewSample[]
 }
 
-/** Converts the whole archive into a brand-new project's shape - fresh ids and label colors throughout. */
+/** Converts the whole archive into a brand-new project's shape - fresh ids throughout, label colors kept as exported. */
 export const cvLabelManifestToNewProject = async (
   manifest: CvLabelManifest,
   dir: string,
@@ -201,7 +204,7 @@ export const cvLabelManifestToNewProject = async (
   const labels: ILabel[] = manifest.labels.map((label) => ({
     id: labelIdMap.get(label.id)!,
     name: label.name,
-    color: randomHexColor()
+    color: label.color ?? randomHexColor()
   }))
 
   const byPath = new Map(files.map((f) => [f.path, f] as const))
@@ -234,7 +237,8 @@ export const cvLabelManifestToNewProject = async (
           imagePath,
           split: manifestSample.split,
           annotations,
-          createdAt: manifestSample.createdAt
+          createdAt: manifestSample.createdAt,
+          completedAt: manifestSample.completedAt ?? null
         })
       }
 

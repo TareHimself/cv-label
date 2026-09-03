@@ -72,7 +72,7 @@ describe('CvLabelJsonExporterComponent', () => {
     ).content
     expect(JSON.parse(manifestJson)).toEqual({
       version: 1,
-      labels: [{ id: 'l1', name: 'Stop Sign' }],
+      labels: [{ id: 'l1', name: 'Stop Sign', color: '#ff0000' }],
       tasks: [
         {
           id: 't1',
@@ -84,6 +84,7 @@ describe('CvLabelJsonExporterComponent', () => {
               split: TrainingSplit.Train,
               annotations: sample.annotations,
               createdAt: sample.createdAt,
+              completedAt: sample.completedAt,
               width: sample.width,
               height: sample.height,
               imageFile: 'images/s1.png'
@@ -153,7 +154,7 @@ describe('CvLabelJsonExporterComponent', () => {
     const manifestJson = JSON.parse(
       manifest.textEntries.find((e: { path: string }) => e.path === 'manifest.json').content
     )
-    expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign' }])
+    expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign', color: '#ff0000' }])
     expect(manifestJson.tasks[0].samples[0].annotations).toHaveLength(1)
     expect(manifestJson.tasks[0].samples[0].annotations[0].labelId).toBe('l1')
   })
@@ -196,7 +197,7 @@ describe('CvLabelJsonExporterComponent', () => {
     const manifestJson = JSON.parse(
       manifest.textEntries.find((e: { path: string }) => e.path === 'manifest.json').content
     )
-    expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign' }])
+    expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign', color: '#ff0000' }])
     expect(manifestJson.tasks[0].samples[0].annotations).toHaveLength(2)
     expect(
       manifestJson.tasks[0].samples[0].annotations.every(

@@ -35,10 +35,11 @@ sits, which is always the root today).
 
 ### Label
 
-| Field  | Type     |
-| ------ | -------- |
-| `id`   | `string` |
-| `name` | `string` |
+| Field   | Type     |
+| ------- | -------- |
+| `id`    | `string` |
+| `name`  | `string` |
+| `color` | `string` |
 
 ### Task
 
@@ -56,6 +57,7 @@ sits, which is always the root today).
 | `name`        | `string`          | |
 | `split`       | `"train" \| "test" \| "valid"` | |
 | `createdAt`   | `string`          | ISO 8601 |
+| `completedAt` | `string \| null`  | ISO 8601, or `null` if not marked complete |
 | `imageFile`   | `string`          | Path relative to `manifest.json`, e.g. `images/abc123.jpg` |
 | `annotations` | `Annotation[]`    | |
 | `width`, `height` | `number` (optional) | Written on export; not read on import today |
@@ -94,7 +96,8 @@ manifest ids only need to be unique within the file, not globally.
 file), with its own fresh labels and every task reconstructed directly from `tasks`/`labels` as
 exported — no label mapping step, since there's no existing project to reconcile against, and no
 id-based sample-to-task lookup either, since each task already carries its own samples. Every id
-is likewise regenerated.
+is likewise regenerated. `Label.color` is kept as exported (falls back to a random color if
+missing); `Sample.completedAt` is kept as exported either way.
 
 ## 5. Versioning
 
@@ -108,7 +111,7 @@ additions, not about reading old files. Bump `version` on any future breaking ch
 ```json
 {
   "version": 1,
-  "labels": [{ "id": "lbl_1", "name": "person" }],
+  "labels": [{ "id": "lbl_1", "name": "person", "color": "#ff0000" }],
   "tasks": [
     {
       "id": "task_1",
@@ -119,6 +122,7 @@ additions, not about reading old files. Bump `version` on any future breaking ch
           "name": "frame_0001",
           "split": "train",
           "createdAt": "2026-08-01T12:00:00.000Z",
+          "completedAt": null,
           "imageFile": "images/smp_1.jpg",
           "width": 1920,
           "height": 1080,

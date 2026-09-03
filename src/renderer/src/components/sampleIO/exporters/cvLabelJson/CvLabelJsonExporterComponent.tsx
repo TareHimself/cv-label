@@ -66,6 +66,7 @@ export const CvLabelJsonExporterComponent = ({
               return target ? [{ ...annotation, labelId: target }] : []
             }),
             createdAt: sample.createdAt,
+            completedAt: sample.completedAt,
             width: sample.width,
             height: sample.height,
             imageFile

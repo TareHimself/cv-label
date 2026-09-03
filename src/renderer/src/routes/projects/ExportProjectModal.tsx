@@ -59,6 +59,7 @@ export const ExportProjectModal: FC<ExportProjectModalProps> = ({ opened, projec
             split: sample.split,
             annotations: sample.annotations,
             createdAt: sample.createdAt,
+            completedAt: sample.completedAt,
             width: sample.width,
             height: sample.height,
             imageFile

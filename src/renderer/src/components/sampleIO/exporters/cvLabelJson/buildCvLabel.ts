@@ -1,6 +1,6 @@
 import { ILabel, ISample } from '@shared/types'
 
-export interface CvLabelManifestSample extends Omit<ISample, 'imageUri' | 'completedAt'> {
+export interface CvLabelManifestSample extends Omit<ISample, 'imageUri'> {
   imageFile: string
 }
 
@@ -17,7 +17,7 @@ export const buildCvLabelManifest = (labels: ILabel[], tasks: CvLabelManifestTas
   JSON.stringify(
     {
       version: CVLABEL_FORMAT_VERSION,
-      labels: labels.map((label) => ({ id: label.id, name: label.name })),
+      labels: labels.map((label) => ({ id: label.id, name: label.name, color: label.color })),
       tasks
     },
     null,

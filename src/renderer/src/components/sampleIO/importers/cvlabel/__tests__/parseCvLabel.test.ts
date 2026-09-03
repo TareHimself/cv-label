@@ -132,6 +132,7 @@ describe('cvLabelDatasetToSamples', () => {
             }
           ],
           createdAt: '2026-01-01T00:00:00.000Z',
+          completedAt: '2026-01-05T00:00:00.000Z',
           imageFile: 'images/s1.jpg'
         },
         image: makeFile('images/s1.jpg', 'fake-image-bytes')
@@ -145,11 +146,32 @@ describe('cvLabelDatasetToSamples', () => {
     expect(samples[0].imagePath).toMatch(/^\/scratch\/.+\.jpg$/)
     expect(samples[0].id).not.toBe('s1')
     expect(samples[0].name).toBe('photo')
+    expect(samples[0].completedAt).toBe('2026-01-05T00:00:00.000Z')
     expect(samples[0].annotations).toHaveLength(1)
     expect(samples[0].annotations[0].id).not.toBe('orig-a1')
     expect(samples[0].annotations[0].labelId).toBe('target-l1')
     expect(samples[0].annotations[0].points[0].id).not.toBe('orig-p1')
     expect(samples[0].annotations[0].points[0]).toMatchObject({ x: 10, y: 20 })
+  })
+
+  it('defaults completedAt to null when the source sample has none', async () => {
+    const pairs = [
+      {
+        sample: {
+          id: 's1',
+          name: 'photo',
+          split: TrainingSplit.Train,
+          annotations: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          imageFile: 'images/s1.jpg'
+        },
+        image: makeFile('images/s1.jpg', 'x')
+      }
+    ]
+
+    const samples = await cvLabelDatasetToSamples(pairs, new Map(), '/scratch')
+
+    expect(samples[0].completedAt).toBeNull()
   })
 
   it('skips annotations whose source label has no mapping', async () => {
@@ -324,7 +346,7 @@ describe('cvLabelManifestToNewProject', () => {
   const manifest = twoTaskManifest
   const files = twoTaskFiles
 
-  it('regenerates label ids with fresh colors, keeping annotations pointed at the new ids', async () => {
+  it('regenerates label ids, falling back to a random color when the source label has none', async () => {
     const { labels, tasks } = await cvLabelManifestToNewProject(manifest, '', files, '/scratch')
 
     expect(labels).toHaveLength(1)
@@ -332,6 +354,38 @@ describe('cvLabelManifestToNewProject', () => {
     expect(labels[0].name).toBe('Person')
     expect(labels[0].color).toMatch(/^#[0-9a-f]{6}$/i)
     expect(tasks[0].samples[0].annotations[0].labelId).toBe(labels[0].id)
+  })
+
+  it("keeps the source label's color when it has one", async () => {
+    const manifestWithColor: CvLabelManifest = {
+      ...manifest,
+      labels: [{ id: 'src-l1', name: 'Person', color: '#123456' }]
+    }
+
+    const { labels } = await cvLabelManifestToNewProject(manifestWithColor, '', files, '/scratch')
+
+    expect(labels[0].color).toBe('#123456')
+  })
+
+  it('keeps completedAt as exported', async () => {
+    const manifestWithCompletedAt: CvLabelManifest = {
+      ...manifest,
+      tasks: [
+        {
+          ...manifest.tasks[0],
+          samples: [{ ...manifest.tasks[0].samples[0], completedAt: '2026-02-01T00:00:00.000Z' }]
+        }
+      ]
+    }
+
+    const { tasks } = await cvLabelManifestToNewProject(
+      manifestWithCompletedAt,
+      '',
+      files,
+      '/scratch'
+    )
+
+    expect(tasks[0].samples[0].completedAt).toBe('2026-02-01T00:00:00.000Z')
   })
 
   it('preserves task structure, regenerating task and sample ids', async () => {

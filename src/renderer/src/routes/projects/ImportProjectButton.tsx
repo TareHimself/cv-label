@@ -7,7 +7,6 @@ import { FaFileImport } from 'react-icons/fa'
 import { useQueryClient } from '@tanstack/react-query'
 import { AsyncButton } from '@renderer/components/AsyncButton'
 import { useAppStore } from '@renderer/hooks/useAppStore'
-import { navigate } from '@renderer/router/appRouter'
 import { makeUUID } from '@shared/utils'
 import { ZIndex } from '@renderer/zIndex'
 import {
@@ -105,7 +104,6 @@ export const ImportProjectButton: FC = () => {
 
       await queryClient.invalidateQueries({ queryKey: ['projects', store] })
       close()
-      navigate('tasks', { project: newProject })
     } catch (error) {
       console.error(error)
       toast.error('Failed to import the project')

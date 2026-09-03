@@ -312,6 +312,7 @@ const insertSamplesWithImages = (
         name: sample.name,
         split: sample.split,
         createdAt: sample.createdAt,
+        completedAt: sample.completedAt ?? null,
         imageId,
         taskId
       })
@@ -326,7 +327,7 @@ const insertSamplesWithImages = (
       createdAt: sample.createdAt,
       annotations: insertAnnotations(tx, sample.id, sample.annotations),
       split: sample.split,
-      completedAt: null
+      completedAt: sample.completedAt ?? null
     })
   }
 
