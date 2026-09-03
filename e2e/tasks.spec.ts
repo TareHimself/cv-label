@@ -15,6 +15,14 @@ test.describe('Tasks page', () => {
     await expect(tasksPage.emptyState).toBeVisible()
   })
 
+  test('creates an empty task via the picker\'s "None" option, with no import', async ({
+    tasksPage
+  }) => {
+    await tasksPage.createEmptyTask('Batch 1')
+
+    await expect(tasksPage.row('Batch 1')).toBeVisible()
+  })
+
   test('creates a task with sample files and lists it', async ({ tasksPage }) => {
     const image = await createTestImage('sample-1')
     try {

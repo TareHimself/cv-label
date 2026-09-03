@@ -27,6 +27,11 @@ export class TasksPage {
     return this.page.getByRole('dialog', { name: /Import Samples/ })
   }
 
+  /** The picker's "None" option - starts an empty create-task modal with no import. */
+  get noneImportOption() {
+    return this.importDialog.getByText('None', { exact: true })
+  }
+
   get fileInput() {
     return this.importDialog.locator('input[type=file]')
   }
@@ -121,18 +126,30 @@ export class TasksPage {
     return this.page.getByText(name, { exact: true })
   }
 
-  /** Opens the create-task modal, names it, and attaches sample image files via the
-   *  Plain Images importer (opened in a nested modal by "Add Samples"). */
+  /** "Create Task" opens the sample importer picker directly - picks Plain Images, attaches
+   *  files, then names the resulting (auto-opened, prefilled) create-task modal and confirms. */
   async createTask(name: string, filePaths: string[]) {
     await this.createTaskButton.click()
-    await this.nameInput.waitFor()
-    await this.nameInput.fill(name)
-    await this.addSamplesButton.click()
+    await this.importDialog.waitFor()
     await this.importDialog.getByText('Plain Images').click()
     await this.fileInput.waitFor()
     await this.fileInput.setInputFiles(filePaths)
-    // The importer completes as soon as files are selected, closing the nested modal.
+    // The importer completes as soon as files are selected, closing the picker and
+    // opening the create-task modal prefilled with the imported samples.
     await this.importDialog.waitFor({ state: 'hidden' })
+    await this.createDialog.waitFor()
+    await this.nameInput.fill(name)
+    await this.createButton.click()
+  }
+
+  /** "Create Task" opens the picker; "None" skips straight to a blank create-task modal
+   *  (no import), which is then named and confirmed with no samples. */
+  async createEmptyTask(name: string) {
+    await this.createTaskButton.click()
+    await this.importDialog.waitFor()
+    await this.noneImportOption.click()
+    await this.createDialog.waitFor()
+    await this.nameInput.fill(name)
     await this.createButton.click()
   }
 
@@ -146,19 +163,18 @@ export class TasksPage {
     })
   }
 
-  /** Opens the create-task modal, names it, and imports samples from a YOLO dataset zip via
-   *  the YOLO Dataset importer, accepting the default class-to-label mapping (each class
-   *  defaults to the project's first label). `format` picks the importer's "Label Format"
-   *  toggle - defaults to Detection, matching the importer's own default. */
+  /** "Create Task" opens the sample importer picker directly - picks YOLO Dataset, imports
+   *  the zip accepting the default class-to-label mapping (each class defaults to the
+   *  project's first label), then names the resulting (auto-opened, prefilled) create-task
+   *  modal and confirms. `format` picks the importer's "Label Format" toggle - defaults to
+   *  Detection, matching the importer's own default. */
   async createTaskFromYoloZip(
     name: string,
     zipPath: string,
     format: 'Detection' | 'Segmentation' = 'Detection'
   ) {
     await this.createTaskButton.click()
-    await this.nameInput.waitFor()
-    await this.nameInput.fill(name)
-    await this.addSamplesButton.click()
+    await this.importDialog.waitFor()
     await this.importDialog.getByText('YOLO Dataset').click()
     await this.yoloZipInput.setInputFiles(zipPath)
     if (format === 'Segmentation') {
@@ -166,6 +182,8 @@ export class TasksPage {
     }
     await this.importDialog.getByRole('button', { name: 'Import' }).click()
     await this.importDialog.waitFor({ state: 'hidden' })
+    await this.createDialog.waitFor()
+    await this.nameInput.fill(name)
     await this.createButton.click()
   }
 
