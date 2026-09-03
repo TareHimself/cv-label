@@ -61,7 +61,9 @@ describe('PlainImagesImporterComponent', () => {
 
     resolveImport([sample])
 
-    await waitFor(() => expect(onComplete).toHaveBeenCalledWith([sample], '/scratch'))
+    await waitFor(() =>
+      expect(onComplete).toHaveBeenCalledWith([{ name: undefined, samples: [sample] }], '/scratch')
+    )
     expect(screen.queryByText(/Processing images/)).not.toBeInTheDocument()
   })
 

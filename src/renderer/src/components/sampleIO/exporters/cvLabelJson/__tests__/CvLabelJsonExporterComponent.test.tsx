@@ -41,7 +41,7 @@ beforeEach(() => {
 })
 
 describe('CvLabelJsonExporterComponent', () => {
-  it('fetches every task/sample and builds a manifest with a flat sample list, calling onComplete on save', async () => {
+  it('fetches every task/sample and builds a manifest with samples nested per task, calling onComplete on save', async () => {
     const getSamplesForTask = vi.fn().mockResolvedValue([sample])
     const onComplete = vi.fn()
 
@@ -72,18 +72,23 @@ describe('CvLabelJsonExporterComponent', () => {
     ).content
     expect(JSON.parse(manifestJson)).toEqual({
       version: 1,
-      kind: 'tasks',
       labels: [{ id: 'l1', name: 'Stop Sign' }],
-      samples: [
+      tasks: [
         {
-          id: 's1',
-          name: 'photo-one',
-          split: TrainingSplit.Train,
-          annotations: sample.annotations,
-          createdAt: sample.createdAt,
-          width: sample.width,
-          height: sample.height,
-          imageFile: 'images/s1.png'
+          id: 't1',
+          name: 'Batch 1',
+          samples: [
+            {
+              id: 's1',
+              name: 'photo-one',
+              split: TrainingSplit.Train,
+              annotations: sample.annotations,
+              createdAt: sample.createdAt,
+              width: sample.width,
+              height: sample.height,
+              imageFile: 'images/s1.png'
+            }
+          ]
         }
       ]
     })
@@ -149,8 +154,8 @@ describe('CvLabelJsonExporterComponent', () => {
       manifest.textEntries.find((e: { path: string }) => e.path === 'manifest.json').content
     )
     expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign' }])
-    expect(manifestJson.samples[0].annotations).toHaveLength(1)
-    expect(manifestJson.samples[0].annotations[0].labelId).toBe('l1')
+    expect(manifestJson.tasks[0].samples[0].annotations).toHaveLength(1)
+    expect(manifestJson.tasks[0].samples[0].annotations[0].labelId).toBe('l1')
   })
 
   it('merges one label into another: the merged annotation is remapped to the target', async () => {
@@ -192,9 +197,11 @@ describe('CvLabelJsonExporterComponent', () => {
       manifest.textEntries.find((e: { path: string }) => e.path === 'manifest.json').content
     )
     expect(manifestJson.labels).toEqual([{ id: 'l1', name: 'Stop Sign' }])
-    expect(manifestJson.samples[0].annotations).toHaveLength(2)
+    expect(manifestJson.tasks[0].samples[0].annotations).toHaveLength(2)
     expect(
-      manifestJson.samples[0].annotations.every((a: { labelId: string }) => a.labelId === 'l1')
+      manifestJson.tasks[0].samples[0].annotations.every(
+        (a: { labelId: string }) => a.labelId === 'l1'
+      )
     ).toBe(true)
   })
 

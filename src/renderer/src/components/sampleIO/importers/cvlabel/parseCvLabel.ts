@@ -31,22 +31,11 @@ type ManifestTask = {
   samples: ManifestSample[]
 }
 
-type CvLabelTasksManifest = {
+type CvLabelManifest = {
   version: number
-  kind: 'tasks'
-  labels: CvLabelClass[]
-  samples: ManifestSample[]
-}
-
-type CvLabelProjectManifest = {
-  version: number
-  kind: 'project'
-  project: { name: string }
   labels: CvLabelClass[]
   tasks: ManifestTask[]
 }
-
-type CvLabelManifest = CvLabelTasksManifest | CvLabelProjectManifest
 
 const isManifestSample = (value: unknown): value is ManifestSample => {
   if (typeof value !== 'object' || value === null) return false
@@ -58,34 +47,26 @@ const isManifestSample = (value: unknown): value is ManifestSample => {
   )
 }
 
+const isManifestTask = (value: unknown): value is ManifestTask => {
+  if (typeof value !== 'object' || value === null) return false
+  const obj = value as Record<string, unknown>
+  return (
+    typeof obj.id === 'string' &&
+    typeof obj.name === 'string' &&
+    Array.isArray(obj.samples) &&
+    obj.samples.every(isManifestSample)
+  )
+}
+
 const isCvLabelManifest = (value: unknown): value is CvLabelManifest => {
   if (typeof value !== 'object' || value === null) return false
   const obj = value as Record<string, unknown>
-  if (obj.version !== 1 || !Array.isArray(obj.labels)) return false
-
-  if (obj.kind === 'tasks') {
-    return Array.isArray(obj.samples) && obj.samples.every(isManifestSample)
-  }
-
-  if (obj.kind === 'project') {
-    return (
-      typeof obj.project === 'object' &&
-      obj.project !== null &&
-      typeof (obj.project as Record<string, unknown>).name === 'string' &&
-      Array.isArray(obj.tasks) &&
-      obj.tasks.every(
-        (task) =>
-          typeof task === 'object' &&
-          task !== null &&
-          typeof (task as Record<string, unknown>).id === 'string' &&
-          typeof (task as Record<string, unknown>).name === 'string' &&
-          Array.isArray((task as Record<string, unknown>).samples) &&
-          ((task as Record<string, unknown>).samples as unknown[]).every(isManifestSample)
-      )
-    )
-  }
-
-  return false
+  return (
+    obj.version === 1 &&
+    Array.isArray(obj.labels) &&
+    Array.isArray(obj.tasks) &&
+    obj.tasks.every(isManifestTask)
+  )
 }
 
 const dirOf = (path: string) => {
@@ -116,20 +97,20 @@ export type CvLabelPair = {
   image: VirtualFile | null
 }
 
-/** Pairs a `kind: "tasks"` manifest's samples with their image files - a missing image is kept as null and skipped later, rather than failing the whole import. */
+/** Pairs a flat list of manifest samples with their image files - a missing image is kept as null and skipped later, rather than failing the whole import. */
 export const findCvLabelPairs = (
-  manifest: CvLabelTasksManifest,
+  samples: ManifestSample[],
   dir: string,
   files: VirtualFile[]
 ): CvLabelPair[] => {
   const byPath = new Map(files.map((f) => [f.path, f] as const))
-  return manifest.samples.map((sample) => ({
+  return samples.map((sample) => ({
     sample,
     image: byPath.get(`${dir}${sample.imageFile}`) ?? null
   }))
 }
 
-/** Converts a `kind: "tasks"` archive to samples, one image at a time (see yoloDatasetToSamples). Every id is regenerated fresh so re-importing never collides with existing records; annotations with no label mapping are dropped. */
+/** Converts a flat sample list to real samples, one image at a time (see yoloDatasetToSamples). Every id is regenerated fresh so re-importing never collides with existing records; annotations with no label mapping are dropped. */
 export const cvLabelDatasetToSamples = async (
   pairs: CvLabelPair[],
   labelIdToProjectLabelId: Map<string, string | null>,
@@ -172,15 +153,45 @@ export const cvLabelDatasetToSamples = async (
   return samples
 }
 
+export type CvLabelTaskGroup = {
+  name: string
+  samples: INewSample[]
+}
+
+/** Converts every task in the archive separately, applying the same label mapping to each - for a multi-task import that keeps task boundaries. */
+export const cvLabelManifestTasksToGroups = async (
+  manifest: CvLabelManifest,
+  dir: string,
+  files: VirtualFile[],
+  labelIdToProjectLabelId: Map<string, string | null>,
+  scratchDir: string,
+  onProgress?: (completed: number, total: number) => void
+): Promise<CvLabelTaskGroup[]> => {
+  const total = manifest.tasks.reduce((sum, task) => sum + task.samples.length, 0)
+  let completedBefore = 0
+
+  const groups: CvLabelTaskGroup[] = []
+  for (const task of manifest.tasks) {
+    const pairs = findCvLabelPairs(task.samples, dir, files)
+    const samples = await cvLabelDatasetToSamples(pairs, labelIdToProjectLabelId, scratchDir, (c) =>
+      onProgress?.(completedBefore + c, total)
+    )
+    completedBefore += task.samples.length
+    groups.push({ name: task.name, samples })
+  }
+
+  return groups
+}
+
 export type CvLabelProjectTask = {
   id: string
   name: string
   samples: INewSample[]
 }
 
-/** Converts a `kind: "project"` archive into a brand-new project's shape - fresh ids and label colors throughout. */
-export const cvLabelProjectManifestToNewProject = async (
-  manifest: CvLabelProjectManifest,
+/** Converts the whole archive into a brand-new project's shape - fresh ids and label colors throughout. */
+export const cvLabelManifestToNewProject = async (
+  manifest: CvLabelManifest,
   dir: string,
   files: VirtualFile[],
   scratchDir: string,
@@ -237,4 +248,4 @@ export const cvLabelProjectManifestToNewProject = async (
   return { labels, tasks }
 }
 
-export type { CvLabelManifest, CvLabelTasksManifest, CvLabelProjectManifest }
+export type { CvLabelManifest }

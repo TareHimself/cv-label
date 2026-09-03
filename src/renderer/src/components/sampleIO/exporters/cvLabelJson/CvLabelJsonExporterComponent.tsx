@@ -9,7 +9,12 @@ import { imageExtensionFromUri } from '../imageExtensionFromUri'
 import { exportBaseName } from '../exportBaseName'
 import { LabelMapper } from '../../LabelMapper'
 import { buildIncludedLabelsAndIndex } from '../labelRouting'
-import { buildCvLabelManifest, cvLabelImagePath, type CvLabelManifestSample } from './buildCvLabel'
+import {
+  buildCvLabelManifest,
+  cvLabelImagePath,
+  type CvLabelManifestSample,
+  type CvLabelManifestTask
+} from './buildCvLabel'
 
 // 'preparing' covers fetching samples/building the manifest/the save dialog - no progress events arrive during any of that, so without it the bar would sit at 0% unexplained.
 type ExportPhase = 'preparing' | 'exporting'
@@ -43,39 +48,34 @@ export const CvLabelJsonExporterComponent = ({
       const { includedLabels } = buildIncludedLabelsAndIndex(project.labels, mapping)
 
       const samplesByTask = await Promise.all(tasks.map((task) => getSamplesForTask(task.id)))
-      const samples = samplesByTask.flat()
 
       const manifest: ArchiveManifest = { textEntries: [], imageEntries: [] }
-      const manifestSamples: CvLabelManifestSample[] = []
-
-      for (const sample of samples) {
-        const extension = imageExtensionFromUri(sample.imageUri)
-        const imageFile = cvLabelImagePath(sample.id, extension)
-
-        manifest.imageEntries.push({ path: imageFile, imageUri: sample.imageUri })
-
-        manifestSamples.push({
-          id: sample.id,
-          name: sample.name,
-          split: sample.split,
-          annotations: sample.annotations.flatMap((annotation) => {
-            const target = mapping.get(annotation.labelId)
-            return target ? [{ ...annotation, labelId: target }] : []
-          }),
-          createdAt: sample.createdAt,
-          width: sample.width,
-          height: sample.height,
-          imageFile
+      const manifestTasks: CvLabelManifestTask[] = tasks.map((task, i) => ({
+        id: task.id,
+        name: task.name,
+        samples: samplesByTask[i].map((sample): CvLabelManifestSample => {
+          const extension = imageExtensionFromUri(sample.imageUri)
+          const imageFile = cvLabelImagePath(sample.id, extension)
+          manifest.imageEntries.push({ path: imageFile, imageUri: sample.imageUri })
+          return {
+            id: sample.id,
+            name: sample.name,
+            split: sample.split,
+            annotations: sample.annotations.flatMap((annotation) => {
+              const target = mapping.get(annotation.labelId)
+              return target ? [{ ...annotation, labelId: target }] : []
+            }),
+            createdAt: sample.createdAt,
+            width: sample.width,
+            height: sample.height,
+            imageFile
+          }
         })
-      }
+      }))
 
       manifest.textEntries.push({
         path: 'manifest.json',
-        content: buildCvLabelManifest({
-          kind: 'tasks',
-          labels: includedLabels,
-          samples: manifestSamples
-        })
+        content: buildCvLabelManifest(includedLabels, manifestTasks)
       })
 
       setPhase('exporting')
@@ -97,8 +97,8 @@ export const CvLabelJsonExporterComponent = ({
     <Stack gap="lg">
       <Text size="sm" c="dimmed">
         Exports {tasks.length} task{tasks.length === 1 ? '' : 's'} as a single <code>.cvlabel</code>{' '}
-        file - a flat list of samples and their labels, independent of task structure. Re-importing
-        works into any project via a label-mapping step.
+        file, task names included. Re-importing works into any project via a label-mapping step,
+        merging into one task or keeping them separate.
       </Text>
       <LabelMapper
         items={project.labels}

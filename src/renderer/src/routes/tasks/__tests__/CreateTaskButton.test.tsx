@@ -46,6 +46,8 @@ const makeFile = (name: string, sizeInBytes: number) => {
 
 const openModal = async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create Task' }))
+  const importDialog = await screen.findByRole('dialog', { name: /Import Samples/ })
+  fireEvent.click(within(importDialog).getByText('None'))
   return screen.findByLabelText('Name')
 }
 
@@ -75,8 +77,34 @@ const projectWithLabel: IProject = {
 
 const makeCvLabelFile = async (name: string, labels: unknown[], samples: unknown[]) => {
   const zip = new JSZip()
-  zip.file('manifest.json', JSON.stringify({ version: 1, kind: 'tasks', labels, samples }))
+  zip.file(
+    'manifest.json',
+    JSON.stringify({ version: 1, labels, tasks: [{ id: 't1', name: 'Batch 1', samples }] })
+  )
   zip.file('images/s1.jpg', 'fake-image-bytes')
+  const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+  return new File([buffer], name)
+}
+
+const makeMultiTaskCvLabelFile = async (name: string, labels: unknown[]) => {
+  const zip = new JSZip()
+  zip.file(
+    'manifest.json',
+    JSON.stringify({
+      version: 1,
+      labels,
+      tasks: [
+        { id: 't1', name: 'Batch 1', samples: oneCvLabelSample },
+        {
+          id: 't2',
+          name: 'Batch 2',
+          samples: [{ ...oneCvLabelSample[0], id: 's2', imageFile: 'images/s2.jpg' }]
+        }
+      ]
+    })
+  )
+  zip.file('images/s1.jpg', 'fake-image-bytes')
+  zip.file('images/s2.jpg', 'fake-image-bytes')
   const buffer = await zip.generateAsync({ type: 'arraybuffer' })
   return new File([buffer], name)
 }
@@ -345,6 +373,18 @@ describe('CreateTaskButton', () => {
     })
   })
 
+  it('opens nothing when the standalone picker is cancelled instead of choosing None', async () => {
+    renderWithProviders(<CreateTaskButton project={project} create={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Task' }))
+    await screen.findByRole('dialog', { name: /Import Samples/ })
+    fireEvent.keyDown(document.body, { key: 'Escape', code: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
   it('combines everything into one task when the user declines the split', async () => {
     const create = vi.fn().mockResolvedValue(undefined)
     renderWithProviders(<CreateTaskButton project={project} create={create} />)
@@ -439,6 +479,38 @@ describe('CreateTaskButton', () => {
         expect(screen.queryByRole('dialog', { name: 'Import .cvlabel' })).not.toBeInTheDocument()
       })
       expect(screen.queryByRole('dialog', { name: 'Create Task' })).not.toBeInTheDocument()
+    })
+
+    it('starts a queue, one Create Task step per task, when the standalone picker returns multiple task groups', async () => {
+      const file = await makeMultiTaskCvLabelFile('Two Batches.cvlabel', [
+        { id: 'l1', name: 'Texte' }
+      ])
+      const create = vi.fn().mockResolvedValue(undefined)
+      renderWithProviders(<CreateTaskButton project={projectWithLabel} create={create} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create Task' }))
+      const importDialog = await screen.findByRole('dialog', { name: /Import Samples/ })
+      fireEvent.click(within(importDialog).getByText('cv-label File'))
+      const input = importDialog.querySelector('input[type=file]') as HTMLInputElement
+      fireEvent.change(input, { target: { files: [file] } })
+
+      fireEvent.click(await screen.findByRole('button', { name: '2 Separate Tasks' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Import' }))
+
+      expect(await screen.findByRole('dialog', { name: 'Create Task (1/2)' })).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveValue('Batch 1')
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+      expect(await screen.findByRole('dialog', { name: 'Create Task (2/2)' })).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveValue('Batch 2')
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: /Create Task/ })).not.toBeInTheDocument()
+      })
+      expect(create).toHaveBeenCalledTimes(2)
+      expect(create.mock.calls[0][0]).toBe('Batch 1')
+      expect(create.mock.calls[1][0]).toBe('Batch 2')
     })
   })
 })

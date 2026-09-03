@@ -15,15 +15,15 @@ import {
   type VirtualFile
 } from '@renderer/components/sampleIO/importers/virtualFileSystem'
 import {
-  cvLabelProjectManifestToNewProject,
+  cvLabelManifestToNewProject,
   findCvLabelManifest,
-  type CvLabelProjectManifest
+  type CvLabelManifest
 } from '@renderer/components/sampleIO/importers/cvlabel/parseCvLabel'
 
 type WizardState =
   | { step: 'select-source' }
   | { step: 'parsing' }
-  | { step: 'preview'; manifest: CvLabelProjectManifest; dir: string; files: VirtualFile[] }
+  | { step: 'preview'; manifest: CvLabelManifest; dir: string; files: VirtualFile[] }
   | { step: 'importing'; progress: number }
 
 export const ImportProjectButton: FC = () => {
@@ -64,13 +64,8 @@ export const ImportProjectButton: FC = () => {
         setState({ step: 'select-source' })
         return
       }
-      if (found.manifest.kind !== 'project') {
-        toast.error('This is a task export - import it from within a project instead')
-        setState({ step: 'select-source' })
-        return
-      }
 
-      setProjectName(found.manifest.project.name)
+      setProjectName(file.name.replace(/\.(cvlabel|zip)$/i, ''))
       setState({
         step: 'preview',
         manifest: found.manifest,
@@ -89,7 +84,7 @@ export const ImportProjectButton: FC = () => {
     const scratchDir = await ensureScratchDir()
     setState({ step: 'importing', progress: 0 })
     try {
-      const { labels, tasks } = await cvLabelProjectManifestToNewProject(
+      const { labels, tasks } = await cvLabelManifestToNewProject(
         state.manifest,
         state.dir,
         state.files,

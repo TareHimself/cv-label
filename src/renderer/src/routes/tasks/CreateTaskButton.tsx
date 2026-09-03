@@ -19,15 +19,13 @@ import { MdDeleteOutline } from 'react-icons/md'
 import { INewSample, IProject } from '@shared/types'
 import { AsyncButton } from '@renderer/components/AsyncButton'
 import { ImportSamplesModal } from '@renderer/components/sampleIO/ImportSamplesModal'
+import type { ImportedTaskGroup } from '@renderer/components/sampleIO/types'
 import { CvLabelImporterComponent } from '@renderer/components/sampleIO/importers/cvlabel/CvLabelImporterComponent'
 import { filesToSamples } from '@renderer/components/sampleIO/importers/filesToSamples'
 import { folderNameFromDroppedFiles, groupFilesByTopFolder } from '@renderer/utils'
 import { ZIndex } from '@renderer/zIndex'
 
 const CVLABEL_EXTENSION = /\.cvlabel$/i
-
-/** The dropped file's name minus the .cvlabel extension - seeds the Create Task modal's name field, same role as folderNameFromDroppedFiles for the image-drop path. */
-const taskNameFromCvLabelFile = (file: FileWithPath) => file.name.replace(CVLABEL_EXTENSION, '')
 
 // Dropzone needs the record form of `accept` - .cvlabel has no real mime type, so it's keyed under the generic zip mime, same as CvLabelImporterComponent's own Dropzone.
 const DROP_ACCEPT: Record<string, string[]> = {
@@ -40,7 +38,8 @@ export type CreateTaskButtonProps = {
   create: (name: string, samples: INewSample[]) => Promise<void>
 }
 
-type ImportQueueItem = { name: string; files: FileWithPath[] }
+type ImportQueueItem =
+  { name: string; files: FileWithPath[] } | { name: string; samples: INewSample[] }
 
 const FileRow = styled.div`
   display: flex;
@@ -97,7 +96,7 @@ const SelectedSampleRow = memo(function SelectedSampleRow({
           {sample.name}
         </Text>
         <Text size="xs" c="dimmed">
-          {sizeBytes === null ? ' ' : formatFileSize(sizeBytes)}
+          {sizeBytes === null ? ' ' : formatFileSize(sizeBytes)}
         </Text>
       </Flex>
       <ActionIcon aria-label="Remove file" variant="subtle" color="red" onClick={onRemove}>
@@ -169,6 +168,8 @@ const SampleList = memo(function SampleList({
 export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  // True when the picker was opened via "Create Task" itself (samples/name get applied, or the queue starts); false when opened via the already-open modal's "Add Samples" (just appends).
+  const [isStandaloneImport, setIsStandaloneImport] = useState(false)
   const [isDropProcessing, setIsDropProcessing] = useState(false)
   const [taskName, setTaskName] = useState('')
   const [samples, setSamples] = useState<INewSample[]>([])
@@ -206,7 +207,14 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
 
   const loadQueueItem = useCallback(
     (queue: ImportQueueItem[], index: number) => {
-      const { name, files } = queue[index]
+      const item = queue[index]
+      if ('samples' in item) {
+        setSamples(item.samples)
+        openModal(item.name)
+        return
+      }
+
+      const { name, files } = item
       setIsDropProcessing(true)
       toast
         .promise(
@@ -241,6 +249,20 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
       loadQueueItem(queue, 0)
     },
     [loadQueueItem]
+  )
+
+  /** Feeds one importer's result into the create-task flow: a single group prefills the modal directly, several start the same one-task-at-a-time queue the folder-split path uses. */
+  const applyImportResult = useCallback(
+    (taskGroups: ImportedTaskGroup[], scratchDir: string) => {
+      setPendingScratchDirs((dirs) => [...dirs, scratchDir])
+      if (taskGroups.length <= 1) {
+        setSamples(taskGroups[0]?.samples ?? [])
+        openModal(taskGroups[0]?.name ?? '')
+      } else {
+        startQueue(taskGroups.map((g) => ({ name: g.name ?? '', samples: g.samples })))
+      }
+    },
+    [openModal, startQueue]
   )
 
   // Shared by Skip and Create - both move to the next queued folder, or close once there isn't one.
@@ -278,7 +300,10 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
     }
   }
 
-  const openImportModal = useCallback(() => setIsImportOpen(true), [])
+  const openImportModal = useCallback(() => {
+    setIsStandaloneImport(false)
+    setIsImportOpen(true)
+  }, [])
   const clearSamples = useCallback(() => setSamples([]), [])
   const removeSample = useCallback((id: string) => {
     setSamples((s) => s.filter((sample) => sample.id !== id))
@@ -366,12 +391,9 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
           <CvLabelImporterComponent
             project={project}
             initialFile={cvLabelDropFile}
-            onComplete={(newSamples, scratchDir) => {
-              const name = taskNameFromCvLabelFile(cvLabelDropFile)
+            onComplete={(taskGroups, scratchDir) => {
               setCvLabelDropFile(null)
-              setSamples(newSamples)
-              setPendingScratchDirs((dirs) => [...dirs, scratchDir])
-              openModal(name)
+              applyImportResult(taskGroups, scratchDir)
             }}
             onCancel={() => setCvLabelDropFile(null)}
           />
@@ -381,10 +403,22 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
         opened={isImportOpen}
         project={project}
         onClose={() => setIsImportOpen(false)}
-        onImported={async (newSamples, scratchDir) => {
-          setSamples((s) => [...s, ...newSamples])
-          setPendingScratchDirs((dirs) => [...dirs, scratchDir])
+        onImported={async (taskGroups, scratchDir) => {
+          if (isStandaloneImport) {
+            applyImportResult(taskGroups, scratchDir)
+          } else {
+            setSamples((s) => [...s, ...taskGroups.flatMap((g) => g.samples)])
+            setPendingScratchDirs((dirs) => [...dirs, scratchDir])
+          }
         }}
+        onSkip={
+          isStandaloneImport
+            ? () => {
+                setIsImportOpen(false)
+                openModal('')
+              }
+            : undefined
+        }
         zIndex={ZIndex.nestedActionModal}
       />
       <Modal
@@ -468,7 +502,8 @@ export const CreateTaskButton: FC<CreateTaskButtonProps> = ({ project, create })
           setSamples([])
           setImportQueue([])
           setImportQueueIndex(0)
-          openModal()
+          setIsStandaloneImport(true)
+          setIsImportOpen(true)
         }}
       >
         Create Task

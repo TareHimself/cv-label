@@ -68,12 +68,7 @@ export const ExportProjectModal: FC<ExportProjectModalProps> = ({ opened, projec
 
       manifest.textEntries.push({
         path: 'manifest.json',
-        content: buildCvLabelManifest({
-          kind: 'project',
-          project: { name: project.name },
-          labels: project.labels,
-          tasks: manifestTasks
-        })
+        content: buildCvLabelManifest(project.labels, manifestTasks)
       })
 
       setPhase('exporting')

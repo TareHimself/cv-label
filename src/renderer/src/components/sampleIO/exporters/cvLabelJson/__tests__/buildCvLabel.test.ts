@@ -24,31 +24,13 @@ const sample: CvLabelManifestSample = {
 }
 
 describe('buildCvLabelManifest', () => {
-  it('kind: tasks - trims labels down to id + name, includes the flat sample list as-is', () => {
-    const manifest = JSON.parse(buildCvLabelManifest({ kind: 'tasks', labels, samples: [sample] }))
-
-    expect(manifest).toEqual({
-      version: 1,
-      kind: 'tasks',
-      labels: [
-        { id: 'l1', name: 'Person' },
-        { id: 'l2', name: 'Car' }
-      ],
-      samples: [sample]
-    })
-  })
-
-  it('kind: project - includes the project identity and nests samples under each task', () => {
+  it('trims labels down to id + name, and nests samples under each task as-is', () => {
     const tasks: CvLabelManifestTask[] = [{ id: 't1', name: 'Batch 1', samples: [sample] }]
 
-    const manifest = JSON.parse(
-      buildCvLabelManifest({ kind: 'project', project: { name: 'My Project' }, labels, tasks })
-    )
+    const manifest = JSON.parse(buildCvLabelManifest(labels, tasks))
 
     expect(manifest).toEqual({
       version: 1,
-      kind: 'project',
-      project: { name: 'My Project' },
       labels: [
         { id: 'l1', name: 'Person' },
         { id: 'l2', name: 'Car' }

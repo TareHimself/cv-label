@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Button, Group, Progress, Stack, Text } from '@mantine/core'
-import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone'
+import { Dropzone, IMAGE_MIME_TYPE, type FileWithPath } from '@mantine/dropzone'
 import { FaRegImages } from 'react-icons/fa'
 import toast from 'react-hot-toast'
 import type { SampleImporterComponentProps } from '../../types'
+import { folderNameFromDroppedFiles } from '@renderer/utils'
 import { filesToSamples } from '../filesToSamples'
 
 export const PlainImagesImporterComponent = ({
@@ -13,7 +14,7 @@ export const PlainImagesImporterComponent = ({
   const [isImporting, setIsImporting] = useState(false)
   const [progress, setProgress] = useState(0)
 
-  const handleDrop = async (files: File[]) => {
+  const handleDrop = async (files: FileWithPath[]) => {
     setIsImporting(true)
     setProgress(0)
     try {
@@ -21,7 +22,7 @@ export const PlainImagesImporterComponent = ({
       const samples = await filesToSamples(files, scratchDir, (completed, total) =>
         setProgress(Math.round((completed / total) * 100))
       )
-      onComplete(samples, scratchDir)
+      onComplete([{ name: folderNameFromDroppedFiles(files) ?? undefined, samples }], scratchDir)
     } catch (error) {
       console.error(error)
       toast.error('Failed to read image files')
