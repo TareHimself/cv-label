@@ -32,8 +32,9 @@ export class TasksPage {
     return this.importDialog.getByText('None', { exact: true })
   }
 
+  /** The Plain Images importer's own Dropzone file input - excludes its separate folder-picker input. */
   get fileInput() {
-    return this.importDialog.locator('input[type=file]')
+    return this.importDialog.locator('input[type=file]:not([data-testid="plain-images-folder-input"])')
   }
 
   get yoloZipInput() {
