@@ -4,51 +4,26 @@
   "title": "CV-Label manifest.json",
   "description": "manifest.json found at the root of a .cvlabel archive. See SPEC.md.",
   "type": "object",
-  "required": ["version", "kind", "labels"],
+  "required": ["version", "labels", "tasks"],
   "properties": {
     "version": { "const": 1 },
-    "kind": { "enum": ["tasks", "project"] },
     "labels": {
       "type": "array",
       "items": { "$ref": "#/$defs/label" }
     },
-    "samples": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/sample" }
-    },
-    "project": { "$ref": "#/$defs/project" },
     "tasks": {
       "type": "array",
       "items": { "$ref": "#/$defs/task" }
     }
   },
-  "allOf": [
-    {
-      "if": { "properties": { "kind": { "const": "project" } } },
-      "then": {
-        "required": ["project", "tasks"],
-        "properties": { "samples": false }
-      },
-      "else": {
-        "required": ["samples"],
-        "properties": { "project": false, "tasks": false }
-      }
-    }
-  ],
   "$defs": {
     "label": {
       "type": "object",
-      "required": ["id", "name"],
+      "required": ["id", "name", "color"],
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" }
-      }
-    },
-    "project": {
-      "type": "object",
-      "required": ["name"],
-      "properties": {
-        "name": { "type": "string" }
+        "name": { "type": "string" },
+        "color": { "type": "string" }
       }
     },
     "task": {
@@ -65,12 +40,13 @@
     },
     "sample": {
       "type": "object",
-      "required": ["id", "name", "split", "createdAt", "imageFile", "annotations"],
+      "required": ["id", "name", "split", "createdAt", "completedAt", "imageFile", "annotations"],
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
         "split": { "enum": ["train", "test", "valid"] },
         "createdAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": ["string", "null"], "format": "date-time" },
         "imageFile": { "type": "string" },
         "width": { "type": "number" },
         "height": { "type": "number" },

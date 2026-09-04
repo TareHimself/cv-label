@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Modal, Stack, UnstyledButton, Text, ThemeIcon } from '@mantine/core'
 import { styled } from '@linaria/react'
 import toast from 'react-hot-toast'
-import type { IProject, INewSample } from '@shared/types'
+import type { IProject } from '@shared/types'
+import { MdBlock } from 'react-icons/md'
 import { ZIndex } from '@renderer/zIndex'
 import { importers } from './importers/registry'
-import type { SampleImporter } from './types'
+import type { ImportedTaskGroup, SampleImporter } from './types'
 
 const importerList = Object.values(importers)
 
@@ -26,10 +27,12 @@ export type ImportSamplesModalProps = {
   opened: boolean
   project: IProject
   onClose: () => void
-  /** scratchDir is where the imported samples' images live - onImported decides when it's safe to delete it. */
-  onImported: (samples: INewSample[], scratchDir: string) => Promise<void>
+  /** scratchDir is where the imported samples' images live - onImported decides when it's safe to delete it. Most importers report one group; a format with its own task structure may report several. */
+  onImported: (taskGroups: ImportedTaskGroup[], scratchDir: string) => Promise<void>
   /** Pass ZIndex.nestedActionModal when opened from within another already-open action modal (e.g. Create Task). */
   zIndex?: number
+  /** Adds a "None" option at the top of the format list, for a caller that wants a way to proceed with nothing imported (e.g. Create Task's blank-task path). Omit to not offer it. */
+  onSkip?: () => void
 }
 
 export const ImportSamplesModal = ({
@@ -37,7 +40,8 @@ export const ImportSamplesModal = ({
   project,
   onClose,
   onImported,
-  zIndex = ZIndex.actionModal
+  zIndex = ZIndex.actionModal,
+  onSkip
 }: ImportSamplesModalProps) => {
   const [selectedImporter, setSelectedImporter] = useState<SampleImporter | null>(null)
   const [wasOpened, setWasOpened] = useState(opened)
@@ -49,9 +53,9 @@ export const ImportSamplesModal = ({
     }
   }
 
-  const handleComplete = async (samples: INewSample[], scratchDir: string) => {
+  const handleComplete = async (taskGroups: ImportedTaskGroup[], scratchDir: string) => {
     try {
-      await toast.promise(onImported(samples, scratchDir), {
+      await toast.promise(onImported(taskGroups, scratchDir), {
         loading: 'Importing samples',
         success: 'Samples imported',
         error: (e) => {
@@ -86,6 +90,19 @@ export const ImportSamplesModal = ({
         />
       ) : (
         <Stack gap="sm">
+          {onSkip && (
+            <ImporterOption onClick={onSkip}>
+              <ThemeIcon variant="light" size="lg" radius="md" mr="md">
+                <MdBlock size={20} />
+              </ThemeIcon>
+              <Stack gap={0}>
+                <Text fw={600}>None</Text>
+                <Text size="xs" c="dimmed">
+                  Start with an empty task - add samples yourself afterward.
+                </Text>
+              </Stack>
+            </ImporterOption>
+          )}
           {importerList.map((importer) => (
             <ImporterOption key={importer.id} onClick={() => setSelectedImporter(importer)}>
               <ThemeIcon variant="light" size="lg" radius="md" mr="md">

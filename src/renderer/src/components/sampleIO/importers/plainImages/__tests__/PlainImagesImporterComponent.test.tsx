@@ -19,6 +19,12 @@ const project: IProject = { id: 'p1', name: 'Street Signs', labels: [] }
 
 const makeFile = (name: string) => new File(['x'], name, { type: 'image/jpeg' })
 
+const makeFolderFile = (relativePath: string, mimeType: string) => {
+  const file = new File(['x'], relativePath.split('/').pop() as string, { type: mimeType })
+  Object.defineProperty(file, 'webkitRelativePath', { value: relativePath })
+  return file
+}
+
 const getFileInput = () => document.querySelector('input[type=file]') as HTMLInputElement
 
 const createTemporaryDirectory = vi.fn()
@@ -61,8 +67,34 @@ describe('PlainImagesImporterComponent', () => {
 
     resolveImport([sample])
 
-    await waitFor(() => expect(onComplete).toHaveBeenCalledWith([sample], '/scratch'))
+    await waitFor(() =>
+      expect(onComplete).toHaveBeenCalledWith([{ name: undefined, samples: [sample] }], '/scratch')
+    )
     expect(screen.queryByText(/Processing images/)).not.toBeInTheDocument()
+  })
+
+  it('selects a folder, derives the task name from it, and filters out non-image files', async () => {
+    filesToSamples.mockResolvedValue([])
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <PlainImagesImporterComponent project={project} onComplete={onComplete} onCancel={vi.fn()} />
+    )
+
+    fireEvent.change(screen.getByTestId('plain-images-folder-input'), {
+      target: {
+        files: [
+          makeFolderFile('MyPhotos/a.jpg', 'image/jpeg'),
+          makeFolderFile('MyPhotos/notes.txt', 'text/plain')
+        ]
+      }
+    })
+
+    await waitFor(() => expect(filesToSamples).toHaveBeenCalledTimes(1))
+    const [importedFiles] = filesToSamples.mock.calls[0]
+    expect(importedFiles).toHaveLength(1)
+    expect(importedFiles[0].name).toBe('a.jpg')
+    expect(onComplete).toHaveBeenCalledWith([{ name: 'MyPhotos', samples: [] }], '/scratch')
   })
 
   it('shows an error toast and re-enables Cancel when reading files fails', async () => {

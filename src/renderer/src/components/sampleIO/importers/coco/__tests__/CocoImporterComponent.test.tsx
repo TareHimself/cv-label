@@ -109,7 +109,7 @@ describe('CocoImporterComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
-    const samples = onComplete.mock.calls[0][0]
+    const samples = onComplete.mock.calls[0][0][0].samples
     expect(samples).toHaveLength(1)
     expect(samples[0].annotations[0].labelId).toBe('l2')
   })
@@ -144,7 +144,7 @@ describe('CocoImporterComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
-    const samples = onComplete.mock.calls[0][0]
+    const samples = onComplete.mock.calls[0][0][0].samples
     expect(samples).toHaveLength(1)
     expect(samples[0].annotations).toHaveLength(0)
   })

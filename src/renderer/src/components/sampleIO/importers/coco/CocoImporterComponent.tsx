@@ -31,6 +31,7 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
 }) => {
   const [state, setState] = useState<WizardState>({ step: 'select-source' })
   const [labelByClassId, setLabelByClassId] = useState<Map<number, string | null>>(new Map())
+  const [sourceName, setSourceName] = useState<string | undefined>(undefined)
   const zipInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
   const scratchDirRef = useRef<string | null>(null)
@@ -77,6 +78,7 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    setSourceName(file.name.replace(/\.zip$/i, ''))
     loadSource((scratchDir) => virtualFilesFromExtractedZip(file, scratchDir))
   }
 
@@ -89,6 +91,7 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
     // input.files is a live mutable FileList - materialize it now, before the value reset below (needed so re-picking the same folder still fires onChange) clears it in place.
     const files = Array.from(fileList)
     e.target.value = ''
+    setSourceName(files[0].webkitRelativePath?.split('/')[0] || undefined)
     loadSource(() => virtualFilesFromFileList(files))
   }
 
@@ -105,7 +108,7 @@ export const CocoImporterComponent: FC<SampleImporterComponentProps> = ({
           setState({ step: 'importing', progress: Math.round((completed / total) * 100) })
         }
       )
-      onComplete(samples, scratchDir)
+      onComplete([{ name: sourceName, samples }], scratchDir)
     } catch (error) {
       console.error(error)
       toast.error('Failed to import the dataset')

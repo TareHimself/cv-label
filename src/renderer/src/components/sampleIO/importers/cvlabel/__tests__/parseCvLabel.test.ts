@@ -3,10 +3,11 @@ import { AnnotationType, TrainingSplit } from '@shared/types'
 import type { VirtualFile } from '../../virtualFileSystem'
 import {
   cvLabelDatasetToSamples,
-  cvLabelProjectManifestToNewProject,
+  cvLabelManifestTasksToGroups,
+  cvLabelManifestToNewProject,
   findCvLabelManifest,
   findCvLabelPairs,
-  type CvLabelProjectManifest
+  type CvLabelManifest
 } from '../parseCvLabel'
 
 const makeFile = (path: string, content: string): VirtualFile => ({
@@ -15,39 +16,17 @@ const makeFile = (path: string, content: string): VirtualFile => ({
   blob: () => Promise.resolve(new Blob([content]))
 })
 
-const tasksManifestJson = (labels: unknown[], samples: unknown[]) =>
-  JSON.stringify({ version: 1, kind: 'tasks', labels, samples })
+const manifestJson = (labels: unknown[], tasks: unknown[]) =>
+  JSON.stringify({ version: 1, labels, tasks })
 
 describe('findCvLabelManifest', () => {
-  it('reads labels and samples from a kind: tasks manifest.json', async () => {
+  it('reads labels and tasks, samples nested under each task', async () => {
     const files = [
       makeFile(
         'manifest.json',
-        tasksManifestJson(
+        manifestJson(
           [{ id: 'l1', name: 'Person' }],
-          [{ id: 's1', name: 'photo', split: 'train', annotations: [], imageFile: 'images/s1.jpg' }]
-        )
-      )
-    ]
-
-    const found = await findCvLabelManifest(files)
-
-    expect(found?.manifest.kind).toBe('tasks')
-    expect(found?.manifest.labels).toEqual([{ id: 'l1', name: 'Person' }])
-    expect(found?.manifest.kind === 'tasks' && found.manifest.samples).toHaveLength(1)
-    expect(found?.dir).toBe('')
-  })
-
-  it('reads a kind: project manifest.json, samples nested under each task', async () => {
-    const files = [
-      makeFile(
-        'manifest.json',
-        JSON.stringify({
-          version: 1,
-          kind: 'project',
-          project: { name: 'My Project' },
-          labels: [{ id: 'l1', name: 'Person' }],
-          tasks: [
+          [
             {
               id: 't1',
               name: 'Batch 1',
@@ -62,19 +41,19 @@ describe('findCvLabelManifest', () => {
               ]
             }
           ]
-        })
+        )
       )
     ]
 
     const found = await findCvLabelManifest(files)
 
-    expect(found?.manifest.kind).toBe('project')
-    expect(found?.manifest.kind === 'project' && found.manifest.project.name).toBe('My Project')
-    expect(found?.manifest.kind === 'project' && found.manifest.tasks[0].samples).toHaveLength(1)
+    expect(found?.manifest.labels).toEqual([{ id: 'l1', name: 'Person' }])
+    expect(found?.manifest.tasks[0].samples).toHaveLength(1)
+    expect(found?.dir).toBe('')
   })
 
   it('resolves the manifest directory when the archive wraps content in a folder', async () => {
-    const files = [makeFile('MyExport/manifest.json', tasksManifestJson([], []))]
+    const files = [makeFile('MyExport/manifest.json', manifestJson([], []))]
 
     const found = await findCvLabelManifest(files)
 
@@ -99,8 +78,8 @@ describe('findCvLabelManifest', () => {
     expect(await findCvLabelManifest(files)).toBeNull()
   })
 
-  it('returns null for a manifest with no version/kind (pre-release format, unsupported)', async () => {
-    const files = [makeFile('manifest.json', JSON.stringify({ labels: [], samples: [] }))]
+  it('returns null for a manifest with no version (pre-release format, unsupported)', async () => {
+    const files = [makeFile('manifest.json', JSON.stringify({ labels: [], tasks: [] }))]
 
     expect(await findCvLabelManifest(files)).toBeNull()
   })
@@ -108,32 +87,22 @@ describe('findCvLabelManifest', () => {
 
 describe('findCvLabelPairs', () => {
   it('resolves each sample image relative to the manifest directory', () => {
-    const manifest = {
-      version: 1,
-      kind: 'tasks' as const,
-      labels: [],
-      samples: [
-        { id: 's1', name: 'photo', split: 'train', annotations: [], imageFile: 'images/s1.jpg' }
-      ]
-    }
+    const samples = [
+      { id: 's1', name: 'photo', split: 'train', annotations: [], imageFile: 'images/s1.jpg' }
+    ]
     const files = [makeFile('MyExport/images/s1.jpg', 'fake-image-bytes')]
 
-    const [pair] = findCvLabelPairs(manifest as never, 'MyExport/', files)
+    const [pair] = findCvLabelPairs(samples as never, 'MyExport/', files)
 
     expect(pair.image?.path).toBe('MyExport/images/s1.jpg')
   })
 
   it('keeps a sample with a null image when its file is missing from the archive', () => {
-    const manifest = {
-      version: 1,
-      kind: 'tasks' as const,
-      labels: [],
-      samples: [
-        { id: 's1', name: 'photo', split: 'train', annotations: [], imageFile: 'images/s1.jpg' }
-      ]
-    }
+    const samples = [
+      { id: 's1', name: 'photo', split: 'train', annotations: [], imageFile: 'images/s1.jpg' }
+    ]
 
-    const [pair] = findCvLabelPairs(manifest as never, '', [])
+    const [pair] = findCvLabelPairs(samples as never, '', [])
 
     expect(pair.image).toBeNull()
   })
@@ -163,6 +132,7 @@ describe('cvLabelDatasetToSamples', () => {
             }
           ],
           createdAt: '2026-01-01T00:00:00.000Z',
+          completedAt: '2026-01-05T00:00:00.000Z',
           imageFile: 'images/s1.jpg'
         },
         image: makeFile('images/s1.jpg', 'fake-image-bytes')
@@ -176,11 +146,32 @@ describe('cvLabelDatasetToSamples', () => {
     expect(samples[0].imagePath).toMatch(/^\/scratch\/.+\.jpg$/)
     expect(samples[0].id).not.toBe('s1')
     expect(samples[0].name).toBe('photo')
+    expect(samples[0].completedAt).toBe('2026-01-05T00:00:00.000Z')
     expect(samples[0].annotations).toHaveLength(1)
     expect(samples[0].annotations[0].id).not.toBe('orig-a1')
     expect(samples[0].annotations[0].labelId).toBe('target-l1')
     expect(samples[0].annotations[0].points[0].id).not.toBe('orig-p1')
     expect(samples[0].annotations[0].points[0]).toMatchObject({ x: 10, y: 20 })
+  })
+
+  it('defaults completedAt to null when the source sample has none', async () => {
+    const pairs = [
+      {
+        sample: {
+          id: 's1',
+          name: 'photo',
+          split: TrainingSplit.Train,
+          annotations: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          imageFile: 'images/s1.jpg'
+        },
+        image: makeFile('images/s1.jpg', 'x')
+      }
+    ]
+
+    const samples = await cvLabelDatasetToSamples(pairs, new Map(), '/scratch')
+
+    expect(samples[0].completedAt).toBeNull()
   })
 
   it('skips annotations whose source label has no mapping', async () => {
@@ -255,7 +246,53 @@ describe('cvLabelDatasetToSamples', () => {
   })
 })
 
-describe('cvLabelProjectManifestToNewProject', () => {
+const twoTaskManifest: CvLabelManifest = {
+  version: 1,
+  labels: [{ id: 'src-l1', name: 'Person' }],
+  tasks: [
+    {
+      id: 'src-t1',
+      name: 'Batch 1',
+      samples: [
+        {
+          id: 'src-s1',
+          name: 'photo-1',
+          split: TrainingSplit.Train,
+          annotations: [
+            {
+              id: 'src-a1',
+              type: AnnotationType.Box,
+              labelId: 'src-l1',
+              points: [{ id: 'p1', x: 0, y: 0 }]
+            }
+          ],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          imageFile: 'images/s1.jpg'
+        }
+      ]
+    },
+    {
+      id: 'src-t2',
+      name: 'Batch 2',
+      samples: [
+        {
+          id: 'src-s2',
+          name: 'photo-2',
+          split: TrainingSplit.Train,
+          annotations: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          imageFile: 'images/s2.jpg'
+        }
+      ]
+    }
+  ]
+}
+const twoTaskFiles = [
+  makeFile('images/s1.jpg', 'fake-image-bytes'),
+  makeFile('images/s2.jpg', 'fake-image-bytes')
+]
+
+describe('cvLabelManifestTasksToGroups', () => {
   const writeFile = vi.fn()
 
   beforeEach(() => {
@@ -263,44 +300,54 @@ describe('cvLabelProjectManifestToNewProject', () => {
     window.system = { writeFile } as unknown as typeof window.system
   })
 
-  const manifest: CvLabelProjectManifest = {
-    version: 1,
-    kind: 'project',
-    project: { name: 'My Project' },
-    labels: [{ id: 'src-l1', name: 'Person' }],
-    tasks: [
-      {
-        id: 'src-t1',
-        name: 'Batch 1',
-        samples: [
-          {
-            id: 'src-s1',
-            name: 'photo',
-            split: TrainingSplit.Train,
-            annotations: [
-              {
-                id: 'src-a1',
-                type: AnnotationType.Box,
-                labelId: 'src-l1',
-                points: [{ id: 'src-p1', x: 10, y: 20 }]
-              }
-            ],
-            createdAt: '2026-01-01T00:00:00.000Z',
-            imageFile: 'images/s1.jpg'
-          }
-        ]
-      }
-    ]
-  }
-  const files = [makeFile('images/s1.jpg', 'fake-image-bytes')]
+  it('converts each task separately, applying the same label mapping to every one', async () => {
+    const mapping = new Map([['src-l1', 'target-l1']])
 
-  it('regenerates label ids with fresh colors, keeping annotations pointed at the new ids', async () => {
-    const { labels, tasks } = await cvLabelProjectManifestToNewProject(
-      manifest,
+    const groups = await cvLabelManifestTasksToGroups(
+      twoTaskManifest,
       '',
-      files,
+      twoTaskFiles,
+      mapping,
       '/scratch'
     )
+
+    expect(groups).toHaveLength(2)
+    expect(groups[0]).toMatchObject({ name: 'Batch 1' })
+    expect(groups[0].samples).toHaveLength(1)
+    expect(groups[0].samples[0].annotations[0].labelId).toBe('target-l1')
+    expect(groups[1]).toMatchObject({ name: 'Batch 2' })
+    expect(groups[1].samples).toHaveLength(1)
+  })
+
+  it('reports progress across every task combined', async () => {
+    const onProgress = vi.fn()
+
+    await cvLabelManifestTasksToGroups(
+      twoTaskManifest,
+      '',
+      twoTaskFiles,
+      new Map([['src-l1', 'target-l1']]),
+      '/scratch',
+      onProgress
+    )
+
+    expect(onProgress).toHaveBeenLastCalledWith(2, 2)
+  })
+})
+
+describe('cvLabelManifestToNewProject', () => {
+  const writeFile = vi.fn()
+
+  beforeEach(() => {
+    writeFile.mockReset().mockResolvedValue(undefined)
+    window.system = { writeFile } as unknown as typeof window.system
+  })
+
+  const manifest = twoTaskManifest
+  const files = twoTaskFiles
+
+  it('regenerates label ids, falling back to a random color when the source label has none', async () => {
+    const { labels, tasks } = await cvLabelManifestToNewProject(manifest, '', files, '/scratch')
 
     expect(labels).toHaveLength(1)
     expect(labels[0].id).not.toBe('src-l1')
@@ -309,19 +356,50 @@ describe('cvLabelProjectManifestToNewProject', () => {
     expect(tasks[0].samples[0].annotations[0].labelId).toBe(labels[0].id)
   })
 
-  it('preserves task structure, regenerating task and sample ids', async () => {
-    const { tasks } = await cvLabelProjectManifestToNewProject(manifest, '', files, '/scratch')
+  it("keeps the source label's color when it has one", async () => {
+    const manifestWithColor: CvLabelManifest = {
+      ...manifest,
+      labels: [{ id: 'src-l1', name: 'Person', color: '#123456' }]
+    }
 
-    expect(tasks).toHaveLength(1)
+    const { labels } = await cvLabelManifestToNewProject(manifestWithColor, '', files, '/scratch')
+
+    expect(labels[0].color).toBe('#123456')
+  })
+
+  it('keeps completedAt as exported', async () => {
+    const manifestWithCompletedAt: CvLabelManifest = {
+      ...manifest,
+      tasks: [
+        {
+          ...manifest.tasks[0],
+          samples: [{ ...manifest.tasks[0].samples[0], completedAt: '2026-02-01T00:00:00.000Z' }]
+        }
+      ]
+    }
+
+    const { tasks } = await cvLabelManifestToNewProject(
+      manifestWithCompletedAt,
+      '',
+      files,
+      '/scratch'
+    )
+
+    expect(tasks[0].samples[0].completedAt).toBe('2026-02-01T00:00:00.000Z')
+  })
+
+  it('preserves task structure, regenerating task and sample ids', async () => {
+    const { tasks } = await cvLabelManifestToNewProject(manifest, '', files, '/scratch')
+
+    expect(tasks).toHaveLength(2)
     expect(tasks[0].id).not.toBe('src-t1')
     expect(tasks[0].name).toBe('Batch 1')
-    expect(tasks[0].samples).toHaveLength(1)
     expect(tasks[0].samples[0].id).not.toBe('src-s1')
-    expect(tasks[0].samples[0].name).toBe('photo')
+    expect(tasks[0].samples[0].name).toBe('photo-1')
   })
 
   it('skips samples with no resolved image', async () => {
-    const { tasks } = await cvLabelProjectManifestToNewProject(manifest, '', [], '/scratch')
+    const { tasks } = await cvLabelManifestToNewProject(manifest, '', [], '/scratch')
 
     expect(tasks[0].samples).toHaveLength(0)
   })
@@ -329,8 +407,8 @@ describe('cvLabelProjectManifestToNewProject', () => {
   it('reports progress across every task combined', async () => {
     const onProgress = vi.fn()
 
-    await cvLabelProjectManifestToNewProject(manifest, '', files, '/scratch', onProgress)
+    await cvLabelManifestToNewProject(manifest, '', files, '/scratch', onProgress)
 
-    expect(onProgress).toHaveBeenLastCalledWith(1, 1)
+    expect(onProgress).toHaveBeenLastCalledWith(2, 2)
   })
 })

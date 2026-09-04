@@ -61,6 +61,22 @@ export class ProjectsPage {
     return this.page.getByRole('dialog', { name: 'Delete project' })
   }
 
+  get importProjectButton() {
+    return this.page.getByRole('button', { name: 'Import Project' })
+  }
+
+  get importProjectDialog() {
+    return this.page.getByRole('dialog', { name: 'Import Project' })
+  }
+
+  get importProjectFileInput() {
+    return this.importProjectDialog.locator('input[type=file]')
+  }
+
+  get exportProjectDialog() {
+    return this.page.getByRole('dialog', { name: 'Export Project' })
+  }
+
   projectCheckbox(name: string) {
     return this.page.getByRole('checkbox', { name: `Select ${name}` })
   }
@@ -132,6 +148,32 @@ export class ProjectsPage {
     }
 
     await this.editDialog.getByRole('button', { name: 'Save' }).click()
+  }
+
+  /** Exports a whole project via its context-menu "Export" entry. The real save dialog is
+   *  native and blocks Playwright, so the caller must stub `dialog.showSaveDialog` via
+   *  `electronApp.evaluate` first, same as TasksPage's exportTasks. */
+  async exportProject(name: string) {
+    await this.row(name).click({ button: 'right' })
+    await this.page.getByText('Export', { exact: true }).click()
+    await this.exportProjectDialog.waitFor()
+    await this.exportProjectDialog.getByRole('button', { name: 'Export' }).click()
+    await this.exportProjectDialog.waitFor({ state: 'hidden' })
+  }
+
+  /** Imports a project archive, always creating a new project - optionally overriding the
+   *  name the "Project name" field prefills from the file. Resolves once the modal closes,
+   *  same as exportProject. */
+  async importProject(filePath: string, projectName?: string) {
+    await this.importProjectButton.click()
+    await this.importProjectFileInput.setInputFiles(filePath)
+    const nameInput = this.importProjectDialog.getByLabel('Project name')
+    await nameInput.waitFor()
+    if (projectName) {
+      await nameInput.fill(projectName)
+    }
+    await this.importProjectDialog.getByRole('button', { name: 'Import', exact: true }).click()
+    await this.importProjectDialog.waitFor({ state: 'hidden' })
   }
 
   /** Enters select mode (if not already in it) and selects the given projects via

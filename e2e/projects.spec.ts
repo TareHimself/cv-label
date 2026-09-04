@@ -1,4 +1,7 @@
 import { test, expect } from './fixtures'
+import { createTestImage, cleanupTestImage } from './testImage'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 test.describe('Projects page', () => {
   test('shows an empty state when there are no projects', async ({ projectsPage }) => {
@@ -113,5 +116,46 @@ test.describe('Projects page', () => {
     await expect(projectsPage.row('Street Signs')).not.toBeVisible()
     await expect(projectsPage.row('Wildlife Cams')).not.toBeVisible()
     await expect(projectsPage.row('Other Project')).toBeVisible()
+  })
+
+  test('exporting then importing a project round-trips it without leaving the app stuck', async ({
+    projectsPage,
+    tasksPage,
+    electronApp,
+    appDataDir
+  }) => {
+    const image = await createTestImage('sample-1')
+    const savePath = join(appDataDir, 'export.cvlabel')
+    try {
+      await projectsPage.createProject('Street Signs', ['Stop Sign'])
+      await projectsPage.open('Street Signs')
+      await tasksPage.createTask('Batch 1', [image])
+      await tasksPage.back()
+
+      // The real dialog is native and blocks Playwright, so stub it to resolve
+      // immediately with a fixed path, same as TasksPage's own export tests.
+      await electronApp.evaluate(({ dialog }, targetPath) => {
+        dialog.showSaveDialog = (async () => ({
+          canceled: false,
+          filePath: targetPath
+        })) as typeof dialog.showSaveDialog
+      }, savePath)
+      await projectsPage.exportProject('Street Signs')
+      expect(existsSync(savePath)).toBe(true)
+
+      await projectsPage.importProject(savePath, 'Imported Signs')
+
+      // Regression: the import used to leave the modal stuck open (or the page
+      // unresponsive) right as it closed itself and navigated away mid-transition.
+      // Assert the modal actually closed, the page stayed interactive, and the new
+      // project both appears and is genuinely navigable afterward.
+      await expect(projectsPage.importProjectDialog).not.toBeVisible()
+      await expect(projectsPage.row('Imported Signs')).toBeVisible()
+
+      await projectsPage.open('Imported Signs')
+      await expect(tasksPage.row('Batch 1')).toBeVisible()
+    } finally {
+      cleanupTestImage(image)
+    }
   })
 })

@@ -20,7 +20,7 @@ const project: IProject = {
 }
 
 const manifestJson = (labels: unknown[], samples: unknown[]) =>
-  JSON.stringify({ version: 1, kind: 'tasks', labels, samples })
+  JSON.stringify({ version: 1, labels, tasks: [{ id: 't1', name: 'Batch 1', samples }] })
 
 // Mantine's Dropzone renders a real <input type=file> under the hood and reacts to it the
 // same way it would a drop - same interaction pattern as PlainImagesImporterComponent's
@@ -133,7 +133,7 @@ describe('CvLabelImporterComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
-    const samples = onComplete.mock.calls[0][0]
+    const samples = onComplete.mock.calls[0][0][0].samples
     expect(samples).toHaveLength(1)
     expect(samples[0].annotations).toHaveLength(0)
   })
@@ -165,10 +165,94 @@ describe('CvLabelImporterComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
-    const samples = onComplete.mock.calls[0][0]
+    const samples = onComplete.mock.calls[0][0][0].samples
     expect(samples).toHaveLength(1)
     expect(samples[0].name).toBe('photo-one')
     expect(samples[0].annotations[0].labelId).toBe('l1')
+  })
+
+  const makeMultiTaskCvLabelFile = async () => {
+    const zip = new JSZip()
+    zip.file(
+      'manifest.json',
+      JSON.stringify({
+        version: 1,
+        labels: [{ id: 'l1', name: 'Person' }],
+        tasks: [
+          {
+            id: 't1',
+            name: 'Batch 1',
+            samples: [
+              {
+                id: 's1',
+                name: 'photo-1',
+                split: 'train',
+                annotations: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                imageFile: 'images/s1.jpg'
+              }
+            ]
+          },
+          {
+            id: 't2',
+            name: 'Batch 2',
+            samples: [
+              {
+                id: 's2',
+                name: 'photo-2',
+                split: 'train',
+                annotations: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                imageFile: 'images/s2.jpg'
+              }
+            ]
+          }
+        ]
+      })
+    )
+    zip.file('images/s1.jpg', 'x')
+    zip.file('images/s2.jpg', 'x')
+    const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+    return new File([buffer], 'export.cvlabel')
+  }
+
+  it('merges every task into one group when "One Combined Task" is chosen', async () => {
+    const file = await makeMultiTaskCvLabelFile()
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <CvLabelImporterComponent project={project} onComplete={onComplete} onCancel={vi.fn()} />
+    )
+    fireEvent.change(getFileInput(), { target: { files: [file] } })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'One Combined Task' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Import' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const groups = onComplete.mock.calls[0][0]
+    expect(groups).toHaveLength(1)
+    expect(groups[0].samples).toHaveLength(2)
+  })
+
+  it('keeps tasks separate, one group per task, when "N Separate Tasks" is chosen', async () => {
+    const file = await makeMultiTaskCvLabelFile()
+    const onComplete = vi.fn()
+
+    renderWithProviders(
+      <CvLabelImporterComponent project={project} onComplete={onComplete} onCancel={vi.fn()} />
+    )
+    fireEvent.change(getFileInput(), { target: { files: [file] } })
+
+    fireEvent.click(await screen.findByRole('button', { name: '2 Separate Tasks' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Import' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const groups = onComplete.mock.calls[0][0]
+    expect(groups).toHaveLength(2)
+    expect(groups[0]).toMatchObject({ name: 'Batch 1' })
+    expect(groups[0].samples).toHaveLength(1)
+    expect(groups[1]).toMatchObject({ name: 'Batch 2' })
+    expect(groups[1].samples).toHaveLength(1)
   })
 
   it('shows an error and stays on the selection step when there is no manifest.json', async () => {

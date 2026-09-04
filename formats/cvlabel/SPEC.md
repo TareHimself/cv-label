@@ -5,13 +5,15 @@ Version: 1
 ## 1. Overview
 
 A `.cvlabel` file is this app's native interchange format: a zip archive containing one
-`manifest.json` plus the sample images it references. Every manifest has a `kind`:
+`manifest.json` plus the sample images it references. One shape covers both use cases:
 
-- **`tasks`** — a flat, project-agnostic export of one or more tasks' samples. Designed for
-  merging samples into any project via a label-mapping step on import; task structure isn't
-  preserved.
-- **`project`** — a full snapshot of one project, task structure included, for backup/duplication.
-  Import always creates a new project; there's no merge-into-an-existing-project path.
+- Exporting a selection of tasks (task structure and names preserved).
+- Exporting a whole project (same shape - just every task in the project).
+
+What differs is *import intent*, chosen by the user at import time, not anything in the file
+itself: import into the current project (merge every task's samples into one, or keep them
+separate, plus a label-mapping step) or create a brand-new project from the file (no merging, no
+label mapping).
 
 ## 2. File layout
 
@@ -25,44 +27,21 @@ sits, which is always the root today).
 
 ## 3. `manifest.json`
 
-Every manifest starts with:
-
-| Field     | Type                 | Description |
-| --------- | -------------------- | ----------- |
-| `version` | `number`             | Format version. Currently always `1`. |
-| `kind`    | `"tasks" \| "project"` | Which shape the rest of the manifest follows — see below. |
-| `labels`  | `Label[]`             | Every exported label |
-
-A `kind: "tasks"` manifest additionally has:
-
 | Field     | Type       | Description |
 | --------- | ---------- | ----------- |
-| `samples` | `Sample[]` | A flat list, independent of any task structure |
-
-A `kind: "project"` manifest additionally has:
-
-| Field     | Type       | Description |
-| --------- | ---------- | ----------- |
-| `project` | `Project`  | The exported project's own identity |
-| `tasks`   | `Task[]`   | Every task in the project, each carrying its own samples directly |
-
-There's no top-level `samples` field for `kind: "project"` — each task nests its samples, mirroring
-the app's actual Project → Task → Sample structure instead of flattening it into id references.
+| `version` | `number`   | Format version. Currently always `1`. |
+| `labels`  | `Label[]`  | Every exported label |
+| `tasks`   | `Task[]`   | Every exported task, each carrying its own samples directly |
 
 ### Label
 
-| Field  | Type     |
-| ------ | -------- |
-| `id`   | `string` |
-| `name` | `string` |
+| Field   | Type     |
+| ------- | -------- |
+| `id`    | `string` |
+| `name`  | `string` |
+| `color` | `string` |
 
-### Project (`kind: "project"` only)
-
-| Field  | Type     |
-| ------ | -------- |
-| `name` | `string` |
-
-### Task (`kind: "project"` only)
+### Task
 
 | Field     | Type       | Description |
 | --------- | ---------- | ----------- |
@@ -78,13 +57,10 @@ the app's actual Project → Task → Sample structure instead of flattening it 
 | `name`        | `string`          | |
 | `split`       | `"train" \| "test" \| "valid"` | |
 | `createdAt`   | `string`          | ISO 8601 |
+| `completedAt` | `string \| null`  | ISO 8601, or `null` if not marked complete |
 | `imageFile`   | `string`          | Path relative to `manifest.json`, e.g. `images/abc123.jpg` |
 | `annotations` | `Annotation[]`    | |
 | `width`, `height` | `number` (optional) | Written on export; not read on import today |
-
-A `kind: "tasks"` sample sits in the top-level flat `samples` list, belonging to no particular task
-- that's the point of the shape. A `kind: "project"` sample sits inside whichever `Task.samples` it
-belongs to - task membership is structural, not an id reference.
 
 ### Annotation
 
@@ -109,15 +85,19 @@ belongs to - task membership is structural, not an id reference.
 
 ## 4. Importing
 
-**`kind: "tasks"`**: a manifest's `labels` are independent of any project's existing labels.
-Importing asks the user to map each manifest label id to a project label (or drop it); annotations
-whose label has no mapping are dropped. Every id (sample, annotation, point) is regenerated fresh
-on import, so manifest ids only need to be unique within the file, not globally.
+**Into the current project**: a manifest's `labels` are independent of any project's existing
+labels. Importing asks the user to map each manifest label id to a project label (or drop it);
+annotations whose label has no mapping are dropped. If the archive has more than one task, the
+user also chooses whether to merge every task's samples into one, or import them as separate
+tasks. Every id (sample, annotation, point, and task if kept separate) is regenerated fresh, so
+manifest ids only need to be unique within the file, not globally.
 
-**`kind: "project"`**: always creates a brand-new project named after `Project.name`, with its own
-fresh labels and tasks reconstructed directly from `tasks`/`labels` as exported — no label mapping
-step, since there's no existing project to reconcile against, and no id-based sample-to-task lookup
-either, since each task already carries its own samples. Every id is likewise regenerated.
+**As a new project**: always creates a brand-new project (named by the user, not read from the
+file), with its own fresh labels and every task reconstructed directly from `tasks`/`labels` as
+exported — no label mapping step, since there's no existing project to reconcile against, and no
+id-based sample-to-task lookup either, since each task already carries its own samples. Every id
+is likewise regenerated. `Label.color` is kept as exported (falls back to a random color if
+missing); `Sample.completedAt` is kept as exported either way.
 
 ## 5. Versioning
 
@@ -126,48 +106,12 @@ manifests written before this field existed. A parser should still ignore any *u
 doesn't recognize rather than reject the manifest — forward compatibility is about tolerating
 additions, not about reading old files. Bump `version` on any future breaking change.
 
-## 6. Examples
-
-### `kind: "tasks"`
+## 6. Example
 
 ```json
 {
   "version": 1,
-  "kind": "tasks",
-  "labels": [{ "id": "lbl_1", "name": "person" }],
-  "samples": [
-    {
-      "id": "smp_1",
-      "name": "frame_0001",
-      "split": "train",
-      "createdAt": "2026-08-01T12:00:00.000Z",
-      "imageFile": "images/smp_1.jpg",
-      "width": 1920,
-      "height": 1080,
-      "annotations": [
-        {
-          "id": "ann_1",
-          "type": "box",
-          "labelId": "lbl_1",
-          "points": [
-            { "id": "pt_1", "x": 100, "y": 200 },
-            { "id": "pt_2", "x": 300, "y": 400 }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
-
-### `kind: "project"`
-
-```json
-{
-  "version": 1,
-  "kind": "project",
-  "project": { "name": "Street Signs" },
-  "labels": [{ "id": "lbl_1", "name": "stop_sign" }],
+  "labels": [{ "id": "lbl_1", "name": "person", "color": "#ff0000" }],
   "tasks": [
     {
       "id": "task_1",
@@ -178,6 +122,7 @@ additions, not about reading old files. Bump `version` on any future breaking ch
           "name": "frame_0001",
           "split": "train",
           "createdAt": "2026-08-01T12:00:00.000Z",
+          "completedAt": null,
           "imageFile": "images/smp_1.jpg",
           "width": 1920,
           "height": 1080,

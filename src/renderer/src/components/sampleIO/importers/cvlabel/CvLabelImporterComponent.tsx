@@ -6,19 +6,30 @@ import { FaFileZipper } from 'react-icons/fa6'
 import type { SampleImporterComponentProps } from '../../types'
 import { LabelMapper } from '../../LabelMapper'
 import { findLabelIdById, findLabelIdByName } from '../matchLabel'
-import { virtualFilesFromExtractedZip } from '../virtualFileSystem'
+import { virtualFilesFromExtractedZip, type VirtualFile } from '../virtualFileSystem'
 import {
   cvLabelDatasetToSamples,
+  cvLabelManifestTasksToGroups,
   findCvLabelManifest,
   findCvLabelPairs,
   type CvLabelClass,
-  type CvLabelPair
+  type CvLabelManifest
 } from './parseCvLabel'
+
+type ImportMode = 'merge' | 'multi'
+
+type ParsedSource = {
+  manifest: CvLabelManifest
+  dir: string
+  files: VirtualFile[]
+  sourceName?: string
+}
 
 type WizardState =
   | { step: 'select-source' }
   | { step: 'parsing' }
-  | { step: 'mapping'; classes: CvLabelClass[]; pairs: CvLabelPair[] }
+  | ({ step: 'choose-mode' } & ParsedSource)
+  | ({ step: 'mapping'; mode: ImportMode; classes: CvLabelClass[] } & ParsedSource)
   | { step: 'importing'; progress: number }
 
 type CvLabelImporterComponentProps = SampleImporterComponentProps & {
@@ -45,6 +56,22 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
     return scratchDirRef.current
   }
 
+  const goToMapping = useCallback(
+    (source: ParsedSource, mode: ImportMode) => {
+      setLabelByClassId(
+        new Map(
+          source.manifest.labels.map((label) => [
+            label.id,
+            findLabelIdById(project.labels, label.id) ??
+              findLabelIdByName(project.labels, label.name)
+          ]) as [string, string | undefined][]
+        ) as Map<string, string | null>
+      )
+      setState({ ...source, step: 'mapping', mode, classes: source.manifest.labels })
+    },
+    [project]
+  )
+
   const handleFileSelected = useCallback(
     async (files: FileWithPath[]) => {
       const file = files[0]
@@ -60,36 +87,33 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
           setState({ step: 'select-source' })
           return
         }
-        if (found.manifest.kind !== 'tasks') {
-          toast.error('This is a project export - import it from the Projects page instead')
-          setState({ step: 'select-source' })
-          return
-        }
 
-        const pairs = findCvLabelPairs(found.manifest, found.dir, extractedFiles)
-        if (pairs.length === 0) {
+        const totalSamples = found.manifest.tasks.reduce((sum, t) => sum + t.samples.length, 0)
+        if (totalSamples === 0) {
           toast.error('No samples found in this file')
           setState({ step: 'select-source' })
           return
         }
 
-        setLabelByClassId(
-          new Map(
-            found.manifest.labels.map((label) => [
-              label.id,
-              findLabelIdById(project.labels, label.id) ??
-                findLabelIdByName(project.labels, label.name)
-            ]) as [string, string | undefined][]
-          ) as Map<string, string | null>
-        )
-        setState({ step: 'mapping', classes: found.manifest.labels, pairs })
+        const source: ParsedSource = {
+          manifest: found.manifest,
+          dir: found.dir,
+          files: extractedFiles,
+          sourceName: file.name.replace(/\.(cvlabel|zip)$/i, '')
+        }
+
+        if (found.manifest.tasks.length > 1) {
+          setState({ step: 'choose-mode', ...source })
+        } else {
+          goToMapping(source, 'merge')
+        }
       } catch (error) {
         console.error(error)
         toast.error('Failed to read the file')
         setState({ step: 'select-source' })
       }
     },
-    [project]
+    [goToMapping]
   )
 
   // Mirrors Dropzone's own onDrop for this file - re-fires per distinct initialFile instance. Deferred a microtask since handleFileSelected's synchronous setState would flag as a cascading-render risk called directly in the effect body.
@@ -104,19 +128,43 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
     const scratchDir = await ensureScratchDir()
     setState({ step: 'importing', progress: 0 })
     try {
-      const samples = await cvLabelDatasetToSamples(
-        state.pairs,
-        labelByClassId,
-        scratchDir,
-        (completed, total) => {
-          setState({ step: 'importing', progress: Math.round((completed / total) * 100) })
-        }
-      )
-      onComplete(samples, scratchDir)
+      if (state.mode === 'merge') {
+        const allSamples = state.manifest.tasks.flatMap((t) => t.samples)
+        const pairs = findCvLabelPairs(allSamples, state.dir, state.files)
+        const samples = await cvLabelDatasetToSamples(
+          pairs,
+          labelByClassId,
+          scratchDir,
+          (completed, total) => {
+            setState({ step: 'importing', progress: Math.round((completed / total) * 100) })
+          }
+        )
+        onComplete([{ name: state.sourceName, samples }], scratchDir)
+      } else {
+        const groups = await cvLabelManifestTasksToGroups(
+          state.manifest,
+          state.dir,
+          state.files,
+          labelByClassId,
+          scratchDir,
+          (completed, total) => {
+            setState({ step: 'importing', progress: Math.round((completed / total) * 100) })
+          }
+        )
+        onComplete(groups, scratchDir)
+      }
     } catch (error) {
       console.error(error)
       toast.error('Failed to import the file')
-      setState({ step: 'mapping', classes: state.classes, pairs: state.pairs })
+      setState({
+        step: 'mapping',
+        mode: state.mode,
+        classes: state.classes,
+        manifest: state.manifest,
+        dir: state.dir,
+        files: state.files,
+        sourceName: state.sourceName
+      })
     }
   }
 
@@ -159,6 +207,29 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
     )
   }
 
+  if (state.step === 'choose-mode') {
+    const source = state
+    return (
+      <Stack gap="lg">
+        <Text size="sm">
+          This file has {state.manifest.tasks.length} tasks. Import them as one combined task, or
+          keep them separate?
+        </Text>
+        <Group justify="flex-end">
+          <Button variant="outline" onClick={() => setState({ step: 'select-source' })}>
+            Back
+          </Button>
+          <Button variant="outline" onClick={() => goToMapping(source, 'merge')}>
+            One Combined Task
+          </Button>
+          <Button onClick={() => goToMapping(source, 'multi')}>
+            {state.manifest.tasks.length} Separate Tasks
+          </Button>
+        </Group>
+      </Stack>
+    )
+  }
+
   if (state.step === 'importing') {
     return (
       <Stack gap="lg">
@@ -170,13 +241,14 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
     )
   }
 
-  const { classes, pairs } = state
+  const { classes } = state
+  const totalSamples = state.manifest.tasks.reduce((sum, t) => sum + t.samples.length, 0)
   const hasProjectLabels = project.labels.length > 0
 
   return (
     <Stack gap="lg">
       <Text size="sm" c="dimmed">
-        Found {pairs.length} sample{pairs.length === 1 ? '' : 's'} and {classes.length} label
+        Found {totalSamples} sample{totalSamples === 1 ? '' : 's'} and {classes.length} label
         {classes.length === 1 ? '' : 's'}. Map each source label to a project label.
       </Text>
       {!hasProjectLabels && (
@@ -192,7 +264,20 @@ export const CvLabelImporterComponent: FC<CvLabelImporterComponentProps> = ({
         disabled={!hasProjectLabels}
       />
       <Group justify="flex-end">
-        <Button variant="outline" onClick={() => setState({ step: 'select-source' })}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            state.manifest.tasks.length > 1
+              ? setState({
+                  step: 'choose-mode',
+                  manifest: state.manifest,
+                  dir: state.dir,
+                  files: state.files,
+                  sourceName: state.sourceName
+                })
+              : setState({ step: 'select-source' })
+          }
+        >
           Back
         </Button>
         <Button

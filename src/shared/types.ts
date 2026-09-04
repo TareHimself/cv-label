@@ -84,6 +84,8 @@ export interface INewSample {
   split: TrainingSplit
   annotations: IAnnotation[]
   createdAt: string
+  /** Only set by an importer restoring a previous export (e.g. .cvlabel); every other creation path leaves this unset, defaulting to not-completed. */
+  completedAt?: string | null
 }
 
 export interface ISample extends OmitV2<INewSample, 'imagePath'> {

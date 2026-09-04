@@ -325,8 +325,8 @@ export const SamplesPage = ({ project, task }: SamplesPageProps) => {
         opened={isImportOpen}
         project={project}
         onClose={() => setIsImportOpen(false)}
-        onImported={async (samples, scratchDir) => {
-          await createSamples(samples)
+        onImported={async (taskGroups, scratchDir) => {
+          await createSamples(taskGroups.flatMap((g) => g.samples))
           await window.system.deleteDirectory(scratchDir).catch(() => {})
         }}
       />
