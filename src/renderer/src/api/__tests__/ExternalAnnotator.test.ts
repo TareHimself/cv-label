@@ -66,12 +66,13 @@ describe('connectToAnnotator', () => {
 describe('mapPredictionsToAnnotations', () => {
   const labelMapping = { '0': 'project-label-1', '1': null }
 
-  it('resolves a mapped box prediction into a normalized annotation', () => {
+  it('resolves a mapped box prediction into a normalized proposal, carrying confidence through', () => {
     const { annotations, skipped } = mapPredictionsToAnnotations(
       [
         {
           labelId: '0',
           type: AnnotationType.Box,
+          confidence: 0.87,
           points: [
             { x: 80, y: 90 },
             { x: 10, y: 20 }
@@ -86,6 +87,7 @@ describe('mapPredictionsToAnnotations', () => {
     const [annotation] = annotations
     expect(annotation.labelId).toBe('project-label-1')
     expect(annotation.type).toBe(AnnotationType.Box)
+    expect(annotation.confidence).toBe(0.87)
     // normalizeAnnotationPoints reorders box corners to [min, max]
     expect(annotation.points[0]).toMatchObject({ x: 10, y: 20 })
     expect(annotation.points[1]).toMatchObject({ x: 80, y: 90 })
@@ -98,6 +100,7 @@ describe('mapPredictionsToAnnotations', () => {
         {
           labelId: 'unknown',
           type: AnnotationType.Box,
+          confidence: 0.5,
           points: [
             { x: 0, y: 0 },
             { x: 1, y: 1 }
@@ -116,6 +119,7 @@ describe('mapPredictionsToAnnotations', () => {
         {
           labelId: '1',
           type: AnnotationType.Box,
+          confidence: 0.5,
           points: [
             { x: 0, y: 0 },
             { x: 1, y: 1 }
@@ -130,7 +134,7 @@ describe('mapPredictionsToAnnotations', () => {
 
   it('skips a box with the wrong number of points', () => {
     const { annotations, skipped } = mapPredictionsToAnnotations(
-      [{ labelId: '0', type: AnnotationType.Box, points: [{ x: 0, y: 0 }] }],
+      [{ labelId: '0', type: AnnotationType.Box, confidence: 0.5, points: [{ x: 0, y: 0 }] }],
       labelMapping
     )
     expect(annotations).toHaveLength(0)
@@ -143,6 +147,7 @@ describe('mapPredictionsToAnnotations', () => {
         {
           labelId: '0',
           type: AnnotationType.Polygon,
+          confidence: 0.5,
           points: [
             { x: 0, y: 0 },
             { x: 5, y: 0 },
@@ -155,6 +160,50 @@ describe('mapPredictionsToAnnotations', () => {
     expect(skipped).toBe(0)
     expect(annotations).toHaveLength(1)
     expect(annotations[0].points).toHaveLength(3)
+  })
+
+  it.each([
+    ['missing', { labelId: '0', type: AnnotationType.Box, points: [{ x: 0, y: 0 }] }],
+    [
+      'negative',
+      {
+        labelId: '0',
+        type: AnnotationType.Box,
+        confidence: -0.1,
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 }
+        ]
+      }
+    ],
+    [
+      'above 1',
+      {
+        labelId: '0',
+        type: AnnotationType.Box,
+        confidence: 1.1,
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 }
+        ]
+      }
+    ],
+    [
+      'non-numeric',
+      {
+        labelId: '0',
+        type: AnnotationType.Box,
+        confidence: '0.9',
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 }
+        ]
+      }
+    ]
+  ])('skips a prediction with a %s confidence', (_label, prediction) => {
+    const { annotations, skipped } = mapPredictionsToAnnotations([prediction], labelMapping)
+    expect(annotations).toHaveLength(0)
+    expect(skipped).toBe(1)
   })
 
   it('skips malformed prediction shapes and non-array input', () => {
@@ -211,6 +260,7 @@ describe('runAnnotatorOnSample', () => {
           {
             labelId: '0',
             type: AnnotationType.Box,
+            confidence: 0.73,
             points: [
               { x: 0, y: 0 },
               { x: 1, y: 1 }
@@ -234,6 +284,7 @@ describe('runAnnotatorOnSample', () => {
     expect(result.skipped).toBe(0)
     expect(result.annotations).toHaveLength(1)
     expect(result.annotations[0].labelId).toBe('project-label-1')
+    expect(result.annotations[0].confidence).toBe(0.73)
   })
 
   it('throws if the sample image cannot be read', async () => {

@@ -1,4 +1,4 @@
-import { AnnotationType, IAnnotator, INewAnnotation, IPoint, ISample } from '@shared/types'
+import { AnnotationType, IAnnotator, IPoint, IProposedAnnotation, ISample } from '@shared/types'
 import { arrayBufferToBase64, makeUUID } from '@shared/utils'
 import { normalizeAnnotationPoints } from '@renderer/hooks/useLabeler'
 import { imageExtensionFromUri } from '@renderer/components/sampleIO/exporters/imageExtensionFromUri'
@@ -33,7 +33,10 @@ const isAnnotatorAnnotation = (value: unknown): value is AnnotatorAnnotation =>
   typeof (value as AnnotatorAnnotation).labelId === 'string' &&
   typeof (value as AnnotatorAnnotation).type === 'string' &&
   Array.isArray((value as AnnotatorAnnotation).points) &&
-  (value as AnnotatorAnnotation).points.every(isAnnotatorPoint)
+  (value as AnnotatorAnnotation).points.every(isAnnotatorPoint) &&
+  typeof (value as AnnotatorAnnotation).confidence === 'number' &&
+  (value as AnnotatorAnnotation).confidence >= 0 &&
+  (value as AnnotatorAnnotation).confidence <= 1
 
 /** Calls an annotator server's `/connect` route for its label vocabulary - never persisted, so this must be called again any time the mapping UI reopens. */
 export const connectToAnnotator = async (
@@ -59,12 +62,12 @@ export const connectToAnnotator = async (
   return labels.filter(isAnnotatorLabel)
 }
 
-/** Resolves raw `/predict` output through labelMapping into real INewAnnotations - an unmapped or malformed prediction is dropped and counted, never guessed at. */
+/** Resolves raw `/predict` output through labelMapping into IProposedAnnotations - an unmapped or malformed prediction (including a missing/out-of-range confidence) is dropped and counted, never guessed at. */
 export const mapPredictionsToAnnotations = (
   predictions: unknown,
   labelMapping: Record<string, string | null>
-): { annotations: INewAnnotation[]; skipped: number } => {
-  const annotations: INewAnnotation[] = []
+): { annotations: IProposedAnnotation[]; skipped: number } => {
+  const annotations: IProposedAnnotation[] = []
   let skipped = 0
 
   if (!Array.isArray(predictions)) {
@@ -96,11 +99,12 @@ export const mapPredictionsToAnnotations = (
       y: point.y
     }))
 
-    const annotation: INewAnnotation = {
+    const annotation: IProposedAnnotation = {
       id: makeUUID(),
       type: prediction.type,
       labelId,
-      points
+      points,
+      confidence: prediction.confidence
     }
 
     annotations.push(normalizeAnnotationPoints(annotation))
@@ -114,7 +118,7 @@ export const runAnnotatorOnSample = async (
   annotator: IAnnotator,
   labelMapping: Record<string, string | null>,
   sample: Pick<ISample, 'imageUri' | 'width' | 'height'>
-): Promise<{ annotations: INewAnnotation[]; skipped: number }> => {
+): Promise<{ annotations: IProposedAnnotation[]; skipped: number }> => {
   // A renderer-side fetch() on image:// is blocked by Chromium's cross-origin scheme allowlist - read it via main instead.
   const imageResult = await window.storeManager.readImage(sample.imageUri)
 

@@ -122,6 +122,12 @@ export interface INewAnnotation {
 
 export interface IAnnotation extends INewAnnotation {}
 
+/** An external annotator's prediction, not yet accepted into the sample's real annotations - see docs/annotation-proposals.md. */
+export interface IProposedAnnotation extends INewAnnotation {
+  /** The annotator's confidence in this prediction, 0-1. */
+  confidence: number
+}
+
 export interface IAnnotationUpdate extends Partial<OmitV2<IAnnotation, 'points'>> {
   id: IAnnotation['id']
 }

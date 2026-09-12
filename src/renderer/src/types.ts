@@ -18,6 +18,8 @@ export type AnnotatorAnnotation = {
   labelId: string
   type: AnnotationType
   points: AnnotatorPoint[]
+  /** The annotator's confidence in this prediction, 0-1. */
+  confidence: number
 }
 
 export type AnnotatorAnnotateResponse = {
