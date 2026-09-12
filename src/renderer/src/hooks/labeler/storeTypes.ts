@@ -38,7 +38,11 @@ export type LabelerStoreState = {
   readonly hitTestCanvas: OffscreenCanvas
 
   isDragging: boolean
+  /** Source of truth for selection. selectedAnnotation is derived from it - non-null only at size 1. */
+  readonly selectedAnnotationIds: Set<string>
   selectedAnnotation: OptimisticObject<IAnnotation> | null
+  /** Ids currently being translated together by a group drag - see moveSelectedAnnotationsBy. */
+  groupMoveAnnotationIds: string[] | null
   readonly hitIdToAnnotationId: OneToOneMap<string, string>
   readonly selectedAnnotationControlHitIds: OneToOneMap<string, string>
   readonly selectedAnnotationLineHitIds: OneToOneMap<string, string>
@@ -86,6 +90,8 @@ export type HistoryEntry =
       afterType: AnnotationType
       afterPoints: IPoint[]
     }
+  /** Groups several entries (batch delete/duplicate/relabel/convert, group move) under one undo/redo step. */
+  | { kind: 'batch'; entries: HistoryEntry[] }
 
 export type LabelerStoreActions = {
   markAllDirty: () => void
@@ -102,22 +108,34 @@ export type LabelerStoreActions = {
   setMode: (mode: LabelerMode) => void
   setLabelId: (labelId: string) => void
   selectAnnotation: (id: string | null) => void
+  /** Shift-click: adds/removes one id from the selection instead of replacing it. */
+  toggleAnnotationSelection: (id: string) => void
+  /** Bulk replace - used by "select all in group"/"select all on page" and the drawer's checkboxes. */
+  setSelectedAnnotationIds: (ids: string[]) => void
   /** Escape: deselects, or else drops back to Select mode. */
   cancelActiveAction: () => void
   onMouseMove: (x: number, y: number) => void
   onConfirmPoint: (x: number, y: number) => void
   onConfirmAnnotationCreation: (discardLivePoint?: boolean) => void
   setAnnotationLabelId: (annotationId: string, newLabelId: string) => void
+  setSelectedAnnotationsLabelId: (labelId: string) => void
   moveSelectedAnnotationBy: (dx: number, dy: number) => void
   moveAnnotationPoint: (pointId: string, x: number, y: number) => void
   commitAnnotationMove: (annotationId: string) => void
+  /** Group-drag live preview for 2+ selected annotations - see groupMoveAnnotationIds. */
+  moveSelectedAnnotationsBy: (dx: number, dy: number) => void
+  commitGroupAnnotationMove: () => void
   setShowHitTestDebugOverlay: (enabled: boolean) => void
   canvasToBitmapSpace: (x: number, y: number) => [x: number, y: number]
   deleteAnnotation: (annotationId: string) => void
+  /** Deletes every selected annotation (a single-item selection stays a single 'delete' undo entry). */
   deleteSelectedAnnotation: () => void
   duplicateAnnotation: (annotationId: string) => string | undefined
+  /** Duplicates every selected annotation; the new copies become the selection. */
   duplicateSelectedAnnotation: () => void
   convertAnnotationType: (annotationId: string) => void
+  /** Converts every selected annotation not already targetType - the multi-select context menu shows both directions explicitly instead of one toggle. */
+  convertSelectedAnnotationsType: (targetType: AnnotationType) => void
   addControlPoint: (lineId: string, x: number, y: number) => string | undefined
   deleteControlPoint: (controlPointId: string) => void
   hittest: (x: number, y: number) => HitTestResult | null

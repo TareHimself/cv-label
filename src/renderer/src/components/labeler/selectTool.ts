@@ -8,9 +8,59 @@ export const selectTool: LabelerTool = {
   onPointerDown(ctx, pos, hit) {
     let state = ctx.store.getState()
 
-    if (hit === null) {
-      state.selectAnnotation(null)
+    if (hit === null || hit.annotationId === null) {
+      if (!ctx.shiftKey) state.selectAnnotation(null)
       return PointerResult.Default
+    }
+
+    if (ctx.shiftKey) {
+      state.toggleAnnotationSelection(hit.annotationId)
+      return PointerResult.Consumed
+    }
+
+    if (state.selectedAnnotationIds.size > 1) {
+      if (!state.selectedAnnotationIds.has(hit.annotationId)) {
+        state.selectAnnotation(hit.annotationId)
+        return PointerResult.Consumed
+      }
+
+      // Dragging one member of a multi-selection moves the whole group; point/edge editing stays single-select-only.
+      const ids = [...state.selectedAnnotationIds]
+      const annotationsMap = state.sample?.resolve().annotations.resolve() ?? {}
+      const allPoints = ids.flatMap((id) => annotationsMap[id]?.resolve().points ?? [])
+      if (allPoints.length === 0) return PointerResult.Default
+
+      const minPoints = allPoints.reduce(
+        (t, c) => ({ x: Math.min(c.x, t.x), y: Math.min(c.y, t.y) }),
+        { x: allPoints[0].x, y: allPoints[0].y }
+      )
+      const maxPoints = allPoints.reduce(
+        (t, c) => ({ x: Math.max(c.x, t.x), y: Math.max(c.y, t.y) }),
+        { x: allPoints[0].x, y: allPoints[0].y }
+      )
+      const [startX, startY] = state.canvasToBitmapSpace(pos.x, pos.y)
+      const [endX, endY] = state.canvasToBitmapSpace(MAX_BITMAP_COORDINATE, MAX_BITMAP_COORDINATE)
+      const allowedDiffTowardsMinimum = [-minPoints.x, -minPoints.y]
+      const allowedDiffTowardMaximum = [endX - maxPoints.x, endY - maxPoints.y]
+
+      ctx.startDrag(
+        (x, y) => {
+          const [currentX, currentY] = state.canvasToBitmapSpace(x, y)
+          const dx = clamp(
+            currentX - startX,
+            allowedDiffTowardsMinimum[0],
+            allowedDiffTowardMaximum[0]
+          )
+          const dy = clamp(
+            currentY - startY,
+            allowedDiffTowardsMinimum[1],
+            allowedDiffTowardMaximum[1]
+          )
+          state.moveSelectedAnnotationsBy(dx, dy)
+        },
+        () => state.commitGroupAnnotationMove()
+      )
+      return PointerResult.Consumed
     }
 
     // First figure out selection, then do other ops.

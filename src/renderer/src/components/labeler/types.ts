@@ -15,6 +15,8 @@ export type StartDragFn = (onMove: (x: number, y: number) => void, onRelease?: (
 export type LabelerToolContext = {
   store: UseBoundStore<StoreApi<LabelerStore>>
   startDrag: StartDragFn
+  /** Shift held on pointerdown - selectTool uses this to toggle rather than replace the selection. */
+  shiftKey: boolean
 }
 
 export interface LabelerTool {

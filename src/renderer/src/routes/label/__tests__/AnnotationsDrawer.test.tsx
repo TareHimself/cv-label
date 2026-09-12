@@ -59,14 +59,18 @@ const polygonAnnotation: IAnnotation = {
 
 const setMode = vi.fn()
 const selectAnnotation = vi.fn()
+const toggleAnnotationSelection = vi.fn()
+const setSelectedAnnotationIds = vi.fn()
 const deleteAnnotation = vi.fn()
+const deleteSelectedAnnotation = vi.fn()
+const duplicateSelectedAnnotation = vi.fn()
 const setHoveredAnnotation = vi.fn()
 const setAnnotationsDrawerHovered = vi.fn()
 
 const makeStore = (
   annotations: IAnnotation[],
   mode: LabelerMode = LabelerMode.Select,
-  selectedAnnotationId: string | null = null
+  selectedAnnotationIds: string[] = []
 ) =>
   create(() => ({
     mode,
@@ -78,13 +82,18 @@ const makeStore = (
       })
     },
     selectedAnnotation:
-      selectedAnnotationId === null
-        ? null
-        : { resolve: () => annotations.find((a) => a.id === selectedAnnotationId) },
+      selectedAnnotationIds.length === 1
+        ? { resolve: () => annotations.find((a) => a.id === selectedAnnotationIds[0]) }
+        : null,
+    selectedAnnotationIds: new Set(selectedAnnotationIds),
     labelsMap: Object.fromEntries(labels.map((l) => [l.id, l])),
     setMode,
     selectAnnotation,
+    toggleAnnotationSelection,
+    setSelectedAnnotationIds,
     deleteAnnotation,
+    deleteSelectedAnnotation,
+    duplicateSelectedAnnotation,
     setHoveredAnnotation,
     setAnnotationsDrawerHovered
   })) as unknown as UseBoundStore<StoreApi<LabelerStore>>
@@ -92,7 +101,11 @@ const makeStore = (
 beforeEach(() => {
   setMode.mockClear()
   selectAnnotation.mockClear()
+  toggleAnnotationSelection.mockClear()
+  setSelectedAnnotationIds.mockClear()
   deleteAnnotation.mockClear()
+  deleteSelectedAnnotation.mockClear()
+  duplicateSelectedAnnotation.mockClear()
   setHoveredAnnotation.mockClear()
   setAnnotationsDrawerHovered.mockClear()
   onRouteLeave.current = null
@@ -234,5 +247,125 @@ describe('AnnotationsDrawer', () => {
 
     fireEvent.mouseLeave(panel)
     expect(setAnnotationsDrawerHovered).toHaveBeenLastCalledWith(false)
+  })
+
+  it('toggles one annotation via its row checkbox without also selecting it', () => {
+    renderWithProviders(
+      <AnnotationsDrawer
+        store={makeStore([boxAnnotation], LabelerMode.CreateBox)}
+        opened
+        onClose={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Box 1' }))
+
+    expect(setMode).toHaveBeenCalledWith(LabelerMode.Select)
+    expect(toggleAnnotationSelection).toHaveBeenCalledWith('a1')
+    expect(selectAnnotation).not.toHaveBeenCalled()
+  })
+
+  it("selects every annotation in a group via that group's checkbox", () => {
+    renderWithProviders(
+      <AnnotationsDrawer
+        store={makeStore([boxAnnotation, secondBoxAnnotation, polygonAnnotation])}
+        opened
+        onClose={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all annotations in Stop Sign' }))
+
+    expect(setSelectedAnnotationIds).toHaveBeenCalledWith(expect.arrayContaining(['a1', 'a3']))
+    expect(setSelectedAnnotationIds.mock.calls[0][0]).toHaveLength(2)
+  })
+
+  it("clears a fully-selected group via that group's checkbox", () => {
+    renderWithProviders(
+      <AnnotationsDrawer
+        store={makeStore(
+          [boxAnnotation, secondBoxAnnotation, polygonAnnotation],
+          LabelerMode.Select,
+          ['a1', 'a3']
+        )}
+        opened
+        onClose={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all annotations in Stop Sign' }))
+
+    expect(setSelectedAnnotationIds).toHaveBeenCalledWith([])
+  })
+
+  it('selects every annotation on the page via Select All', () => {
+    renderWithProviders(
+      <AnnotationsDrawer
+        store={makeStore([boxAnnotation, polygonAnnotation])}
+        opened
+        onClose={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all annotations' }))
+
+    expect(setSelectedAnnotationIds).toHaveBeenCalledWith(expect.arrayContaining(['a1', 'a2']))
+    expect(setSelectedAnnotationIds.mock.calls[0][0]).toHaveLength(2)
+  })
+
+  it('shows a batch action bar once 2+ annotations are selected, wired to the batch actions', () => {
+    renderWithProviders(
+      <AnnotationsDrawer
+        store={makeStore(
+          [boxAnnotation, secondBoxAnnotation, polygonAnnotation],
+          LabelerMode.Select,
+          ['a1', 'a3']
+        )}
+        opened
+        onClose={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate selected annotations' }))
+    expect(duplicateSelectedAnnotation).toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected annotations' }))
+    expect(deleteSelectedAnnotation).toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
+    expect(selectAnnotation).toHaveBeenCalledWith(null)
+  })
+
+  it('disables the batch action buttons for a single selection instead of hiding the header (avoids layout shift)', () => {
+    renderWithProviders(
+      <AnnotationsDrawer
+        store={makeStore([boxAnnotation], LabelerMode.Select, ['a1'])}
+        opened
+        onClose={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    // The buttons stay in the DOM (reserving their space, no layout shift) but are
+    // visibility:hidden - querySelector, not getByRole, since that's pulled from the a11y tree.
+    expect(document.querySelector('[aria-label="Duplicate selected annotations"]')).toBeDisabled()
+    expect(document.querySelector('[aria-label="Delete selected annotations"]')).toBeDisabled()
+  })
+
+  it('shift-clicking a row toggles it into the selection instead of replacing it', () => {
+    renderWithProviders(
+      <AnnotationsDrawer
+        store={makeStore([boxAnnotation, secondBoxAnnotation], LabelerMode.Select, ['a1'])}
+        opened
+        onClose={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Box 2'), { shiftKey: true })
+
+    expect(toggleAnnotationSelection).toHaveBeenCalledWith('a3')
+    expect(selectAnnotation).not.toHaveBeenCalled()
   })
 })

@@ -5,7 +5,6 @@ import { create } from 'zustand'
 import { useMemo } from 'react'
 import { makeUUID } from '@shared/utils'
 import { clamp } from '@mantine/hooks'
-import { OptimisticObject } from '@renderer/util/optimistic_object'
 import { boundingBoxOf } from '@renderer/util/boundingBox'
 import {
   BOX_CORNER_HANDLE_TOP_RIGHT,
@@ -26,7 +25,8 @@ import {
   clampedDuplicateAxisOffset
 } from './labeler/geometry'
 import { createHistoryController } from './labeler/history'
-import type { Vector2, LabelerStoreState, LabelerStore } from './labeler/storeTypes'
+import { idsEqual, resolveSelectedAnnotation } from './labeler/selection'
+import type { Vector2, LabelerStoreState, LabelerStore, HistoryEntry } from './labeler/storeTypes'
 
 export {
   BOX_CORNER_HANDLE_TOP_RIGHT,
@@ -120,6 +120,34 @@ export const useLabeler = (labels: ILabel[]) => {
           } satisfies INewAnnotation
         }
 
+        /** Shared by duplicateAnnotation and the batch path in duplicateSelectedAnnotation. */
+        const buildDuplicate = (
+          annotation: IAnnotation,
+          bitmap: ImageBitmap | null
+        ): IAnnotation => {
+          const box = boundingBoxOf(annotation.points)
+          const desired = duplicateOffsetFor(box)
+          const dx =
+            bitmap !== null
+              ? clampedDuplicateAxisOffset(box.minX, box.width, bitmap.width, desired)
+              : desired
+          const dy =
+            bitmap !== null
+              ? clampedDuplicateAxisOffset(box.minY, box.height, bitmap.height, desired)
+              : desired
+
+          return {
+            id: makeUUID(),
+            type: annotation.type,
+            labelId: annotation.labelId,
+            points: annotation.points.map((p) => ({
+              id: makeUUID(),
+              x: p.x + dx,
+              y: p.y + dy
+            }))
+          }
+        }
+
         const fitBitmapToCanvas = () => {
           const state = get()
           if (state.bitmap === null) {
@@ -162,6 +190,31 @@ export const useLabeler = (labels: ILabel[]) => {
 
         const history = createHistoryController({ get, set, hitIds })
 
+        /** Shared by selectAnnotation/toggleAnnotationSelection/setSelectedAnnotationIds - keeps selectedAnnotation and hit ids in sync with the set. */
+        const applySelection = (ids: Set<string>) => {
+          const state = get()
+          if (idsEqual(state.selectedAnnotationIds, ids)) return
+
+          const selectedAnnotation = resolveSelectedAnnotation(ids, state.sample)
+
+          if (selectedAnnotation !== null) {
+            hitIds.rebuildSelectedAnnotationHitIds(selectedAnnotation.resolve())
+          } else {
+            hitIds.clearSelectedAnnotationHitIds()
+          }
+
+          set({
+            selectedAnnotationIds: ids,
+            selectedAnnotation,
+            annotationDirty: true,
+            hitTestDirty: true,
+            // Selecting a single annotation syncs the label picker; any other case leaves it alone.
+            ...(selectedAnnotation !== null
+              ? { selectedLabelId: selectedAnnotation.resolve().labelId }
+              : {})
+          })
+        }
+
         const initialState: LabelerStoreState = {
           imageHitId: imageHitId,
           sizeDirty: false,
@@ -177,7 +230,9 @@ export const useLabeler = (labels: ILabel[]) => {
           showHitTestDebugOverlay: false,
           hitTestCanvas: new OffscreenCanvas(0, 0),
           isDragging: false,
+          selectedAnnotationIds: new Set(),
           selectedAnnotation: null,
+          groupMoveAnnotationIds: null,
           hitIdToAnnotationId: hitIds.hitIdToAnnotationId,
           selectedAnnotationControlHitIds: hitIds.selectedAnnotationControlHitIds,
           selectedAnnotationLineHitIds: hitIds.selectedAnnotationLineHitIds,
@@ -299,7 +354,9 @@ export const useLabeler = (labels: ILabel[]) => {
             if (mode === LabelerMode.Select) {
               set({
                 mode,
+                selectedAnnotationIds: new Set(),
                 selectedAnnotation: null,
+                groupMoveAnnotationIds: null,
                 annotationDirty: true,
                 hitTestDirty: true,
                 annotationBeingCreated: null
@@ -312,7 +369,9 @@ export const useLabeler = (labels: ILabel[]) => {
 
             set({
               mode,
+              selectedAnnotationIds: new Set(),
               selectedAnnotation: null,
+              groupMoveAnnotationIds: null,
               annotationDirty: true,
               hitTestDirty: true,
               annotationBeingCreated: createPendingAnnotation(
@@ -330,30 +389,23 @@ export const useLabeler = (labels: ILabel[]) => {
             set({ selectedLabelId: id, annotationBeingCreated })
           },
           selectAnnotation: (id: string | null) => {
-            if ((get().selectedAnnotation?.resolve().id ?? null) === id) return
-
-            let annotation: OptimisticObject<IAnnotation> | null = null
-            if (id !== null) {
-              annotation = get().sample?.resolve().annotations.resolve()[id] ?? null
-            }
-
-            if (annotation !== null) {
-              hitIds.rebuildSelectedAnnotationHitIds(annotation.resolve())
+            applySelection(id === null ? new Set() : new Set([id]))
+          },
+          toggleAnnotationSelection: (id: string) => {
+            const next = new Set(get().selectedAnnotationIds)
+            if (next.has(id)) {
+              next.delete(id)
             } else {
-              hitIds.clearSelectedAnnotationHitIds()
+              next.add(id)
             }
-
-            set({
-              selectedAnnotation: annotation,
-              annotationDirty: true,
-              hitTestDirty: true,
-              // Selecting an annotation syncs the label picker; deselecting leaves it alone.
-              ...(annotation !== null ? { selectedLabelId: annotation.resolve().labelId } : {})
-            })
+            applySelection(next)
+          },
+          setSelectedAnnotationIds: (ids: string[]) => {
+            applySelection(new Set(ids))
           },
           cancelActiveAction: () => {
             const state = get()
-            if (state.selectedAnnotation !== null) {
+            if (state.selectedAnnotationIds.size > 0) {
               state.selectAnnotation(null)
               return
             }
@@ -449,7 +501,9 @@ export const useLabeler = (labels: ILabel[]) => {
 
             set({
               sample,
+              selectedAnnotationIds: new Set(),
               selectedAnnotation: null,
+              groupMoveAnnotationIds: null,
               hoveredAnnotationId: null,
               hitTestDirty: get().mode === LabelerMode.Select,
               annotationDirty: true,
@@ -498,6 +552,22 @@ export const useLabeler = (labels: ILabel[]) => {
               afterLabelId: labelId
             })
           },
+          setSelectedAnnotationsLabelId: (labelId: string) => {
+            const state = get()
+            const ids = [...state.selectedAnnotationIds]
+            const entries: HistoryEntry[] = []
+            for (const annotationId of ids) {
+              const targetAnnotation = state.sample?.resolve().annotations.resolve()[annotationId]
+              if (targetAnnotation === undefined) continue
+              const beforeLabelId = targetAnnotation.resolve().labelId
+              if (beforeLabelId === labelId) continue
+
+              history.applyRelabel(annotationId, labelId)
+              entries.push({ kind: 'relabel', annotationId, beforeLabelId, afterLabelId: labelId })
+            }
+            if (entries.length === 0) return
+            history.pushHistory(entries.length === 1 ? entries[0] : { kind: 'batch', entries })
+          },
           moveSelectedAnnotationBy: (dx, dy) => {
             const state = get()
             if (state.selectedAnnotation === null) {
@@ -512,6 +582,41 @@ export const useLabeler = (labels: ILabel[]) => {
               annotationDirty: true,
               hitTestDirty: true
             })
+          },
+          moveSelectedAnnotationsBy: (dx, dy) => {
+            const state = get()
+            if (state.selectedAnnotationIds.size === 0) return
+
+            set({
+              moveCurrent: [dx, dy],
+              groupMoveAnnotationIds: [...state.selectedAnnotationIds],
+              annotationDirty: true,
+              hitTestDirty: true
+            })
+          },
+          commitGroupAnnotationMove: () => {
+            const state = get()
+            const ids = state.groupMoveAnnotationIds
+            if (ids === null) return
+
+            const [dx, dy] = state.moveCurrent
+            set({ groupMoveAnnotationIds: null, moveCurrent: [0, 0] })
+
+            if (dx === 0 && dy === 0) return
+
+            const entries: HistoryEntry[] = []
+            for (const annotationId of ids) {
+              const annotation = state.sample?.resolve().annotations.resolve()[annotationId]
+              if (annotation === undefined) continue
+
+              const before = structuredClone(annotation.resolve().points)
+              const after = before.map((p) => ({ id: p.id, x: p.x + dx, y: p.y + dy }))
+
+              history.applyReplacePoints(annotationId, after)
+              entries.push({ kind: 'points', annotationId, before, after })
+            }
+            if (entries.length === 0) return
+            history.pushHistory(entries.length === 1 ? entries[0] : { kind: 'batch', entries })
           },
           moveAnnotationPoint: (pointId, x, y) => {
             const state = get()
@@ -643,10 +748,22 @@ export const useLabeler = (labels: ILabel[]) => {
           },
           deleteSelectedAnnotation: () => {
             const state = get()
-            if (state.selectedAnnotation !== null) {
-              const annotation = state.selectedAnnotation
-              state.deleteAnnotation(annotation.resolve().id)
+            const ids = [...state.selectedAnnotationIds]
+            if (ids.length === 0) return
+            if (ids.length === 1) {
+              state.deleteAnnotation(ids[0])
+              return
             }
+
+            const entries: HistoryEntry[] = []
+            for (const annotationId of ids) {
+              const annotation =
+                state.sample?.resolve().annotations.resolve()[annotationId]?.resolve() ?? null
+              if (annotation === null) continue
+              history.applyDeleteAnnotation(annotationId)
+              entries.push({ kind: 'delete', annotation })
+            }
+            if (entries.length > 0) history.pushHistory({ kind: 'batch', entries })
           },
           duplicateAnnotation: (annotationId: string) => {
             const state = get()
@@ -654,29 +771,7 @@ export const useLabeler = (labels: ILabel[]) => {
               state.sample?.resolve().annotations.resolve()[annotationId]?.resolve() ?? null
             if (annotation === null) return undefined
 
-            const box = boundingBoxOf(annotation.points)
-            const desired = duplicateOffsetFor(box)
-            const bitmap = state.bitmap
-            const dx =
-              bitmap !== null
-                ? clampedDuplicateAxisOffset(box.minX, box.width, bitmap.width, desired)
-                : desired
-            const dy =
-              bitmap !== null
-                ? clampedDuplicateAxisOffset(box.minY, box.height, bitmap.height, desired)
-                : desired
-
-            const duplicate: IAnnotation = {
-              id: makeUUID(),
-              type: annotation.type,
-              labelId: annotation.labelId,
-              points: annotation.points.map((p) => ({
-                id: makeUUID(),
-                x: p.x + dx,
-                y: p.y + dy
-              }))
-            }
-
+            const duplicate = buildDuplicate(annotation, state.bitmap)
             history.applyCreateAnnotation(duplicate)
             history.pushHistory({ kind: 'create', annotation: duplicate })
             get().selectAnnotation(duplicate.id)
@@ -684,9 +779,27 @@ export const useLabeler = (labels: ILabel[]) => {
           },
           duplicateSelectedAnnotation: () => {
             const state = get()
-            if (state.selectedAnnotation !== null) {
-              state.duplicateAnnotation(state.selectedAnnotation.resolve().id)
+            const ids = [...state.selectedAnnotationIds]
+            if (ids.length === 0) return
+            if (ids.length === 1) {
+              state.duplicateAnnotation(ids[0])
+              return
             }
+
+            const entries: HistoryEntry[] = []
+            const duplicateIds: string[] = []
+            for (const annotationId of ids) {
+              const annotation =
+                state.sample?.resolve().annotations.resolve()[annotationId]?.resolve() ?? null
+              if (annotation === null) continue
+              const duplicate = buildDuplicate(annotation, state.bitmap)
+              history.applyCreateAnnotation(duplicate)
+              entries.push({ kind: 'create', annotation: duplicate })
+              duplicateIds.push(duplicate.id)
+            }
+            if (entries.length === 0) return
+            history.pushHistory({ kind: 'batch', entries })
+            get().setSelectedAnnotationIds(duplicateIds)
           },
           convertAnnotationType: (annotationId: string) => {
             const state = get()
@@ -710,6 +823,32 @@ export const useLabeler = (labels: ILabel[]) => {
               afterType,
               afterPoints
             })
+          },
+          convertSelectedAnnotationsType: (targetType: AnnotationType) => {
+            const state = get()
+            const entries: HistoryEntry[] = []
+            for (const annotationId of state.selectedAnnotationIds) {
+              const annotation =
+                state.sample?.resolve().annotations.resolve()[annotationId]?.resolve() ?? null
+              if (annotation === null || annotation.type === targetType) continue
+
+              const afterPoints =
+                targetType === AnnotationType.Polygon
+                  ? boxPointsToPolygonPoints(annotation.points)
+                  : polygonPointsToBoxPoints(annotation.points)
+
+              history.applyConvertType(annotationId, targetType, afterPoints)
+              entries.push({
+                kind: 'convert',
+                annotationId,
+                beforeType: annotation.type,
+                beforePoints: structuredClone(annotation.points),
+                afterType: targetType,
+                afterPoints
+              })
+            }
+            if (entries.length === 0) return
+            history.pushHistory(entries.length === 1 ? entries[0] : { kind: 'batch', entries })
           },
           addControlPoint: (controlPointId: string, x: number, y: number) => {
             const state = get()

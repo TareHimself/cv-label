@@ -30,6 +30,7 @@ type LabelerCommands = {
 const ANNOTATION_ALPHA = 0.2
 const CREATION_ANNOTATION_ALPHA = 0.45
 const CONTROL_POINT_CIRCLE_RADIUS = 7
+const MULTI_SELECT_OUTLINE_WIDTH = 3
 const HIT_TEST_LINE_WIDTH = 8
 const HIT_TEST_OVERLAY_ALPHA = 0.5
 
@@ -376,16 +377,14 @@ const drawCrosshair = (
   ctx.restore()
 }
 
-function* allAnnotationsGenerator(
-  annotations: IAnnotation[],
-  selectedAnnotation: IAnnotation | null
-) {
+/** Yields unselected annotations first, then selected ones last so they draw on top. */
+function* allAnnotationsGenerator(annotations: IAnnotation[], selected: IAnnotation[]) {
   for (const x of annotations) {
     yield x
   }
 
-  if (selectedAnnotation !== null) {
-    yield selectedAnnotation
+  for (const x of selected) {
+    yield x
   }
 }
 
@@ -415,19 +414,25 @@ const useLabelerContextMenu = (store: UseBoundStore<StoreApi<LabelerStore>>) => 
         result.controlPointId === null
       ) {
         const menuOptions: ContextMenuItemOptions[] = []
+        const currentState = store.getState()
         const resolvedTargetAnnotation =
-          store
-            .getState()
-            .sample?.resolve()
+          currentState.sample
+            ?.resolve()
             .annotations.resolve()
             [result.annotationId ?? ''].resolve() ?? null
         if (resolvedTargetAnnotation === null) {
           return
         }
+
+        // Right-clicking a member of a multi-selection acts on the whole set; otherwise just this one annotation.
+        const isBatch =
+          currentState.selectedAnnotationIds.size > 1 &&
+          currentState.selectedAnnotationIds.has(resolvedTargetAnnotation.id)
+
         {
           const labels = store.getState().labelsMap
           const values = Object.keys(labels).sort()
-          values.splice(values.indexOf(resolvedTargetAnnotation.labelId), 1)
+          if (!isBatch) values.splice(values.indexOf(resolvedTargetAnnotation.labelId), 1)
           if (values.length > 0) {
             menuOptions.push({
               key: 'change-label',
@@ -436,7 +441,10 @@ const useLabelerContextMenu = (store: UseBoundStore<StoreApi<LabelerStore>>) => 
                 key: `set-label-${c}`,
                 title: labels[c].name,
                 color: labels[c].color,
-                onClick: () => store.getState().setAnnotationLabelId(resolvedTargetAnnotation.id, c)
+                onClick: () =>
+                  isBatch
+                    ? store.getState().setSelectedAnnotationsLabelId(c)
+                    : store.getState().setAnnotationLabelId(resolvedTargetAnnotation.id, c)
               }))
             })
           }
@@ -446,29 +454,50 @@ const useLabelerContextMenu = (store: UseBoundStore<StoreApi<LabelerStore>>) => 
           key: 'duplicate',
           icon: <MdContentCopy size={16} />,
           title: 'Duplicate',
-          onClick: () => store.getState().duplicateAnnotation(resolvedTargetAnnotation.id)
+          onClick: () =>
+            isBatch
+              ? store.getState().duplicateSelectedAnnotation()
+              : store.getState().duplicateAnnotation(resolvedTargetAnnotation.id)
         })
 
-        menuOptions.push({
-          key: 'convert-type',
-          icon:
-            resolvedTargetAnnotation.type === AnnotationType.Box ? (
-              <PiPolygonLight size={16} />
-            ) : (
-              <BsBoundingBoxCircles size={16} />
-            ),
-          title:
-            resolvedTargetAnnotation.type === AnnotationType.Box
-              ? 'Convert to Polygon'
-              : 'Convert to Box',
-          onClick: () => store.getState().convertAnnotationType(resolvedTargetAnnotation.id)
-        })
+        if (isBatch) {
+          menuOptions.push({
+            key: 'convert-to-box',
+            icon: <BsBoundingBoxCircles size={16} />,
+            title: 'Convert to Box',
+            onClick: () => store.getState().convertSelectedAnnotationsType(AnnotationType.Box)
+          })
+          menuOptions.push({
+            key: 'convert-to-polygon',
+            icon: <PiPolygonLight size={16} />,
+            title: 'Convert to Polygon',
+            onClick: () => store.getState().convertSelectedAnnotationsType(AnnotationType.Polygon)
+          })
+        } else {
+          menuOptions.push({
+            key: 'convert-type',
+            icon:
+              resolvedTargetAnnotation.type === AnnotationType.Box ? (
+                <PiPolygonLight size={16} />
+              ) : (
+                <BsBoundingBoxCircles size={16} />
+              ),
+            title:
+              resolvedTargetAnnotation.type === AnnotationType.Box
+                ? 'Convert to Polygon'
+                : 'Convert to Box',
+            onClick: () => store.getState().convertAnnotationType(resolvedTargetAnnotation.id)
+          })
+        }
 
         menuOptions.push({
           key: 'delete',
           icon: <MdDeleteOutline size={16} />,
           title: 'Delete',
-          onClick: () => store.getState().deleteAnnotation(resolvedTargetAnnotation.id)
+          onClick: () =>
+            isBatch
+              ? store.getState().deleteSelectedAnnotation()
+              : store.getState().deleteAnnotation(resolvedTargetAnnotation.id)
         })
         const builtContextMenu = originalShowContextMenu(menuOptions)
         builtContextMenu(e)
@@ -596,7 +625,8 @@ const usePointerInteractions = (
         const tool = tools[state.mode]
         const ctx: LabelerToolContext = {
           store,
-          startDrag: (onMove, onRelease) => watchPointerMove(pointerDownEvent, onMove, onRelease)
+          startDrag: (onMove, onRelease) => watchPointerMove(pointerDownEvent, onMove, onRelease),
+          shiftKey: pointerDownEvent.shiftKey
         }
 
         if (pointerDownEvent.button === 2) {
@@ -720,9 +750,12 @@ const useCanvasDraw = (
       const yScale = state.imageRect.height / state.bitmap.height
 
       let selectedAnnotation = state.selectedAnnotation?.resolve() ?? null
-      const annotations = Object.values(state.sample?.resolve().annotations?.resolve() ?? {})
-        .map((c) => c.resolve())
-        .filter((c) => c.id !== selectedAnnotation?.id)
+      const selectedIds = state.selectedAnnotationIds
+      const allResolved = Object.values(state.sample?.resolve().annotations?.resolve() ?? {}).map(
+        (c) => c.resolve()
+      )
+      const annotations = allResolved.filter((c) => !selectedIds.has(c.id))
+      let selectedList = allResolved.filter((c) => selectedIds.has(c.id))
 
       if (selectedAnnotation !== null && state.pointIdsBeingMoved !== null) {
         selectedAnnotation = structuredClone(selectedAnnotation)
@@ -738,6 +771,18 @@ const useCanvasDraw = (
         }
 
         selectedAnnotation = normalizeAnnotationPoints(selectedAnnotation)
+        selectedList = [selectedAnnotation]
+      } else if (state.groupMoveAnnotationIds !== null) {
+        const movingIds = new Set(state.groupMoveAnnotationIds)
+        const [dx, dy] = state.moveCurrent
+        selectedList = selectedList.map((annotation) =>
+          movingIds.has(annotation.id)
+            ? {
+                ...annotation,
+                points: annotation.points.map((p) => ({ id: p.id, x: p.x + dx, y: p.y + dy }))
+              }
+            : annotation
+        )
       }
 
       if (hitTestCtx !== null) {
@@ -745,7 +790,7 @@ const useCanvasDraw = (
         hitTestCtx.clearRect(0, 0, offScreenCanvas.width, offScreenCanvas.height)
 
         if (state.mode === LabelerMode.Select) {
-          for (const annotation of allAnnotationsGenerator(annotations, selectedAnnotation)) {
+          for (const annotation of allAnnotationsGenerator(annotations, selectedList)) {
             const hitId = state.hitIdToAnnotationId.getByValue(annotation.id)
             if (hitId !== undefined) {
               const points = transformPoints(
@@ -797,7 +842,7 @@ const useCanvasDraw = (
       if (annotationCtx !== null) {
         annotationCtx.clearRect(0, 0, width, height)
 
-        for (const annotation of allAnnotationsGenerator(annotations, selectedAnnotation)) {
+        for (const annotation of allAnnotationsGenerator(annotations, selectedList)) {
           const points = transformPoints(
             annotation.points,
             state.imageRect.x,
@@ -852,7 +897,21 @@ const useCanvasDraw = (
           }
         }
 
-        if (selectedAnnotation !== null) {
+        if (selectedList.length > 1) {
+          // 2+ selected: no control handles (point/edge editing is single-select-only) - just an outline so the set reads as selected.
+          for (const annotation of selectedList) {
+            const points = transformPoints(
+              annotation.points,
+              state.imageRect.x,
+              state.imageRect.y,
+              xScale,
+              yScale
+            )
+            const outlinePoints =
+              annotation.type === AnnotationType.Box ? getBoxPoints(points) : points
+            drawPolygon(annotationCtx, outlinePoints, '#ffffff', false, MULTI_SELECT_OUTLINE_WIDTH)
+          }
+        } else if (selectedAnnotation !== null) {
           const points = transformPoints(
             selectedAnnotation.points,
             state.imageRect.x,

@@ -732,3 +732,180 @@ describe('useLabeler cancelActiveAction', () => {
     expect(store.getState().selectedAnnotation).toBeNull()
   })
 })
+
+describe('useLabeler multi-select', () => {
+  it('toggleAnnotationSelection builds up a set and keeps selectedAnnotation derived from it', () => {
+    const store = setup([annotationA, annotationB])
+
+    act(() => store.getState().toggleAnnotationSelection('a1'))
+    expect(store.getState().selectedAnnotationIds).toEqual(new Set(['a1']))
+    expect(store.getState().selectedAnnotation?.resolve().id).toBe('a1')
+
+    act(() => store.getState().toggleAnnotationSelection('a2'))
+    expect(store.getState().selectedAnnotationIds).toEqual(new Set(['a1', 'a2']))
+    // Non-null only at size 1 - editing a group is handled separately from single-annotation editing.
+    expect(store.getState().selectedAnnotation).toBeNull()
+
+    act(() => store.getState().toggleAnnotationSelection('a1'))
+    expect(store.getState().selectedAnnotationIds).toEqual(new Set(['a2']))
+    expect(store.getState().selectedAnnotation?.resolve().id).toBe('a2')
+  })
+
+  it('setSelectedAnnotationIds bulk-replaces the selection (group/select-all)', () => {
+    const store = setup([annotationA, annotationB])
+
+    act(() => store.getState().setSelectedAnnotationIds(['a1', 'a2']))
+    expect(store.getState().selectedAnnotationIds).toEqual(new Set(['a1', 'a2']))
+
+    act(() => store.getState().setSelectedAnnotationIds([]))
+    expect(store.getState().selectedAnnotationIds.size).toBe(0)
+  })
+
+  it('setMode clears a multi-selection, same as it already clears a single one', () => {
+    const store = setup([annotationA, annotationB])
+    act(() => store.getState().setSelectedAnnotationIds(['a1', 'a2']))
+
+    act(() => store.getState().setMode(LabelerMode.CreateBox))
+
+    expect(store.getState().selectedAnnotationIds.size).toBe(0)
+  })
+
+  it('deleteSelectedAnnotation batches multiple deletes under one undo entry', async () => {
+    const store = setup([annotationA, annotationB])
+    const dataStore = useAppStore.getState().store
+    vi.mocked(dataStore.deleteAnnotations).mockResolvedValue([true])
+    act(() => store.getState().setSelectedAnnotationIds(['a1', 'a2']))
+
+    await act(async () => {
+      store.getState().deleteSelectedAnnotation()
+      await flush()
+    })
+
+    expect(store.getState().sample!.resolve().annotations.resolve()).toEqual({})
+    expect(store.getState().undoStack).toHaveLength(1)
+
+    vi.mocked(dataStore.createAnnotations).mockImplementation(
+      async (_sampleId, annotations) => annotations
+    )
+    await act(async () => {
+      store.getState().undo()
+      await flush()
+    })
+
+    const restored = store.getState().sample!.resolve().annotations.resolve()
+    expect(Object.keys(restored).sort()).toEqual(['a1', 'a2'])
+  })
+
+  it('duplicateSelectedAnnotation batches multiple duplicates and selects the new copies', async () => {
+    const store = setup([annotationA, annotationB])
+    const dataStore = useAppStore.getState().store
+    vi.mocked(dataStore.createAnnotations).mockImplementation(
+      async (_sampleId, annotations) => annotations
+    )
+    act(() => store.getState().setSelectedAnnotationIds(['a1', 'a2']))
+
+    await act(async () => {
+      store.getState().duplicateSelectedAnnotation()
+      await flush()
+    })
+
+    const allIds = Object.keys(store.getState().sample!.resolve().annotations.resolve())
+    expect(allIds).toHaveLength(4)
+    expect(store.getState().selectedAnnotationIds.size).toBe(2)
+    for (const id of store.getState().selectedAnnotationIds) {
+      expect(['a1', 'a2']).not.toContain(id)
+    }
+    expect(store.getState().undoStack).toHaveLength(1)
+  })
+
+  it('convertSelectedAnnotationsType only converts annotations not already the target type', async () => {
+    const polygon: IAnnotation = {
+      id: 'a3',
+      type: AnnotationType.Polygon,
+      labelId: 'l1',
+      points: [
+        { id: 'p1', x: 0, y: 0 },
+        { id: 'p2', x: 20, y: 0 },
+        { id: 'p3', x: 10, y: 10 }
+      ]
+    }
+    const store = setup([annotationA, polygon])
+    const dataStore = useAppStore.getState().store
+    vi.mocked(dataStore.updateAnnotations).mockImplementation(async (updates) =>
+      updates.map((u) => ({ ...annotationA, ...u }))
+    )
+    vi.mocked(dataStore.replacePoints).mockImplementation(async (_id, points) =>
+      (points as IPoint[]).map((p) => ({ id: p.id, x: p.x, y: p.y }))
+    )
+    act(() => store.getState().setSelectedAnnotationIds(['a1', 'a3']))
+
+    await act(async () => {
+      store.getState().convertSelectedAnnotationsType(AnnotationType.Polygon)
+      await flush()
+    })
+
+    const annotations = store.getState().sample!.resolve().annotations.resolve()
+    expect(annotations.a1.resolve().type).toBe(AnnotationType.Polygon)
+    expect(annotations.a3.resolve().type).toBe(AnnotationType.Polygon)
+    // a3 was already a Polygon - only a1 should have generated an undo entry.
+    expect(store.getState().undoStack).toHaveLength(1)
+    expect(dataStore.updateAnnotations).toHaveBeenCalledTimes(1)
+  })
+
+  it('setSelectedAnnotationsLabelId relabels every selected annotation under one undo entry', async () => {
+    const store = setup([annotationA, annotationB])
+    const dataStore = useAppStore.getState().store
+    vi.mocked(dataStore.updateAnnotations).mockImplementation(async (updates) =>
+      updates.map((u) => ({ ...annotationA, ...u }))
+    )
+    act(() => store.getState().setSelectedAnnotationIds(['a1', 'a2']))
+
+    await act(async () => {
+      store.getState().setSelectedAnnotationsLabelId('l2')
+      await flush()
+    })
+
+    const annotations = store.getState().sample!.resolve().annotations.resolve()
+    expect(annotations.a1.resolve().labelId).toBe('l2')
+    expect(annotations.a2.resolve().labelId).toBe('l2')
+    expect(store.getState().undoStack).toHaveLength(1)
+  })
+
+  it('moveSelectedAnnotationsBy + commitGroupAnnotationMove translates every selected annotation together', async () => {
+    const store = setup([annotationA, annotationB])
+    const dataStore = useAppStore.getState().store
+    vi.mocked(dataStore.replacePoints).mockImplementation(async (_id, points) => points as IPoint[])
+    act(() => store.getState().setSelectedAnnotationIds(['a1', 'a2']))
+
+    act(() => store.getState().moveSelectedAnnotationsBy(5, 7))
+    expect(store.getState().groupMoveAnnotationIds).toEqual(['a1', 'a2'])
+
+    await act(async () => {
+      store.getState().commitGroupAnnotationMove()
+      await flush()
+    })
+
+    const annotations = store.getState().sample!.resolve().annotations.resolve()
+    expect(annotations.a1.resolve().points.map((p) => [p.x, p.y])).toEqual([
+      [5, 7],
+      [15, 17]
+    ])
+    expect(annotations.a2.resolve().points.map((p) => [p.x, p.y])).toEqual([
+      [25, 27],
+      [35, 37]
+    ])
+    expect(store.getState().groupMoveAnnotationIds).toBeNull()
+    expect(store.getState().undoStack).toHaveLength(1)
+
+    // Undo restores both annotations' points in one step.
+    await act(async () => {
+      store.getState().undo()
+      await flush()
+    })
+    const restored = store.getState().sample!.resolve().annotations.resolve()
+    expect(restored.a1.resolve().points.map((p) => [p.x, p.y])).toEqual([
+      [0, 0],
+      [10, 10]
+    ])
+  })
+})
