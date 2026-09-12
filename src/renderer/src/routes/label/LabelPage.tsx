@@ -232,6 +232,7 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const { store } = useLabeler(project.labels)
   const mode = store((s) => s.mode)
+  const selectedAnnotationCount = store((s) => s.selectedAnnotationIds.size)
   const selecteLabelId = store((s) => s.selectedLabelId)
   const currentSampleId = store((s) => s.sample?.resolve().id ?? null)
   const sampleCompletedAt = store((s) => s.sample?.resolve().completedAt ?? null)
@@ -286,7 +287,7 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
       [
         'delete',
         () => {
-          if (!isDeleteConfirmOpen && store.getState().selectedAnnotation !== null) {
+          if (!isDeleteConfirmOpen && store.getState().selectedAnnotationIds.size > 0) {
             setIsDeleteConfirmOpen(true)
           }
         }
@@ -294,7 +295,7 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
       [
         'backspace',
         () => {
-          if (!isDeleteConfirmOpen && store.getState().selectedAnnotation !== null) {
+          if (!isDeleteConfirmOpen && store.getState().selectedAnnotationIds.size > 0) {
             setIsDeleteConfirmOpen(true)
           }
         }
@@ -374,6 +375,9 @@ export const LabelPage = ({ project, samples, initial }: LabelPageProps) => {
       <ConfirmDeleteModal
         opened={isDeleteConfirmOpen}
         entityName="annotation"
+        itemName={
+          selectedAnnotationCount > 1 ? `${selectedAnnotationCount} annotations` : undefined
+        }
         undoable
         onCancel={() => setIsDeleteConfirmOpen(false)}
         onConfirm={() => {
