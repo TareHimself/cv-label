@@ -54,7 +54,8 @@ const storeApi: IDataStore = {
 
 const storeManagerApi: IStoreManager = {
   listStores: wrap(IPCKeys.Store_List),
-  useStore: wrap(IPCKeys.Store_UseStore)
+  useStore: wrap(IPCKeys.Store_UseStore),
+  readImage: wrap(IPCKeys.Store_ReadImage)
 }
 
 const appStoreApi: IAppDataStore = {

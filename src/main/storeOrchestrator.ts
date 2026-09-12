@@ -61,4 +61,17 @@ export class StoreOrchestrator {
     }
     return entry.resolveImage(imageId)
   }
+
+  /** Same resolution as the image:// protocol handler, but returns raw bytes over IPC instead of a Response - see IStoreManager.readImage. */
+  readImage = async (imageUri: string): Promise<{ data: ArrayBuffer; mimeType: string }> => {
+    const url = new URL(imageUri)
+    const response = await this.resolveImage(url.host, url.pathname.slice(1))
+    if (!response.ok) {
+      throw new Error(`Failed to read image: ${response.status} ${response.statusText}`)
+    }
+    return {
+      data: await response.arrayBuffer(),
+      mimeType: response.headers.get('content-type') ?? 'application/octet-stream'
+    }
+  }
 }

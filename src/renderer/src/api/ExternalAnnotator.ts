@@ -115,19 +115,15 @@ export const runAnnotatorOnSample = async (
   labelMapping: Record<string, string | null>,
   sample: Pick<ISample, 'imageUri' | 'width' | 'height'>
 ): Promise<{ annotations: INewAnnotation[]; skipped: number }> => {
-  const imageResponse = await fetch(sample.imageUri)
-  if (!imageResponse.ok) {
-    throw new Error(
-      `Failed to read sample image: ${imageResponse.status} ${imageResponse.statusText}`
-    )
-  }
+  // A renderer-side fetch() on image:// is blocked by Chromium's cross-origin scheme allowlist - read it via main instead.
+  const imageResult = await window.storeManager.readImage(sample.imageUri)
 
   const mimeType =
-    imageResponse.headers.get('content-type') ||
+    (imageResult.mimeType !== 'application/octet-stream' && imageResult.mimeType) ||
     EXTENSION_MIME_TYPES[imageExtensionFromUri(sample.imageUri).toLowerCase()] ||
     'application/octet-stream'
 
-  const image = arrayBufferToBase64(await imageResponse.arrayBuffer())
+  const image = arrayBufferToBase64(imageResult.data)
 
   const predictResponse = await fetch(withRoute(annotator.url, '/predict'), {
     method: 'POST',

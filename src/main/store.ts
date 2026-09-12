@@ -52,6 +52,7 @@ app.whenReady().then(() => {
 
 handleIpc(IPCKeys.Store_List, orchestrator.list)
 handleIpc(IPCKeys.Store_UseStore, orchestrator.useStore)
+handleIpc(IPCKeys.Store_ReadImage, orchestrator.readImage)
 
 handleIpc(IPCKeys.Store_Connect, (...args) => orchestrator.current.connect(...args))
 handleIpc(IPCKeys.Store_Disconnect, (...args) => orchestrator.current.disconnect(...args))
