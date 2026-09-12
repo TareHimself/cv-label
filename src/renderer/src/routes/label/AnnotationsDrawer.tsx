@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Badge,
+  Checkbox,
   Collapse,
   Drawer,
   Group,
@@ -14,7 +15,7 @@ import { useOnRouteLeave } from '@renderer/router/appRouter'
 import { LabelerMode } from '@renderer/types'
 import { AnnotationType, IAnnotation } from '@shared/types'
 import { useEffect, useState, type FC } from 'react'
-import { MdChevronRight, MdDeleteOutline } from 'react-icons/md'
+import { MdChevronRight, MdClose, MdContentCopy, MdDeleteOutline } from 'react-icons/md'
 import { BsBoundingBoxCircles } from 'react-icons/bs'
 import { PiPolygonLight } from 'react-icons/pi'
 import tinycolor from 'tinycolor2'
@@ -67,13 +68,97 @@ const groupByLabel = (annotations: IAnnotation[]): Map<string, IAnnotation[]> =>
   return groups
 }
 
+/** Selection only ever makes sense in Select mode - same guard the row click has always used. */
+const ensureSelectMode = (store: UseBoundStore<StoreApi<LabelerStore>>) => {
+  const state = store.getState()
+  if (state.mode !== LabelerMode.Select) {
+    state.setMode(LabelerMode.Select)
+  }
+}
+
+type TriState = 'none' | 'some' | 'all'
+
+const triStateOf = (ids: string[], selected: Set<string>): TriState => {
+  const selectedCount = ids.filter((id) => selected.has(id)).length
+  if (selectedCount === 0) return 'none'
+  return selectedCount === ids.length ? 'all' : 'some'
+}
+
+type SelectionHeaderProps = {
+  allState: TriState
+  selectedCount: number
+  onToggleAll: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+  onClear: () => void
+}
+
+/**
+ * One row, always mounted whenever there's at least one annotation - its contents swap in place
+ * (label text, icon visibility) instead of the batch bar mounting/unmounting, so selecting
+ * doesn't shift the list below it.
+ */
+const SelectionHeader: FC<SelectionHeaderProps> = ({
+  allState,
+  selectedCount,
+  onToggleAll,
+  onDuplicate,
+  onDelete,
+  onClear
+}) => (
+  <Group justify="space-between" wrap="nowrap" p="xs">
+    <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+      <Checkbox
+        size="xs"
+        aria-label="Select all annotations"
+        checked={allState === 'all'}
+        indeterminate={allState === 'some'}
+        onChange={onToggleAll}
+      />
+      <Text size="xs" c="dimmed" truncate>
+        {selectedCount > 0 ? `${selectedCount} selected` : 'Select All'}
+      </Text>
+    </Group>
+    <Group gap={4} wrap="nowrap">
+      <ActionIcon
+        aria-label="Duplicate selected annotations"
+        variant="subtle"
+        disabled={selectedCount < 2}
+        style={{ visibility: selectedCount < 2 ? 'hidden' : 'visible' }}
+        onClick={onDuplicate}
+      >
+        <MdContentCopy size={16} />
+      </ActionIcon>
+      <ActionIcon
+        aria-label="Delete selected annotations"
+        variant="subtle"
+        color="red"
+        disabled={selectedCount < 2}
+        style={{ visibility: selectedCount < 2 ? 'hidden' : 'visible' }}
+        onClick={onDelete}
+      >
+        <MdDeleteOutline size={16} />
+      </ActionIcon>
+      <ActionIcon
+        aria-label="Clear selection"
+        variant="subtle"
+        disabled={selectedCount === 0}
+        style={{ visibility: selectedCount === 0 ? 'hidden' : 'visible' }}
+        onClick={onClear}
+      >
+        <MdClose size={16} />
+      </ActionIcon>
+    </Group>
+  </Group>
+)
+
 export const AnnotationsDrawer: FC<AnnotationsDrawerProps> = ({ store, opened, onClose }) => {
   const annotations = store(
     useShallow((s) =>
       Object.values(s.sample?.resolve().annotations.resolve() ?? {}).map((a) => a.resolve())
     )
   )
-  const selectedAnnotationId = store((s) => s.selectedAnnotation?.resolve().id ?? null)
+  const selectedAnnotationIds = store((s) => s.selectedAnnotationIds)
   const labelsMap = store((s) => s.labelsMap)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
@@ -119,48 +204,88 @@ export const AnnotationsDrawer: FC<AnnotationsDrawerProps> = ({ store, opened, o
             No annotations yet
           </Text>
         )}
+        {annotations.length > 0 &&
+          (() => {
+            const allIds = annotations.map((a) => a.id)
+            const allState = triStateOf(allIds, selectedAnnotationIds)
+            return (
+              <SelectionHeader
+                allState={allState}
+                selectedCount={selectedAnnotationIds.size}
+                onToggleAll={() => {
+                  ensureSelectMode(store)
+                  store.getState().setSelectedAnnotationIds(allState === 'all' ? [] : allIds)
+                }}
+                onDuplicate={() => {
+                  ensureSelectMode(store)
+                  store.getState().duplicateSelectedAnnotation()
+                }}
+                onDelete={() => store.getState().deleteSelectedAnnotation()}
+                onClear={() => store.getState().selectAnnotation(null)}
+              />
+            )
+          })()}
         {Array.from(groupByLabel(annotations)).map(([groupKey, groupAnnotations]) => {
           const label = groupKey === UNKNOWN_LABEL_GROUP ? undefined : labelsMap[groupKey]
           const isOpen = !collapsedGroups.has(groupKey)
           const groupName = label?.name ?? 'Unknown label'
+          const groupIds = groupAnnotations.map((a) => a.id)
+          const groupState = triStateOf(groupIds, selectedAnnotationIds)
 
           return (
             <Stack key={groupKey} gap={4}>
-              <UnstyledButton
-                onClick={() => toggleGroup(groupKey)}
-                aria-expanded={isOpen}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <MdChevronRight
-                  size={16}
-                  style={{
-                    flexShrink: 0,
-                    transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.1s ease'
+              <Group gap={6} wrap="nowrap">
+                <Checkbox
+                  size="xs"
+                  aria-label={`Select all annotations in ${groupName}`}
+                  checked={groupState === 'all'}
+                  indeterminate={groupState === 'some'}
+                  onChange={() => {
+                    ensureSelectMode(store)
+                    const next = new Set(store.getState().selectedAnnotationIds)
+                    for (const id of groupIds) {
+                      if (groupState === 'all') next.delete(id)
+                      else next.add(id)
+                    }
+                    store.getState().setSelectedAnnotationIds([...next])
                   }}
                 />
-                {label && (
-                  <Badge
-                    size="xs"
-                    circle
+                <UnstyledButton
+                  onClick={() => toggleGroup(groupKey)}
+                  aria-expanded={isOpen}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}
+                >
+                  <MdChevronRight
+                    size={16}
                     style={{
-                      backgroundColor: label.color,
-                      color: tinycolor(label.color).isLight() ? '#000' : '#fff',
-                      flexShrink: 0
+                      flexShrink: 0,
+                      transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.1s ease'
                     }}
                   />
-                )}
-                <Text size="sm" fw={500} truncate style={{ flex: 1, textAlign: 'left' }}>
-                  {groupName}
-                </Text>
-                <Text size="xs" c="dimmed">
-                  {groupAnnotations.length}
-                </Text>
-              </UnstyledButton>
+                  {label && (
+                    <Badge
+                      size="xs"
+                      circle
+                      style={{
+                        backgroundColor: label.color,
+                        color: tinycolor(label.color).isLight() ? '#000' : '#fff',
+                        flexShrink: 0
+                      }}
+                    />
+                  )}
+                  <Text size="sm" fw={500} truncate style={{ flex: 1, textAlign: 'left' }}>
+                    {groupName}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {groupAnnotations.length}
+                  </Text>
+                </UnstyledButton>
+              </Group>
               <Collapse in={isOpen}>
                 <Stack gap="xs" pl="lg">
                   {groupAnnotations.map((annotation, index) => {
-                    const selected = annotation.id === selectedAnnotationId
+                    const selected = selectedAnnotationIds.has(annotation.id)
 
                     return (
                       <AnnotationRow
@@ -169,17 +294,28 @@ export const AnnotationsDrawer: FC<AnnotationsDrawerProps> = ({ store, opened, o
                         wrap="nowrap"
                         p="xs"
                         data-selected={selected}
-                        onClick={() => {
-                          const state = store.getState()
-                          if (state.mode !== LabelerMode.Select) {
-                            state.setMode(LabelerMode.Select)
+                        onClick={(e) => {
+                          ensureSelectMode(store)
+                          if (e.shiftKey) {
+                            store.getState().toggleAnnotationSelection(annotation.id)
+                          } else {
+                            store.getState().selectAnnotation(annotation.id)
                           }
-                          state.selectAnnotation(annotation.id)
                         }}
                         onMouseEnter={() => store.getState().setHoveredAnnotation(annotation.id)}
                         onMouseLeave={() => store.getState().setHoveredAnnotation(null)}
                       >
                         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+                          <Checkbox
+                            size="xs"
+                            aria-label={`Select ${annotation.type === AnnotationType.Box ? 'Box' : 'Polygon'} ${index + 1}`}
+                            checked={selected}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => {
+                              ensureSelectMode(store)
+                              store.getState().toggleAnnotationSelection(annotation.id)
+                            }}
+                          />
                           <AnnotationTypeIcon type={annotation.type} />
                           <Text size="sm" truncate>
                             {annotation.type === AnnotationType.Box ? 'Box' : 'Polygon'} {index + 1}

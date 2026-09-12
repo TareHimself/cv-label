@@ -40,6 +40,9 @@ vi.mock('@renderer/hooks/useLabeler', () => ({
         })
       },
       selectedAnnotation: mockSelectedAnnotation,
+      selectedAnnotationIds: mockSelectedAnnotation
+        ? new Set([mockSelectedAnnotation.resolve().id])
+        : new Set(),
       labelsMap: {},
       setSample,
       setMode,

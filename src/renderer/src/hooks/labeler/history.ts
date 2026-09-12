@@ -3,6 +3,7 @@ import { AnnotationType, IAnnotation, IPoint } from '@shared/types'
 import { useAppStore } from '@renderer/hooks/useAppStore'
 import { OptimisticObject } from '@renderer/util/optimistic_object'
 import type { HitIdTracker } from './hitIds'
+import { resolveSelectedAnnotation } from './selection'
 import type { HistoryEntry, LabelerStore } from './storeTypes'
 
 type HistoryDeps = {
@@ -59,14 +60,23 @@ export const createHistoryController = ({ get, set, hitIds }: HistoryDeps) => {
     if (annotation === null) return
 
     const wasSelected = state.selectedAnnotation?.resolve().id === annotationId
-    const selectedAnnotation = wasSelected ? null : state.selectedAnnotation
+    const nextSelectedIds = new Set(state.selectedAnnotationIds)
+    nextSelectedIds.delete(annotationId)
 
     const { commit, rollback } = annotations.update({
       [annotationId]: undefined
     })
     const dataStore = useAppStore.getState().store
     hitIds.freeAnnotationHitIds(annotationId, wasSelected)
+
+    const selectedAnnotation = resolveSelectedAnnotation(nextSelectedIds, state.sample)
+    if (selectedAnnotation !== null && !wasSelected) {
+      // Selection just dropped from 2+ to exactly 1 - no hit ids were built for the group, so build this one's now.
+      hitIds.rebuildSelectedAnnotationHitIds(selectedAnnotation.resolve())
+    }
+
     set({
+      selectedAnnotationIds: nextSelectedIds,
       selectedAnnotation,
       hoveredAnnotationId:
         state.hoveredAnnotationId === annotationId ? null : state.hoveredAnnotationId,
@@ -200,6 +210,10 @@ export const createHistoryController = ({ get, set, hitIds }: HistoryDeps) => {
         return applyRelabel(entry.annotationId, entry.beforeLabelId)
       case 'convert':
         return applyConvertType(entry.annotationId, entry.beforeType, entry.beforePoints)
+      case 'batch':
+        // Reverse order, mirroring how undoing a sequence of edits unwinds them one at a time.
+        for (const sub of [...entry.entries].reverse()) applyHistoryInverse(sub)
+        return
     }
   }
 
@@ -215,6 +229,9 @@ export const createHistoryController = ({ get, set, hitIds }: HistoryDeps) => {
         return applyRelabel(entry.annotationId, entry.afterLabelId)
       case 'convert':
         return applyConvertType(entry.annotationId, entry.afterType, entry.afterPoints)
+      case 'batch':
+        for (const sub of entry.entries) applyHistoryForward(sub)
+        return
     }
   }
 
