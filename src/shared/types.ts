@@ -196,6 +196,8 @@ export type StoreDescriptor = { id: string; name: string }
 export interface IStoreManager {
   listStores(): Promise<StoreDescriptor[]>
   useStore(id: string): Promise<void>
+  /** Reads an image:// URI's bytes in main - a renderer fetch() on it is blocked by Chromium's cross-origin scheme allowlist. */
+  readImage(imageUri: string): Promise<{ data: ArrayBuffer; mimeType: string }>
 }
 
 export interface ISystem {
@@ -275,6 +277,7 @@ export enum IPCKeys {
   Store_ReplacePoints = 'store-replacePoints',
   Store_List = 'store-list',
   Store_UseStore = 'store-useStore',
+  Store_ReadImage = 'store-readImage',
 
   // App (store-agnostic, always active - see main/appStore.ts)
   App_GetAnnotators = 'app-getAnnotators',
@@ -333,6 +336,7 @@ export type IPCEvents = {
   [IPCKeys.Store_ReplacePoints]: IDataStore['replacePoints']
   [IPCKeys.Store_List]: IStoreManager['listStores']
   [IPCKeys.Store_UseStore]: IStoreManager['useStore']
+  [IPCKeys.Store_ReadImage]: IStoreManager['readImage']
 
   // App
   [IPCKeys.App_GetAnnotators]: IAppDataStore['getAnnotators']

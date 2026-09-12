@@ -190,40 +190,41 @@ describe('runAnnotatorOnSample', () => {
     height: 100
   }
 
+  const stubReadImage = (impl: (...args: unknown[]) => unknown) => {
+    window.storeManager = {
+      ...window.storeManager,
+      readImage: impl
+    } as unknown as typeof window.storeManager
+  }
+
   beforeEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('fetches the sample image, posts base64 bytes to /predict, and maps the result', async () => {
+  it('reads the sample image via storeManager (not a renderer fetch - blocked by CORS for image://), posts base64 bytes to /predict, and maps the result', async () => {
     const bytes = new Uint8Array([1, 2, 3]).buffer
-    const imageHeaders = new Headers({ 'content-type': 'image/png' })
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: imageHeaders,
-        arrayBuffer: () => Promise.resolve(bytes)
+    const readImage = vi.fn().mockResolvedValue({ data: bytes, mimeType: 'image/png' })
+    stubReadImage(readImage)
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        annotations: [
+          {
+            labelId: '0',
+            type: AnnotationType.Box,
+            points: [
+              { x: 0, y: 0 },
+              { x: 1, y: 1 }
+            ]
+          }
+        ]
       })
-      .mockResolvedValueOnce(
-        jsonResponse({
-          annotations: [
-            {
-              labelId: '0',
-              type: AnnotationType.Box,
-              points: [
-                { x: 0, y: 0 },
-                { x: 1, y: 1 }
-              ]
-            }
-          ]
-        })
-      )
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await runAnnotatorOnSample(annotator, labelMapping, sample)
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, sample.imageUri)
-    const [predictUrl, predictInit] = fetchMock.mock.calls[1]
+    expect(readImage).toHaveBeenCalledWith(sample.imageUri)
+    const [predictUrl, predictInit] = fetchMock.mock.calls[0]
     expect(predictUrl).toBe('https://example.com/predict')
     expect(predictInit.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer token' }))
     const body = JSON.parse(predictInit.body)
@@ -235,26 +236,19 @@ describe('runAnnotatorOnSample', () => {
     expect(result.annotations[0].labelId).toBe('project-label-1')
   })
 
-  it('throws if the sample image cannot be fetched', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' })
-    )
+  it('throws if the sample image cannot be read', async () => {
+    stubReadImage(vi.fn().mockRejectedValue(new Error('Failed to read image: 404 Not Found')))
     await expect(runAnnotatorOnSample(annotator, labelMapping, sample)).rejects.toThrow(
-      /sample image/
+      /read image/
     )
   })
 
   it('throws if /predict responds with a non-ok status', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers({ 'content-type': 'image/png' }),
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0))
-      })
-      .mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Server Error' })
-    vi.stubGlobal('fetch', fetchMock)
+    stubReadImage(vi.fn().mockResolvedValue({ data: new ArrayBuffer(0), mimeType: 'image/png' }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' })
+    )
 
     await expect(runAnnotatorOnSample(annotator, labelMapping, sample)).rejects.toThrow(
       /predict failed/
